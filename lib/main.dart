@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:mikudrome/screens/home_screen.dart';
+import 'package:mikudrome/screens/library_home_screen.dart';
+import 'package:mikudrome/theme/app_theme.dart';
 
 void main() {
   runApp(const MikudromeApp());
@@ -12,11 +13,9 @@ class MikudromeApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Mikudrome',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      home: const HomeScreen(),
+      theme: AppTheme.dark,
+      debugShowCheckedModeBanner: false,
+      home: const LibraryHomeScreen(),
     );
   }
 }

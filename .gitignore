@@ -37,3 +37,5 @@ web/.dart_tool/
 # Env
 .env
 .env.local
+
+media

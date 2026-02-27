@@ -1,0 +1,255 @@
+import 'package:flutter/material.dart';
+
+import '../models/producer.dart';
+import '../theme/app_theme.dart';
+import 'producer_detail_screen.dart';
+
+/// Producers index: grid of circular avatars + stats, alphabet scroller (miku_produce.html).
+class ProducersScreen extends StatelessWidget {
+  const ProducersScreen({super.key, this.producers});
+
+  final List<Producer>? producers;
+
+  static List<Producer> _mockProducers() {
+    return [
+      const Producer(
+        id: 'pino',
+        name: 'ピノキオピー',
+        trackCount: 42,
+        albumCount: 8,
+        avatarSeed: 'pino',
+      ),
+      const Producer(
+        id: 'mitchie',
+        name: 'Mitchie M',
+        trackCount: 15,
+        albumCount: 3,
+        avatarSeed: 'mitchie',
+      ),
+      const Producer(
+        id: 'wowaka',
+        name: 'wowaka',
+        trackCount: 28,
+        albumCount: 5,
+        avatarSeed: 'wowaka',
+      ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final list = producers ?? _mockProducers();
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(40, 40, 40, 48),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Producers',
+                      style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                            color: AppTheme.textPrimary,
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text.rich(
+                      TextSpan(
+                        text: 'Tracking ',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: AppTheme.textMuted,
+                            ),
+                        children: [
+                          TextSpan(
+                            text: '${list.length}',
+                            style: const TextStyle(color: AppTheme.mikuGreen),
+                          ),
+                          const TextSpan(text: ' creators in your collection'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    _IndexChar(label: 'ALL', active: true),
+                    _IndexChar(label: 'A'),
+                    _IndexChar(label: 'B'),
+                    _IndexChar(label: 'C'),
+                    Text('...', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                    _IndexChar(label: 'P'),
+                    Text('...', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                    _IndexChar(label: 'Z'),
+                    _IndexChar(label: '#'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(40, 0, 40, 40),
+          sliver: SliverGrid(
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 180,
+              mainAxisSpacing: 40,
+              crossAxisSpacing: 40,
+              childAspectRatio: 0.75,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final p = list[index];
+                return _ProducerCard(
+                  producer: p,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (context) => ProducerDetailScreen(producer: p),
+                      ),
+                    );
+                  },
+                );
+              },
+              childCount: list.length,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _IndexChar extends StatelessWidget {
+  const _IndexChar({required this.label, this.active = false});
+
+  final String label;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: GestureDetector(
+        onTap: () {},
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: active ? AppTheme.mikuGreen : AppTheme.textMuted,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProducerCard extends StatefulWidget {
+  const _ProducerCard({required this.producer, required this.onTap});
+
+  final Producer producer;
+  final VoidCallback onTap;
+
+  @override
+  State<_ProducerCard> createState() => _ProducerCardState();
+}
+
+class _ProducerCardState extends State<_ProducerCard> {
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: widget.onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 128,
+            height: 128,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.transparent,
+                width: 4,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.mikuGreen.withValues(alpha: 0),
+                  blurRadius: 20,
+                  spreadRadius: 0,
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: widget.onTap,
+                customBorder: const CircleBorder(),
+                child: ClipOval(
+                  child: Image.network(
+                    widget.producer.avatarUrl,
+                    width: 128,
+                    height: 128,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 128,
+                      height: 128,
+                      color: AppTheme.cardBg,
+                      child: const Icon(Icons.person, color: AppTheme.textMuted, size: 48),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            widget.producer.name,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppTheme.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '${widget.producer.trackCount} TRACKS',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppTheme.textMuted,
+                      fontSize: 9,
+                    ),
+              ),
+              const SizedBox(width: 4),
+              Container(
+                width: 4,
+                height: 4,
+                decoration: const BoxDecoration(
+                  color: AppTheme.textMuted,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '${widget.producer.albumCount} ALBUMS',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppTheme.textMuted,
+                      fontSize: 9,
+                    ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
