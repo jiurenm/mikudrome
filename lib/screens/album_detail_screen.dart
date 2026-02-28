@@ -438,7 +438,8 @@ class _TrackRowState extends State<_TrackRow> {
                                 'LOCAL MV',
                                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                                       color: AppTheme.mikuGreen,
-                                      fontWeight: FontWeight.w700,
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w400,
                                     ),
                               ),
                             ],

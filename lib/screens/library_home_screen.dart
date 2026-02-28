@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../models/album.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_shell.dart';
+import 'album_detail_screen.dart';
 import 'albums_screen.dart';
 import 'producers_screen.dart';
 
-/// Root screen: app shell + route-based content (Albums / Producers / etc.).
+const String _kDefaultBaseUrl = 'http://127.0.0.1:8081';
+
+/// Root screen: app shell + route-based content. Album detail is shown in-shell (sidebar stays).
 class LibraryHomeScreen extends StatefulWidget {
   const LibraryHomeScreen({super.key});
 
@@ -15,11 +19,15 @@ class LibraryHomeScreen extends StatefulWidget {
 
 class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   ShellRoute _route = ShellRoute.albums;
+  Album? _selectedAlbum;
 
   Widget _contentForRoute(ShellRoute route) {
     switch (route) {
       case ShellRoute.albums:
-        return const AlbumsScreen();
+        return AlbumsScreen(
+          baseUrl: _kDefaultBaseUrl,
+          onAlbumTap: (album) => setState(() => _selectedAlbum = album),
+        );
       case ShellRoute.producers:
         return const ProducersScreen();
       case ShellRoute.vocalists:
@@ -47,10 +55,20 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final Widget content = _selectedAlbum != null
+        ? AlbumDetailScreen(
+            album: _selectedAlbum!,
+            baseUrl: _kDefaultBaseUrl,
+          )
+        : _contentForRoute(_route);
+
     return AppShell(
       currentRoute: _route,
-      onNavigate: (r) => setState(() => _route = r),
-      child: _contentForRoute(_route),
+      onNavigate: (r) => setState(() {
+        _route = r;
+        _selectedAlbum = null;
+      }),
+      child: content,
     );
   }
 }

@@ -6,13 +6,16 @@ import '../theme/app_theme.dart';
 import 'album_detail_screen.dart';
 
 /// Main library: album grid from API (media/Artist/Album), with search.
+/// When [onAlbumTap] is set, opens album in-shell; otherwise pushes a new route.
 class AlbumsScreen extends StatefulWidget {
   const AlbumsScreen({
     super.key,
     this.baseUrl = 'http://127.0.0.1:8081',
+    this.onAlbumTap,
   });
 
   final String baseUrl;
+  final ValueChanged<Album>? onAlbumTap;
 
   @override
   State<AlbumsScreen> createState() => _AlbumsScreenState();
@@ -158,14 +161,18 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
                       return _AlbumCard(
                         album: album,
                         onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (context) => AlbumDetailScreen(
-                                album: album,
-                                baseUrl: widget.baseUrl,
+                          if (widget.onAlbumTap != null) {
+                            widget.onAlbumTap!(album);
+                          } else {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (context) => AlbumDetailScreen(
+                                  album: album,
+                                  baseUrl: widget.baseUrl,
+                                ),
                               ),
-                            ),
-                          );
+                            );
+                          }
                         },
                       );
                     },
