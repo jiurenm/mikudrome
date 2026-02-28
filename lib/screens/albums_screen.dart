@@ -1,61 +1,52 @@
 import 'package:flutter/material.dart';
 
 import '../models/album.dart';
+import '../services/api_client.dart';
 import '../theme/app_theme.dart';
 import 'album_detail_screen.dart';
 
-/// Main library: album grid + search, matching miku_main.html.
+/// Main library: album grid from API (media/Artist/Album), with search.
 class AlbumsScreen extends StatefulWidget {
   const AlbumsScreen({
     super.key,
-    this.albums,
-    this.onRefresh,
+    this.baseUrl = 'http://127.0.0.1:8081',
   });
 
-  final List<Album>? albums;
-  final VoidCallback? onRefresh;
+  final String baseUrl;
 
   @override
   State<AlbumsScreen> createState() => _AlbumsScreenState();
 }
 
 class _AlbumsScreenState extends State<AlbumsScreen> {
-  static List<Album> _mockAlbums() {
-    return [
-      const Album(
-        id: '1',
-        title: 'HUMAN',
-        producerName: 'ピノキオピー',
-        year: 2021,
-        trackCount: 14,
-        coverSeed: 'album1',
-      ),
-      const Album(
-        id: '2',
-        title: 'Greatest Idols',
-        producerName: 'Mitchie M',
-        year: 2013,
-        trackCount: 13,
-        coverSeed: 'mitchie',
-      ),
-      const Album(
-        id: '3',
-        title: 'Vocaloid Collection',
-        producerName: 'Various',
-        year: 2020,
-        trackCount: 24,
-        coverSeed: 'vc',
-      ),
-    ];
-  }
-
-  late List<Album> _albums;
+  List<Album> _albums = [];
+  bool _loading = true;
+  String? _error;
   final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _albums = widget.albums ?? _mockAlbums();
+    _loadAlbums();
+  }
+
+  Future<void> _loadAlbums() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final list = await ApiClient(baseUrl: widget.baseUrl).getAlbums();
+      setState(() {
+        _albums = list;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
   }
 
   @override
@@ -64,8 +55,37 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
     super.dispose();
   }
 
+  List<Album> get _filteredAlbums {
+    final q = _searchController.text.trim().toLowerCase();
+    if (q.isEmpty) return _albums;
+    return _albums
+        .where((a) =>
+            a.title.toLowerCase().contains(q) ||
+            a.producerName.toLowerCase().contains(q))
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_error!, textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              FilledButton(onPressed: _loadAlbums, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
+    final list = _filteredAlbums;
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
@@ -90,7 +110,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Total ${_albums.length} albums found in your NAS',
+                          'Total ${list.length} albums',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: AppTheme.textMuted,
                               ),
@@ -101,9 +121,9 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
                       width: 264,
                       child: TextField(
                         controller: _searchController,
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           hintText: 'Search producers, songs...',
-                          prefixIcon: const Icon(Icons.search, color: AppTheme.textMuted, size: 18),
+                          prefixIcon: Icon(Icons.search, color: AppTheme.textMuted, size: 18),
                         ),
                         style: const TextStyle(fontSize: 14),
                         onChanged: (_) => setState(() {}),
@@ -115,33 +135,44 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
             ),
           ),
         ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
-          sliver: SliverGrid(
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 220,
-              mainAxisSpacing: 32,
-              crossAxisSpacing: 32,
-              childAspectRatio: 0.85,
-            ),
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final album = _albums[index];
-                return _AlbumCard(
-                  album: album,
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (context) => AlbumDetailScreen(album: album),
-                      ),
-                    );
-                  },
-                );
-              },
-              childCount: _albums.length,
-            ),
-          ),
-        ),
+        list.isEmpty
+            ? const SliverFillRemaining(
+                child: Center(
+                  child: Text(
+                    'No albums. Add media under media/Artist/Album/ and run the server.',
+                  ),
+                ),
+              )
+            : SliverPadding(
+                padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
+                sliver: SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 220,
+                    mainAxisSpacing: 32,
+                    crossAxisSpacing: 32,
+                    childAspectRatio: 0.85,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final album = list[index];
+                      return _AlbumCard(
+                        album: album,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (context) => AlbumDetailScreen(
+                                album: album,
+                                baseUrl: widget.baseUrl,
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                    childCount: list.length,
+                  ),
+                ),
+              ),
       ],
     );
   }
@@ -158,6 +189,8 @@ class _AlbumCard extends StatefulWidget {
 }
 
 class _AlbumCardState extends State<_AlbumCard> {
+  bool _hovering = false;
+
   @override
   Widget build(BuildContext context) {
     return InkWell(
@@ -171,45 +204,50 @@ class _AlbumCardState extends State<_AlbumCard> {
             child: LayoutBuilder(
               builder: (context, c) {
                 final size = c.maxWidth;
-                return Stack(
-                  clipBehavior: Clip.antiAlias,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        widget.album.coverUrl,
-                        width: size,
-                        height: size,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
+                return MouseRegion(
+                  onEnter: (_) => setState(() => _hovering = true),
+                  onExit: (_) => setState(() => _hovering = false),
+                  child: Stack(
+                    clipBehavior: Clip.antiAlias,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.network(
+                          widget.album.coverUrl,
                           width: size,
                           height: size,
-                          color: AppTheme.cardBg,
-                          child: const Icon(Icons.album, color: AppTheme.textMuted, size: 48),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            width: size,
+                            height: size,
+                            color: AppTheme.cardBg,
+                            child: const Icon(Icons.album, color: AppTheme.textMuted, size: 48),
+                          ),
                         ),
                       ),
-                    ),
-                    Positioned.fill(
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: widget.onTap,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.4),
-                            ),
-                            child: const Center(
-                              child: Icon(
-                                Icons.play_circle_fill,
-                                color: AppTheme.mikuGreen,
-                                size: 48,
+                      if (_hovering)
+                        Positioned.fill(
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: widget.onTap,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.4),
+                                ),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.play_circle_fill,
+                                    color: AppTheme.mikuGreen,
+                                    size: 48,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 );
               },
             ),
@@ -235,7 +273,9 @@ class _AlbumCardState extends State<_AlbumCard> {
           ),
           const SizedBox(height: 4),
           Text(
-            '${widget.album.year} • ${widget.album.trackCount} Tracks',
+            widget.album.year > 0
+                ? '${widget.album.year} • ${widget.album.trackCount} Tracks'
+                : '${widget.album.trackCount} Tracks',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: AppTheme.textMuted,
                   letterSpacing: 0.5,

@@ -2,6 +2,8 @@
 bin/
 *.exe
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 
 # Flutter

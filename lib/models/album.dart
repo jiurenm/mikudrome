@@ -1,12 +1,12 @@
-/// Placeholder album for UI; can be wired to backend later.
+/// Album from backend API (media/Artist/Album folder).
 class Album {
   const Album({
     required this.id,
     required this.title,
     required this.producerName,
-    required this.year,
+    this.year = 0,
     required this.trackCount,
-    this.coverSeed = 'album',
+    required this.coverUrl,
   });
 
   final String id;
@@ -14,7 +14,17 @@ class Album {
   final String producerName;
   final int year;
   final int trackCount;
-  final String coverSeed;
+  final String coverUrl;
 
-  String get coverUrl => 'https://api.dicebear.com/7.x/identicon/svg?seed=$coverSeed';
+  factory Album.fromJson(Map<String, dynamic> json, String baseUrl) {
+    final id = json['id'] as int;
+    return Album(
+      id: id.toString(),
+      title: json['title'] as String? ?? '',
+      producerName: json['artist'] as String? ?? '',
+      year: json['year'] as int? ?? 0,
+      trackCount: json['track_count'] as int? ?? 0,
+      coverUrl: '$baseUrl/api/albums/$id/cover',
+    );
+  }
 }

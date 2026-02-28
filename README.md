@@ -55,11 +55,8 @@ MEDIA_ROOT=/path/to/media go run ./cmd/server
 
 扫描规则：
 
-```
-Song.flac / Song.mp3
-↓
-Song.mp4 / Song.mkv（同名即识别为 MV）
-```
+- **曲目**：`Song.flac` / `Song.mp3` 等；同名 `.mp4`/`.mkv` 视为 MV。
+- **专辑**：目录结构为 `media/艺术家/专辑名/`，其下音频会归入同一专辑；封面为同目录下的 `Cover.jpg`。
 
 ---
 
@@ -104,12 +101,15 @@ flutter build ios
 
 ## API（MVP）
 
-| Method | Endpoint                |
-| ------ | ----------------------- |
-| GET    | `/api/tracks`           |
-| GET    | `/api/tracks/:id`       |
-| GET    | `/api/stream/:id/audio` |
-| GET    | `/api/stream/:id/video` |
+| Method | Endpoint                   |
+| ------ | -------------------------- |
+| GET    | `/api/tracks`              |
+| GET    | `/api/tracks/:id`          |
+| GET    | `/api/albums`              |
+| GET    | `/api/albums/:id`          |
+| GET    | `/api/albums/:id/cover`    |
+| GET    | `/api/stream/:id/audio`    |
+| GET    | `/api/stream/:id/video`    |
 
 ---
 

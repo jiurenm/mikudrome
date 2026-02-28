@@ -3,8 +3,11 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mikudrome/mikudrome/internal/store"
 )
@@ -20,7 +23,7 @@ func New(s *store.Store, mediaRoot string) *Handler {
 	return &Handler{store: s, mediaRoot: mediaRoot}
 }
 
-// ServeHTTP routes /api/tracks, /api/tracks/:id, and /api/stream/...
+// ServeHTTP routes /api/tracks, /api/albums, /api/stream/...
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// CORS: allow Flutter Web (and other browsers) to call API from another origin
 	addCORSHeaders(w, r)
@@ -38,6 +41,28 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.getTrack(w, r, idStr)
 			return
 		}
+	}
+	if r.URL.Path == "/api/albums" && r.Method == http.MethodGet {
+		h.listAlbums(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/albums/") && r.Method == http.MethodGet {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/api/albums/")
+		parts := strings.SplitN(trimmed, "/", 2)
+		if parts[0] != "" {
+			if len(parts) == 2 && parts[1] == "cover" {
+				h.serveAlbumCover(w, r, parts[0])
+			} else if len(parts) == 1 {
+				h.getAlbum(w, r, parts[0])
+			} else {
+				http.NotFound(w, r)
+			}
+			return
+		}
+	}
+	if r.URL.Path == "/api/db/backup" && r.Method == http.MethodGet {
+		h.serveDBBackup(w, r)
+		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/stream/") {
 		h.serveStream(w, r)
@@ -75,6 +100,57 @@ func (h *Handler) getTrack(w http.ResponseWriter, _ *http.Request, idStr string)
 	_ = json.NewEncoder(w).Encode(track)
 }
 
+func (h *Handler) listAlbums(w http.ResponseWriter, _ *http.Request) {
+	albums, err := h.store.ListAlbums()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"albums": albums})
+}
+
+func (h *Handler) getAlbum(w http.ResponseWriter, _ *http.Request, idStr string) {
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	album, ok, err := h.store.GetAlbumByID(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		http.NotFound(w, nil)
+		return
+	}
+	tracks, err := h.store.GetTracksByAlbumID(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"album":  album,
+		"tracks": tracks,
+	})
+}
+
+func (h *Handler) serveAlbumCover(w http.ResponseWriter, r *http.Request, idStr string) {
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	album, ok, err := h.store.GetAlbumByID(id)
+	if err != nil || !ok || album.CoverPath == "" {
+		http.NotFound(w, r)
+		return
+	}
+	http.ServeFile(w, r, album.CoverPath)
+}
+
 // serveStream serves audio or video file by track ID and type (audio|video).
 // Path format: /api/stream/:id/audio or /api/stream/:id/video
 func (h *Handler) serveStream(w http.ResponseWriter, r *http.Request) {
@@ -109,6 +185,26 @@ func (h *Handler) serveStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.ServeFile(w, r, path)
+}
+
+// serveDBBackup streams a consistent copy of the database for download (avoids "busy or locked" when copying the file directly).
+func (h *Handler) serveDBBackup(w http.ResponseWriter, r *http.Request) {
+	tmpPath := filepath.Join(os.TempDir(), "mikudrome-backup-"+strconv.FormatInt(time.Now().UnixNano(), 10)+".db")
+	defer os.Remove(tmpPath)
+
+	if err := h.store.BackupTo(tmpPath); err != nil {
+		http.Error(w, "backup failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	info, err := os.Stat(tmpPath)
+	if err != nil {
+		http.Error(w, "backup stat: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", `attachment; filename="mikudrome.db"`)
+	w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
+	http.ServeFile(w, r, tmpPath)
 }
 
 func addCORSHeaders(w http.ResponseWriter, r *http.Request) {
