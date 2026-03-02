@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../api/api.dart';
 import '../models/track.dart';
-import '../services/api_client.dart';
 import 'player_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -12,9 +12,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const String _defaultBaseUrl = 'http://127.0.0.1:8081';
-
-  final ApiClient _api = ApiClient(baseUrl: _defaultBaseUrl);
+  final ApiClient _api = ApiClient();
   List<Track> _tracks = [];
   bool _loading = true;
   String? _error;

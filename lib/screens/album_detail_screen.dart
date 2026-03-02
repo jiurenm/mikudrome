@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../models/album.dart';
 import '../models/track.dart';
-import '../services/api_client.dart';
+import '../api/api.dart';
 import '../theme/app_theme.dart';
 
 /// Album detail: hero + PLAY ALL + track list from API.
 class AlbumDetailScreen extends StatefulWidget {
-  const AlbumDetailScreen({super.key, required this.album, this.baseUrl = 'http://127.0.0.1:8080'});
+  const AlbumDetailScreen({super.key, required this.album, this.baseUrl = ApiConfig.defaultBaseUrl});
 
   final Album album;
   final String baseUrl;

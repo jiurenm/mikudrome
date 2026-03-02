@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../api/api.dart';
 import '../models/album.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_shell.dart';
 import 'album_detail_screen.dart';
 import 'albums_screen.dart';
 import 'producers_screen.dart';
-
-const String _kDefaultBaseUrl = 'http://127.0.0.1:8081';
 
 /// Root screen: app shell + route-based content. Album detail is shown in-shell (sidebar stays).
 class LibraryHomeScreen extends StatefulWidget {
@@ -25,7 +24,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     switch (route) {
       case ShellRoute.albums:
         return AlbumsScreen(
-          baseUrl: _kDefaultBaseUrl,
+          baseUrl: ApiConfig.defaultBaseUrl,
           onAlbumTap: (album) => setState(() => _selectedAlbum = album),
         );
       case ShellRoute.producers:
@@ -58,7 +57,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     final Widget content = _selectedAlbum != null
         ? AlbumDetailScreen(
             album: _selectedAlbum!,
-            baseUrl: _kDefaultBaseUrl,
+            baseUrl: ApiConfig.defaultBaseUrl,
           )
         : _contentForRoute(_route);
 

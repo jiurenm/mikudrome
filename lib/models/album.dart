@@ -1,3 +1,5 @@
+import '../api/endpoints.dart';
+
 /// Album from backend API (media/Artist/Album folder).
 class Album {
   const Album({
@@ -18,13 +20,14 @@ class Album {
 
   factory Album.fromJson(Map<String, dynamic> json, String baseUrl) {
     final id = json['id'] as int;
+    final idStr = id.toString();
     return Album(
-      id: id.toString(),
+      id: idStr,
       title: json['title'] as String? ?? '',
       producerName: json['artist'] as String? ?? '',
       year: json['year'] as int? ?? 0,
       trackCount: json['track_count'] as int? ?? 0,
-      coverUrl: '$baseUrl/api/albums/$id/cover',
+      coverUrl: '$baseUrl${ApiEndpoints.albumCover(idStr)}',
     );
   }
 }

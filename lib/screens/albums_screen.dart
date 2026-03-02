@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/album.dart';
-import '../services/api_client.dart';
+import '../api/api.dart';
 import '../theme/app_theme.dart';
 import 'album_detail_screen.dart';
 
@@ -10,7 +10,7 @@ import 'album_detail_screen.dart';
 class AlbumsScreen extends StatefulWidget {
   const AlbumsScreen({
     super.key,
-    this.baseUrl = 'http://127.0.0.1:8081',
+    this.baseUrl = ApiConfig.defaultBaseUrl,
     this.onAlbumTap,
   });
 
