@@ -12,15 +12,16 @@ import (
 	"github.com/mikudrome/mikudrome/internal/store"
 )
 
-// Handler serves the REST API and static file streaming.
+// Handler serves the REST API, static file streaming, and Flutter web static files.
 type Handler struct {
 	store     *store.Store
 	mediaRoot string
+	webRoot   string
 }
 
 // New returns an HTTP handler for the API.
-func New(s *store.Store, mediaRoot string) *Handler {
-	return &Handler{store: s, mediaRoot: mediaRoot}
+func New(s *store.Store, mediaRoot, webRoot string) *Handler {
+	return &Handler{store: s, mediaRoot: mediaRoot, webRoot: webRoot}
 }
 
 // ServeHTTP routes /api/tracks, /api/albums, /api/stream/...
@@ -68,7 +69,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.serveStream(w, r)
 		return
 	}
-	http.NotFound(w, r)
+	// Serve Flutter web static files; fallback to index.html for SPA routing
+	h.serveWeb(w, r)
 }
 
 func (h *Handler) listTracks(w http.ResponseWriter, _ *http.Request) {
@@ -205,6 +207,38 @@ func (h *Handler) serveDBBackup(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="mikudrome.db"`)
 	w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
 	http.ServeFile(w, r, tmpPath)
+}
+
+// serveWeb serves static files from webRoot. Non-API GET requests fall back to index.html for SPA routing.
+func (h *Handler) serveWeb(w http.ResponseWriter, r *http.Request) {
+	if h.webRoot == "" {
+		http.NotFound(w, r)
+		return
+	}
+	path := r.URL.Path
+	if path == "/" {
+		path = "/index.html"
+	}
+	fpath := filepath.Join(h.webRoot, filepath.FromSlash(path))
+	fpath = filepath.Clean(fpath)
+	rel, err := filepath.Rel(h.webRoot, fpath)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		http.NotFound(w, r)
+		return
+	}
+	if info, err := os.Stat(fpath); err == nil && !info.IsDir() {
+		http.ServeFile(w, r, fpath)
+		return
+	}
+	// SPA fallback: serve index.html for GET so Flutter router handles client-side routes
+	if r.Method == http.MethodGet {
+		indexPath := filepath.Join(h.webRoot, "index.html")
+		if _, err := os.Stat(indexPath); err == nil {
+			http.ServeFile(w, r, indexPath)
+			return
+		}
+	}
+	http.NotFound(w, r)
 }
 
 func addCORSHeaders(w http.ResponseWriter, r *http.Request) {

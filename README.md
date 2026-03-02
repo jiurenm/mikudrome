@@ -25,81 +25,64 @@ flutter doctor
 
 ---
 
-## 启动
+## 快速开始
 
-### 后端
+### 一键运行（推荐）
 
 ```bash
-go run ./cmd/server
+make build    # 构建后端 + Flutter Web
+make run      # 启动服务，访问 http://localhost:8080
 ```
 
-默认监听：
+后端会同时提供 REST API 和托管 `build/web` 静态文件，访问根路径即可使用 Web 客户端。
 
+### 开发模式
+
+```bash
+make run      # 终端 1：启动后端
+make dev      # 终端 2：Flutter 热重载（web-server）
 ```
-http://localhost:8080
+
+---
+
+## Makefile 命令
+
+```bash
+make help     # 查看全部命令
 ```
+---
 
-可选环境变量：
+## 环境变量
 
-| 变量         | 默认值            | 说明    |
-| ---------- | -------------- | ----- |
-| MEDIA_ROOT | ./media        | 媒体目录  |
-| DB_PATH    | ./mikudrome.db | 数据库路径 |
-| HTTP_ADDR  | :8080          | 监听地址  |
+| 变量         | 默认值            | 说明       |
+| ---------- | -------------- | -------- |
+| MEDIA_ROOT | ./media        | 媒体目录     |
+| DB_PATH    | ./mikudrome.db | 数据库路径    |
+| HTTP_ADDR  | :8080          | 监听地址     |
+| WEB_ROOT   | ./build/web    | Flutter Web 构建目录 |
 
 示例：
 
 ```bash
-MEDIA_ROOT=/path/to/media go run ./cmd/server
+MEDIA_ROOT=/path/to/media WEB_ROOT=/opt/mikudrome/web make run
 ```
 
-扫描规则：
+---
+
+## 扫描规则
 
 - **曲目**：`Song.flac` / `Song.mp3` 等；同名 `.mp4`/`.mkv` 视为 MV。
 - **专辑**：目录结构为 `media/艺术家/专辑名/`，其下音频会归入同一专辑；封面为同目录下的 `Cover.jpg`。
 
 ---
 
-### 前端
+## 客户端 API 配置
 
-```bash
-flutter pub get
-flutter run
-```
-
-Web：
-
-```bash
-flutter run -d chrome
-```
-
-默认 API：
-
-```
-http://127.0.0.1:8080
-```
+Web 与后端同源部署时（`make run`），无需配置。移动端/桌面端或前后端分离部署时，需在 `lib/api/config.dart` 中修改 `ApiConfig.defaultBaseUrl` 为实际后端地址（如 `http://192.168.1.100:8080`）。
 
 ---
 
-## 构建（可选）
-
-### 后端
-
-```bash
-go build -o bin/mikudrome ./cmd/server
-```
-
-### 前端
-
-```bash
-flutter build web
-flutter build apk
-flutter build ios
-```
-
----
-
-## API（MVP）
+## API
 
 | Method | Endpoint                   |
 | ------ | -------------------------- |
@@ -110,6 +93,7 @@ flutter build ios
 | GET    | `/api/albums/:id/cover`    |
 | GET    | `/api/stream/:id/audio`    |
 | GET    | `/api/stream/:id/video`    |
+| GET    | `/api/db/backup`           |
 
 ---
 
@@ -117,10 +101,15 @@ flutter build ios
 
 ```
 mikudrome/
-├── cmd/server/
-├── internal/
-├── lib/
-├── web/
+├── cmd/server/       # 后端入口
+├── internal/         # 后端内部包（api, config, scanner, store）
+├── lib/              # Flutter 前端
+│   ├── api/          # API 统一管理（endpoints, config, client）
+│   ├── models/
+│   ├── screens/
+│   └── widgets/
+├── build/web/        # flutter build web 输出（由后端托管）
+├── Makefile
 ├── go.mod
 └── pubspec.yaml
 ```

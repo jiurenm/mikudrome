@@ -22,6 +22,9 @@ func main() {
 	if a := os.Getenv("HTTP_ADDR"); a != "" {
 		cfg.HTTPAddr = a
 	}
+	if w := os.Getenv("WEB_ROOT"); w != "" {
+		cfg.WebRoot = w
+	}
 
 	st, err := store.New(cfg.DBPath)
 	if err != nil {
@@ -33,7 +36,7 @@ func main() {
 		log.Printf("scan warning: %v", err)
 	}
 
-	handler := api.New(st, cfg.MediaRoot)
+	handler := api.New(st, cfg.MediaRoot, cfg.WebRoot)
 	log.Printf("listening on %s", cfg.HTTPAddr)
 	if err := http.ListenAndServe(cfg.HTTPAddr, handler); err != nil {
 		log.Fatal(err)

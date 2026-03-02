@@ -13,6 +13,8 @@ type Config struct {
 	DBPath string
 	// HTTPAddr is the address to bind the API server (e.g. ":8080").
 	HTTPAddr string
+	// WebRoot is the directory for Flutter web build (static files). Empty disables static serving.
+	WebRoot string
 }
 
 // Default returns a config with sensible defaults.
@@ -24,6 +26,7 @@ func Default() *Config {
 	}
 	if wd, err := os.Getwd(); err == nil {
 		c.MediaRoot = filepath.Join(wd, "media")
+		c.WebRoot = filepath.Join(wd, "build", "web")
 	}
 	return c
 }
