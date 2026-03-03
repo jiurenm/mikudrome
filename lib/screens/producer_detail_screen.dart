@@ -26,10 +26,13 @@ class ProducerDetailScreen extends StatefulWidget {
 
 class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
   int _tabIndex = 0;
+  Producer? _loadedProducer; // API 返回的完整数据，含正确 trackCount/albumCount
   List<Album> _albums = [];
   List<Track> _tracks = [];
   bool _loading = true;
   String? _error;
+
+  Producer get _displayProducer => _loadedProducer ?? widget.producer;
 
   @override
   void initState() {
@@ -46,6 +49,7 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
       final result = await ApiClient(baseUrl: widget.baseUrl).getProducer(widget.producer.name);
       if (result == null || !mounted) return;
       setState(() {
+        _loadedProducer = result.producer;
         _albums = result.albums;
         _tracks = result.tracks;
         _loading = false;
@@ -71,7 +75,7 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
             child: CustomScrollView(
               slivers: [
                 SliverToBoxAdapter(
-                  child: _HeroSection(producer: widget.producer, baseUrl: widget.baseUrl),
+                  child: _HeroSection(producer: _displayProducer, baseUrl: widget.baseUrl),
                 ),
                 SliverToBoxAdapter(
                   child: _TabBar(
