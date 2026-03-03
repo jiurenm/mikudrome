@@ -1,4 +1,4 @@
-/// Placeholder producer for UI; can be wired to backend later.
+/// Producer (P主) from backend API or placeholder.
 class Producer {
   const Producer({
     required this.id,
@@ -16,4 +16,15 @@ class Producer {
 
   String get avatarUrl =>
       'https://api.dicebear.com/7.x/identicon/svg?seed=${avatarSeed ?? id}';
+
+  factory Producer.fromJson(Map<String, dynamic> json) {
+    final name = json['name'] as String? ?? '';
+    return Producer(
+      id: name,
+      name: name,
+      trackCount: json['track_count'] as int? ?? 0,
+      albumCount: json['album_count'] as int? ?? 0,
+      avatarSeed: name.isEmpty ? null : name,
+    );
+  }
 }

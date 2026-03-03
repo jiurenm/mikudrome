@@ -1,16 +1,23 @@
 import 'package:flutter/material.dart';
 
 import '../models/album.dart';
+import '../models/producer.dart';
 import '../models/track.dart';
 import '../api/api.dart';
 import '../theme/app_theme.dart';
 
 /// Album detail: hero + PLAY ALL + track list from API.
 class AlbumDetailScreen extends StatefulWidget {
-  const AlbumDetailScreen({super.key, required this.album, this.baseUrl = ApiConfig.defaultBaseUrl});
+  const AlbumDetailScreen({
+    super.key,
+    required this.album,
+    this.baseUrl = ApiConfig.defaultBaseUrl,
+    this.onProducerTap,
+  });
 
   final Album album;
   final String baseUrl;
+  final ValueChanged<Producer>? onProducerTap;
 
   @override
   State<AlbumDetailScreen> createState() => _AlbumDetailScreenState();
@@ -58,7 +65,12 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
             child: CustomScrollView(
               slivers: [
                 SliverToBoxAdapter(
-                  child: _HeroSection(album: widget.album, tracks: _tracks),
+                  child: _HeroSection(
+                    album: widget.album,
+                    tracks: _tracks,
+                    baseUrl: widget.baseUrl,
+                    onProducerTap: widget.onProducerTap,
+                  ),
                 ),
                 if (_loading)
                   const SliverFillRemaining(
@@ -172,10 +184,17 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
 }
 
 class _HeroSection extends StatelessWidget {
-  const _HeroSection({required this.album, this.tracks = const []});
+  const _HeroSection({
+    required this.album,
+    this.tracks = const [],
+    required this.baseUrl,
+    this.onProducerTap,
+  });
 
   final Album album;
   final List<Track> tracks;
+  final String baseUrl;
+  final ValueChanged<Producer>? onProducerTap;
 
   static int _earliestYear(List<Track> tracks) {
     int minYear = 0;
@@ -263,19 +282,58 @@ class _HeroSection extends StatelessWidget {
                   const SizedBox(height: 24),
                   Row(
                     children: [
-                      CircleAvatar(
-                        radius: 12,
-                        backgroundImage: NetworkImage(
-                          'https://api.dicebear.com/7.x/identicon/svg?seed=${album.id}',
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        album.producerName,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: AppTheme.textPrimary,
-                              fontWeight: FontWeight.w700,
+                      MouseRegion(
+                        cursor: album.producerName.isNotEmpty && onProducerTap != null
+                            ? SystemMouseCursors.click
+                            : SystemMouseCursors.basic,
+                        child: GestureDetector(
+                          onTap: album.producerName.isNotEmpty && onProducerTap != null
+                              ? () => onProducerTap!(Producer(
+                                    id: album.producerName,
+                                    name: album.producerName,
+                                    trackCount: 0,
+                                    albumCount: 0,
+                                  ))
+                              : null,
+                          child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ClipOval(
+                              child: SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: album.producerName.isEmpty
+                                    ? const ColoredBox(
+                                        color: AppTheme.cardBg,
+                                        child: Icon(Icons.person, size: 16, color: AppTheme.textMuted),
+                                      )
+                                    : Image.network(
+                                        ApiClient(baseUrl: baseUrl).producerAvatarUrl(album.producerName),
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => const ColoredBox(
+                                          color: AppTheme.cardBg,
+                                          child: Icon(Icons.person, size: 16, color: AppTheme.textMuted),
+                                        ),
+                                      ),
+                              ),
                             ),
+                            const SizedBox(width: 12),
+                            Text(
+                              album.producerName,
+                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                    color: onProducerTap != null
+                                        ? AppTheme.mikuGreen
+                                        : AppTheme.textPrimary,
+                                    fontWeight: FontWeight.w700,
+                                    decoration: onProducerTap != null
+                                        ? TextDecoration.underline
+                                        : null,
+                                    decorationColor: AppTheme.mikuGreen,
+                                  ),
+                            ),
+                          ],
+                        ),
+                        ),
                       ),
                       if (year > 0) ...[
                         const SizedBox(width: 16),
@@ -354,12 +412,13 @@ class _TrackRow extends StatefulWidget {
 class _TrackRowState extends State<_TrackRow> {
   bool _hovering = false;
 
-  /// 歌手一行，逗号分隔，P主在前。
   String get _vocalLine {
-    final parts = <String>[];
-    if (widget.track.producer.isNotEmpty) parts.add(widget.track.producer.trim());
-    if (widget.track.vocal.isNotEmpty) parts.add(widget.track.vocal.trim());
-    return parts.join(', ');
+    final p = widget.track.producer.trim();
+    final v = widget.track.vocal.trim();
+    if (p.isNotEmpty && v.isNotEmpty) return '$p feat. $v';
+    if (p.isNotEmpty) return p;
+    if (v.isNotEmpty) return 'feat. $v';
+    return '';
   }
 
   @override

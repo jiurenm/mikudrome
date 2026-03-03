@@ -1,44 +1,85 @@
 import 'package:flutter/material.dart';
 
+import '../api/api.dart';
 import '../models/producer.dart';
 import '../theme/app_theme.dart';
 import 'producer_detail_screen.dart';
 
 /// Producers index: grid of circular avatars + stats, alphabet scroller (miku_produce.html).
-class ProducersScreen extends StatelessWidget {
-  const ProducersScreen({super.key, this.producers});
+class ProducersScreen extends StatefulWidget {
+  const ProducersScreen({
+    super.key,
+    this.baseUrl = ApiConfig.defaultBaseUrl,
+    this.onProducerTap,
+  });
 
-  final List<Producer>? producers;
+  final String baseUrl;
+  final ValueChanged<Producer>? onProducerTap;
 
-  static List<Producer> _mockProducers() {
-    return [
-      const Producer(
-        id: 'pino',
-        name: 'ピノキオピー',
-        trackCount: 42,
-        albumCount: 8,
-        avatarSeed: 'pino',
-      ),
-      const Producer(
-        id: 'mitchie',
-        name: 'Mitchie M',
-        trackCount: 15,
-        albumCount: 3,
-        avatarSeed: 'mitchie',
-      ),
-      const Producer(
-        id: 'wowaka',
-        name: 'wowaka',
-        trackCount: 28,
-        albumCount: 5,
-        avatarSeed: 'wowaka',
-      ),
-    ];
+  @override
+  State<ProducersScreen> createState() => _ProducersScreenState();
+}
+
+class _ProducersScreenState extends State<ProducersScreen> {
+  List<Producer> _producers = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProducers();
+  }
+
+  Future<void> _loadProducers() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final list = await ApiClient(baseUrl: widget.baseUrl).getProducers();
+      setState(() {
+        _producers = list;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final list = producers ?? _mockProducers();
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _error!,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppTheme.textMuted,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: _loadProducers,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    final list = _producers;
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
@@ -107,12 +148,20 @@ class ProducersScreen extends StatelessWidget {
                 final p = list[index];
                 return _ProducerCard(
                   producer: p,
+                  baseUrl: widget.baseUrl,
                   onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (context) => ProducerDetailScreen(producer: p),
-                      ),
-                    );
+                    if (widget.onProducerTap != null) {
+                      widget.onProducerTap!(p);
+                    } else {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (context) => ProducerDetailScreen(
+                            producer: p,
+                            baseUrl: widget.baseUrl,
+                          ),
+                        ),
+                      );
+                    }
                   },
                 );
               },
@@ -150,9 +199,14 @@ class _IndexChar extends StatelessWidget {
 }
 
 class _ProducerCard extends StatefulWidget {
-  const _ProducerCard({required this.producer, required this.onTap});
+  const _ProducerCard({
+    required this.producer,
+    required this.baseUrl,
+    required this.onTap,
+  });
 
   final Producer producer;
+  final String baseUrl;
   final VoidCallback onTap;
 
   @override
@@ -192,7 +246,7 @@ class _ProducerCardState extends State<_ProducerCard> {
                 customBorder: const CircleBorder(),
                 child: ClipOval(
                   child: Image.network(
-                    widget.producer.avatarUrl,
+                    ApiClient(baseUrl: widget.baseUrl).producerAvatarUrl(widget.producer.name),
                     width: 128,
                     height: 128,
                     fit: BoxFit.cover,

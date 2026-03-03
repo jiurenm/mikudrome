@@ -23,6 +23,9 @@ var VideoExts = map[string]bool{
 	".mp4": true, ".mkv": true, ".webm": true, ".avi": true,
 }
 
+// ThumbExts preferred extensions for MV thumbnail (same base name as video).
+var ThumbExts = []string{".jpg", ".jpeg", ".png", ".webp"}
+
 // CoverNames preferred filenames for album cover image (same dir as tracks).
 // extracted_cover.jpg is written when we extract from a track's embedded art.
 var CoverNames = []string{"Cover.jpg", "cover.jpg", "Jacket.jpg", "jacket.jpg", "folder.jpg", "Folder.jpg", "extracted_cover.jpg", "extracted_cover.png"}
@@ -66,8 +69,14 @@ func Scan(mediaRoot string, s *store.Store) error {
 		n++
 		log.Printf("scan: [%d/%d] %s", n, total, filepath.Base(audioPath))
 		dir := filepath.Dir(audioPath)
+		dirAbs, _ := filepath.Abs(dir)
+		dirAbs = filepath.Clean(dirAbs)
 		fallbackTitle := filepath.Base(base)
 		videoPath := findVideoForBase(dir, base)
+		videoThumbPath := ""
+		if videoPath != "" {
+			videoThumbPath = findOrExtractVideoThumb(videoPath)
+		}
 
 		title := fallbackTitle
 		trackNumber := 0
@@ -82,12 +91,16 @@ func Scan(mediaRoot string, s *store.Store) error {
 			if n, _ := m.Track(); n > 0 {
 				trackNumber = n
 			}
-			producer = m.Composer()
+			producer = strings.TrimSpace(m.Composer())
 			vocal = m.Artist()
 			if y := m.Year(); y > 0 {
 				year = y
 			}
 			durationSeconds = parseDurationFromMetadata(m)
+		}
+		// Producer fallback: use album folder artist when Composer is empty (media/Artist/Album structure)
+		if producer == "" && dirAbs != mediaRootAbs {
+			producer = strings.TrimSpace(filepath.Base(filepath.Dir(dirAbs)))
 		}
 		ffprobeDur, ffprobeFormat := runFFprobe(audioPath)
 		if durationSeconds == 0 && ffprobeDur > 0 {
@@ -99,11 +112,10 @@ func Scan(mediaRoot string, s *store.Store) error {
 		format := ffprobeFormat
 
 		var albumID int64
-		dirAbs, _ := filepath.Abs(dir)
-		dirAbs = filepath.Clean(dirAbs)
 		if dirAbs != mediaRootAbs {
 			albumDir := dirAbs
-			artist := filepath.Base(filepath.Dir(albumDir))
+			artistDir := filepath.Dir(albumDir) // P主 folder (media/Artist)
+			artist := filepath.Base(artistDir)
 			albumTitle := filepath.Base(albumDir)
 			coverPath := findCoverInDir(albumDir)
 			if coverPath == "" {
@@ -114,8 +126,12 @@ func Scan(mediaRoot string, s *store.Store) error {
 				return err
 			}
 			albumID = id
+			// P主头像: artist.jpg in P主 folder
+			if avatarPath := findArtistAvatar(artistDir); avatarPath != "" && producer != "" {
+				_ = s.UpsertProducerAvatar(producer, avatarPath)
+			}
 		}
-		if err := s.UpsertTrack(title, audioPath, videoPath, albumID, trackNumber, producer, vocal, year, durationSeconds, format); err != nil {
+		if err := s.UpsertTrack(title, audioPath, videoPath, videoThumbPath, albumID, trackNumber, producer, vocal, year, durationSeconds, format); err != nil {
 			return err
 		}
 	}
@@ -322,6 +338,15 @@ func findCoverInDir(dir string) string {
 	return ""
 }
 
+// findArtistAvatar looks for artist.jpg in the P主 folder. Returns path or "".
+func findArtistAvatar(artistDir string) string {
+	p := filepath.Join(artistDir, "artist.jpg")
+	if _, err := os.Stat(p); err == nil {
+		return p
+	}
+	return ""
+}
+
 // findVideoForBase looks in dir for a file with same base name and a video extension.
 func findVideoForBase(dir, base string) string {
 	baseName := filepath.Base(base)
@@ -332,4 +357,47 @@ func findVideoForBase(dir, base string) string {
 		}
 	}
 	return ""
+}
+
+// findVideoThumb looks for a thumbnail in the same dir as video, same base name. Returns path or "".
+func findVideoThumb(videoPath string) string {
+	dir := filepath.Dir(videoPath)
+	base := strings.TrimSuffix(filepath.Base(videoPath), filepath.Ext(videoPath))
+	for _, ext := range ThumbExts {
+		candidate := filepath.Join(dir, base+ext)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return ""
+}
+
+// extractVideoThumb uses ffmpeg to extract a frame at 1s and save as .jpg. Returns path or "".
+func extractVideoThumb(videoPath string) string {
+	dir := filepath.Dir(videoPath)
+	base := strings.TrimSuffix(filepath.Base(videoPath), filepath.Ext(videoPath))
+	outPath := filepath.Join(dir, base+".jpg")
+	cmd := exec.Command("ffmpeg",
+		"-y",
+		"-i", videoPath,
+		"-ss", "00:00:01",
+		"-vframes", "1",
+		"-q:v", "2",
+		outPath,
+	)
+	if err := cmd.Run(); err != nil {
+		return ""
+	}
+	if _, err := os.Stat(outPath); err != nil {
+		return ""
+	}
+	return outPath
+}
+
+// findOrExtractVideoThumb returns existing thumbnail or generates one via ffmpeg.
+func findOrExtractVideoThumb(videoPath string) string {
+	if p := findVideoThumb(videoPath); p != "" {
+		return p
+	}
+	return extractVideoThumb(videoPath)
 }

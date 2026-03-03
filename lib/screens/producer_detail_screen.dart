@@ -1,13 +1,24 @@
 import 'package:flutter/material.dart';
 
+import '../api/api.dart';
+import '../models/album.dart';
 import '../models/producer.dart';
+import '../models/track.dart';
 import '../theme/app_theme.dart';
+import 'album_detail_screen.dart';
 
 /// Producer profile: hero with blurred avatar, tabs, Discography, Featured MVs (miku_produce_detail.html).
 class ProducerDetailScreen extends StatefulWidget {
-  const ProducerDetailScreen({super.key, required this.producer});
+  const ProducerDetailScreen({
+    super.key,
+    required this.producer,
+    this.baseUrl = ApiConfig.defaultBaseUrl,
+    this.onAlbumTap,
+  });
 
   final Producer producer;
+  final String baseUrl;
+  final ValueChanged<Album>? onAlbumTap;
 
   @override
   State<ProducerDetailScreen> createState() => _ProducerDetailScreenState();
@@ -15,6 +26,40 @@ class ProducerDetailScreen extends StatefulWidget {
 
 class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
   int _tabIndex = 0;
+  List<Album> _albums = [];
+  List<Track> _tracks = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProducer();
+  }
+
+  Future<void> _loadProducer() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final result = await ApiClient(baseUrl: widget.baseUrl).getProducer(widget.producer.name);
+      if (result == null || !mounted) return;
+      setState(() {
+        _albums = result.albums;
+        _tracks = result.tracks;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  List<Track> get _tracksWithMv => _tracks.where((t) => t.videoPath.isNotEmpty).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -26,66 +71,80 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
             child: CustomScrollView(
               slivers: [
                 SliverToBoxAdapter(
-                  child: _HeroSection(producer: widget.producer),
+                  child: _HeroSection(producer: widget.producer, baseUrl: widget.baseUrl),
                 ),
                 SliverToBoxAdapter(
                   child: _TabBar(
                     index: _tabIndex,
                     onTap: (i) => setState(() => _tabIndex = i),
+                    mvCount: _tracksWithMv.length,
                   ),
                 ),
-                SliverPadding(
-                  padding: const EdgeInsets.all(48),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _SectionTitle('Discography'),
-                      const SizedBox(height: 32),
-                      _DiscographyGrid(),
-                      const SizedBox(height: 64),
-                      _SectionTitle('Featured MVs'),
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: () {},
+                if (_loading)
+                  const SliverFillRemaining(
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (_error != null)
+                  SliverFillRemaining(
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_error!, textAlign: TextAlign.center),
+                            const SizedBox(height: 16),
+                            FilledButton(onPressed: _loadProducer, child: const Text('Retry')),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.all(48),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
+                        _SectionTitle('Discography'),
+                        const SizedBox(height: 32),
+                        _DiscographyGrid(
+                          albums: _albums,
+                          baseUrl: widget.baseUrl,
+                          onAlbumTap: (album) {
+                            if (widget.onAlbumTap != null) {
+                              widget.onAlbumTap!(album);
+                            } else {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (context) => AlbumDetailScreen(
+                                    album: album,
+                                    baseUrl: widget.baseUrl,
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 64),
+                        _SectionTitle('Featured MVs'),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
                           child: Text(
-                            'VIEW ALL VIDEO ASSETS',
+                            '${_tracksWithMv.length} tracks with local MV',
                             style: Theme.of(context).textTheme.labelSmall?.copyWith(
                                   color: AppTheme.textMuted,
                                 ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      _FeaturedMVsGrid(),
-                    ]),
+                        const SizedBox(height: 24),
+                        _FeaturedMVsGrid(
+                          tracks: _tracksWithMv,
+                          baseUrl: widget.baseUrl,
+                        ),
+                      ]),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            decoration: BoxDecoration(
-              color: Colors.black,
-              border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'NAVIGATING: PRODUCER_PROFILE // ${widget.producer.name}',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: AppTheme.textMuted,
-                      ),
-                ),
-                Text(
-                  'NAS ASSET SYNC: COMPLETED',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: AppTheme.mikuGreen,
-                      ),
-                ),
               ],
             ),
           ),
@@ -96,19 +155,21 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
 }
 
 class _HeroSection extends StatelessWidget {
-  const _HeroSection({required this.producer});
+  const _HeroSection({required this.producer, required this.baseUrl});
 
   final Producer producer;
+  final String baseUrl;
 
   @override
   Widget build(BuildContext context) {
+    final avatarUrl = ApiClient(baseUrl: baseUrl).producerAvatarUrl(producer.name);
     return Stack(
       children: [
         SizedBox(
           height: 384,
           width: double.infinity,
           child: Image.network(
-            producer.avatarUrl,
+            avatarUrl,
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => Container(color: AppTheme.cardBg),
           ),
@@ -149,7 +210,7 @@ class _HeroSection extends StatelessWidget {
                 ),
                 child: ClipOval(
                   child: Image.network(
-                    producer.avatarUrl,
+                    avatarUrl,
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(
                       color: AppTheme.cardBg,
@@ -164,21 +225,7 @@ class _HeroSection extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.verified, size: 14, color: AppTheme.mikuGreen),
-                        const SizedBox(width: 8),
-                        Text(
-                          'VERIFIED PRODUCER',
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: AppTheme.mikuGreen,
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
+                    SelectableText(
                       producer.name,
                       style: Theme.of(context).textTheme.displayLarge?.copyWith(
                             color: AppTheme.textPrimary,
@@ -188,7 +235,7 @@ class _HeroSection extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      '${producer.trackCount} Tracks across ${producer.albumCount} Albums in your NAS. Most used Vocalist: Hatsune Miku.',
+                      '${producer.trackCount} Tracks across ${producer.albumCount} Albums in your NAS.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: AppTheme.textMuted,
                           ),
@@ -218,10 +265,11 @@ class _HeroSection extends StatelessWidget {
 }
 
 class _TabBar extends StatelessWidget {
-  const _TabBar({required this.index, required this.onTap});
+  const _TabBar({required this.index, required this.onTap, this.mvCount = 0});
 
   final int index;
   final ValueChanged<int> onTap;
+  final int mvCount;
 
   @override
   Widget build(BuildContext context) {
@@ -236,7 +284,7 @@ class _TabBar extends StatelessWidget {
         children: List.generate(tabs.length, (i) {
           final isActive = index == i;
           final label = tabs[i];
-          final showBadge = i == 2;
+          final showBadge = i == 2 && mvCount > 0;
           return InkWell(
             onTap: () => onTap(i),
             child: Container(
@@ -268,7 +316,7 @@ class _TabBar extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        '12',
+                        '$mvCount',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                               color: Colors.black,
                               fontSize: 9,
@@ -314,8 +362,26 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _DiscographyGrid extends StatelessWidget {
+  const _DiscographyGrid({
+    required this.albums,
+    required this.baseUrl,
+    required this.onAlbumTap,
+  });
+
+  final List<Album> albums;
+  final String baseUrl;
+  final ValueChanged<Album> onAlbumTap;
+
   @override
   Widget build(BuildContext context) {
+    if (albums.isEmpty) {
+      return Text(
+        'No albums',
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppTheme.textMuted,
+            ),
+      );
+    }
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -323,13 +389,14 @@ class _DiscographyGrid extends StatelessWidget {
       mainAxisSpacing: 32,
       crossAxisSpacing: 32,
       childAspectRatio: 0.85,
-      children: [
-        _AlbumTile(
-          coverUrl: 'https://api.dicebear.com/7.x/identicon/svg?seed=album1',
-          title: 'HUMAN',
-          subtitle: '2021 • 14 Tracks',
-        ),
-      ],
+      children: albums
+          .map((a) => _AlbumTile(
+                coverUrl: a.coverUrl,
+                title: a.title,
+                subtitle: '${a.trackCount} Tracks',
+                onTap: () => onAlbumTap(a),
+              ))
+          .toList(),
     );
   }
 }
@@ -339,16 +406,18 @@ class _AlbumTile extends StatelessWidget {
     required this.coverUrl,
     required this.title,
     required this.subtitle,
+    required this.onTap,
   });
 
   final String coverUrl;
   final String title;
   final String subtitle;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () {},
+      onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,8 +459,24 @@ class _AlbumTile extends StatelessWidget {
 }
 
 class _FeaturedMVsGrid extends StatelessWidget {
+  const _FeaturedMVsGrid({
+    required this.tracks,
+    required this.baseUrl,
+  });
+
+  final List<Track> tracks;
+  final String baseUrl;
+
   @override
   Widget build(BuildContext context) {
+    if (tracks.isEmpty) {
+      return Text(
+        'No tracks with local MV',
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppTheme.textMuted,
+            ),
+      );
+    }
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -399,13 +484,17 @@ class _FeaturedMVsGrid extends StatelessWidget {
       mainAxisSpacing: 24,
       crossAxisSpacing: 24,
       childAspectRatio: 16 / 9,
-      children: [
-        _MVCard(
-          imageUrl: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=500',
-          title: 'ノンブレス・オブリージュ',
-          subtitle: 'Local 4K Source',
-        ),
-      ],
+      children: tracks
+          .map((t) => _MVCard(
+                imageUrl: t.videoThumbPath.isNotEmpty
+                    ? ApiClient(baseUrl: baseUrl).streamThumbUrl(t.id)
+                    : '',
+                title: t.title,
+                subtitle: 'Local MV',
+                trackId: t.id,
+                baseUrl: baseUrl,
+              ))
+          .toList(),
     );
   }
 }
@@ -415,30 +504,35 @@ class _MVCard extends StatelessWidget {
     required this.imageUrl,
     required this.title,
     required this.subtitle,
+    required this.trackId,
+    required this.baseUrl,
   });
 
   final String imageUrl;
   final String title;
   final String subtitle;
+  final int trackId;
+  final String baseUrl;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () {},
+      onTap: () {
+        // Could open video player; for now just placeholder
+      },
       borderRadius: BorderRadius.circular(12),
       child: Stack(
         fit: StackFit.expand,
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Image.network(
-              imageUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                color: AppTheme.cardBg,
-                child: const Icon(Icons.movie, color: AppTheme.textMuted, size: 48),
-              ),
-            ),
+            child: imageUrl.isNotEmpty
+                ? Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _placeholder(context),
+                  )
+                : _placeholder(context),
           ),
           Container(
             decoration: BoxDecoration(
@@ -477,10 +571,10 @@ class _MVCard extends StatelessWidget {
               ],
             ),
           ),
-          const Center(
+          Center(
             child: Icon(
               Icons.play_circle_outline,
-              color: Colors.white,
+              color: Colors.white.withValues(alpha: 0.9),
               size: 48,
             ),
           ),
@@ -488,4 +582,9 @@ class _MVCard extends StatelessWidget {
       ),
     );
   }
+
+  Widget _placeholder(BuildContext context) => Container(
+        color: AppTheme.cardBg,
+        child: const Icon(Icons.movie, color: AppTheme.textMuted, size: 48),
+      );
 }

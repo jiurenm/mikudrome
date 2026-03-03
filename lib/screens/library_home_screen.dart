@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../api/api.dart';
 import '../models/album.dart';
+import '../models/producer.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_shell.dart';
 import 'album_detail_screen.dart';
 import 'albums_screen.dart';
+import 'producer_detail_screen.dart';
 import 'producers_screen.dart';
 
 /// Root screen: app shell + route-based content. Album detail is shown in-shell (sidebar stays).
@@ -19,16 +21,26 @@ class LibraryHomeScreen extends StatefulWidget {
 class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   ShellRoute _route = ShellRoute.albums;
   Album? _selectedAlbum;
+  Producer? _selectedProducer;
 
   Widget _contentForRoute(ShellRoute route) {
     switch (route) {
       case ShellRoute.albums:
         return AlbumsScreen(
           baseUrl: ApiConfig.defaultBaseUrl,
-          onAlbumTap: (album) => setState(() => _selectedAlbum = album),
+          onAlbumTap: (album) => setState(() {
+            _selectedAlbum = album;
+            _selectedProducer = null;
+          }),
         );
       case ShellRoute.producers:
-        return const ProducersScreen();
+        return ProducersScreen(
+          baseUrl: ApiConfig.defaultBaseUrl,
+          onProducerTap: (producer) => setState(() {
+            _selectedProducer = producer;
+            _selectedAlbum = null;
+          }),
+        );
       case ShellRoute.vocalists:
         return _PlaceholderScreen(
           title: 'Vocalists',
@@ -54,18 +66,37 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final Widget content = _selectedAlbum != null
-        ? AlbumDetailScreen(
-            album: _selectedAlbum!,
-            baseUrl: ApiConfig.defaultBaseUrl,
-          )
-        : _contentForRoute(_route);
+    Widget content;
+    if (_selectedAlbum != null) {
+      content = AlbumDetailScreen(
+        album: _selectedAlbum!,
+        baseUrl: ApiConfig.defaultBaseUrl,
+        onProducerTap: (producer) => setState(() {
+          _selectedProducer = producer;
+          _selectedAlbum = null;
+          _route = ShellRoute.producers;
+        }),
+      );
+    } else if (_selectedProducer != null) {
+      content = ProducerDetailScreen(
+        producer: _selectedProducer!,
+        baseUrl: ApiConfig.defaultBaseUrl,
+        onAlbumTap: (album) => setState(() {
+          _selectedAlbum = album;
+          _selectedProducer = null;
+          _route = ShellRoute.albums;
+        }),
+      );
+    } else {
+      content = _contentForRoute(_route);
+    }
 
     return AppShell(
       currentRoute: _route,
       onNavigate: (r) => setState(() {
         _route = r;
         _selectedAlbum = null;
+        _selectedProducer = null;
       }),
       child: content,
     );

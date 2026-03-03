@@ -4,6 +4,7 @@ class Track {
   final String title;
   final String audioPath;
   final String videoPath;
+  final String videoThumbPath; // MV thumbnail (same name as video or ffmpeg-generated)
   final int trackNumber;
   final String producer; // P主
   final String vocal;
@@ -16,6 +17,7 @@ class Track {
     required this.title,
     required this.audioPath,
     required this.videoPath,
+    this.videoThumbPath = '',
     this.trackNumber = 0,
     this.producer = '',
     this.vocal = '',
@@ -30,6 +32,7 @@ class Track {
       title: json['title'] as String? ?? '',
       audioPath: json['audio_path'] as String? ?? '',
       videoPath: json['video_path'] as String? ?? '',
+      videoThumbPath: json['video_thumb_path'] as String? ?? '',
       trackNumber: json['track_number'] as int? ?? 0,
       producer: json['producer'] as String? ?? '',
       vocal: json['vocal'] as String? ?? '',
