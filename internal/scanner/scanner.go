@@ -359,6 +359,11 @@ func findVideoForBase(dir, base string) string {
 	return ""
 }
 
+// FindVideoForBase is the exported version for use after downloading MV (e.g. from api package).
+func FindVideoForBase(dir, base string) string {
+	return findVideoForBase(dir, base)
+}
+
 // findVideoThumb looks for a thumbnail in the same dir as video, same base name. Returns path or "".
 func findVideoThumb(videoPath string) string {
 	dir := filepath.Dir(videoPath)
@@ -400,4 +405,9 @@ func findOrExtractVideoThumb(videoPath string) string {
 		return p
 	}
 	return extractVideoThumb(videoPath)
+}
+
+// FindOrExtractVideoThumb is the exported version for use after downloading MV (e.g. from api package).
+func FindOrExtractVideoThumb(videoPath string) string {
+	return findOrExtractVideoThumb(videoPath)
 }

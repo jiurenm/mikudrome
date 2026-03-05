@@ -136,6 +136,15 @@ func (s *Store) UpsertTrack(title, audioPath, videoPath, videoThumbPath string, 
 	return err
 }
 
+// UpdateTrackVideo sets video_path and video_thumb_path for a track by id (e.g. after downloading MV via yt-dlp).
+func (s *Store) UpdateTrackVideo(trackID int64, videoPath, videoThumbPath string) error {
+	_, err := s.db.Exec(
+		`UPDATE tracks SET video_path = ?, video_thumb_path = ? WHERE id = ?`,
+		videoPath, videoThumbPath, trackID,
+	)
+	return err
+}
+
 // ListAlbums returns all albums ordered by artist, title.
 func (s *Store) ListAlbums() ([]Album, error) {
 	rows, err := s.db.Query(`

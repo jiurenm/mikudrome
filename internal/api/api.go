@@ -5,11 +5,13 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/mikudrome/mikudrome/internal/scanner"
 	"github.com/mikudrome/mikudrome/internal/store"
 )
 
@@ -37,11 +39,18 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.listTracks(w, r)
 		return
 	}
-	if strings.HasPrefix(r.URL.Path, "/api/tracks/") && r.Method == http.MethodGet {
-		idStr := strings.TrimPrefix(r.URL.Path, "/api/tracks/")
-		if idStr != "" {
-			h.getTrack(w, r, idStr)
-			return
+	if strings.HasPrefix(r.URL.Path, "/api/tracks/") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/api/tracks/")
+		parts := strings.SplitN(trimmed, "/", 2)
+		if parts[0] != "" {
+			if len(parts) == 2 && parts[1] == "download-mv" && r.Method == http.MethodPost {
+				h.downloadTrackMV(w, r, parts[0])
+				return
+			}
+			if r.Method == http.MethodGet && len(parts) == 1 {
+				h.getTrack(w, r, parts[0])
+				return
+			}
 		}
 	}
 	if r.URL.Path == "/api/albums" && r.Method == http.MethodGet {
@@ -123,6 +132,62 @@ func (h *Handler) getTrack(w http.ResponseWriter, _ *http.Request, idStr string)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(track)
+}
+
+func (h *Handler) downloadTrackMV(w http.ResponseWriter, r *http.Request, idStr string) {
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	track, ok, err := h.store.GetTrackByID(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		http.NotFound(w, nil)
+		return
+	}
+	var body struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.URL) == "" {
+		http.Error(w, "body must be JSON with non-empty \"url\"", http.StatusBadRequest)
+		return
+	}
+	videoURL := strings.TrimSpace(body.URL)
+	dir := filepath.Dir(track.AudioPath)
+	baseName := strings.TrimSuffix(filepath.Base(track.AudioPath), filepath.Ext(track.AudioPath))
+	outputTemplate := filepath.Join(dir, baseName+".%(ext)s")
+	outputTemplate = filepath.ToSlash(outputTemplate)
+	cmd := exec.Command("yt-dlp",
+		"-f", "bestvideo+bestaudio",
+		"--merge-output-format", "mp4",
+		"--write-thumbnail",
+		"--embed-thumbnail",
+		"-o", outputTemplate,
+		"--no-playlist",
+		videoURL)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		http.Error(w, "yt-dlp failed: "+string(out), http.StatusInternalServerError)
+		return
+	}
+	videoPath := scanner.FindVideoForBase(dir, filepath.Join(dir, baseName))
+	if videoPath == "" {
+		http.Error(w, "download did not produce a known video file in album dir", http.StatusInternalServerError)
+		return
+	}
+	thumbPath := scanner.FindOrExtractVideoThumb(videoPath)
+	if err := h.store.UpdateTrackVideo(id, videoPath, thumbPath); err != nil {
+		http.Error(w, "failed to update track: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"video_path":       videoPath,
+		"video_thumb_path": thumbPath,
+	})
 }
 
 func (h *Handler) listAlbums(w http.ResponseWriter, _ *http.Request) {
@@ -319,6 +384,6 @@ func addCORSHeaders(w http.ResponseWriter, r *http.Request) {
 		origin = "*"
 	}
 	w.Header().Set("Access-Control-Allow-Origin", origin)
-	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 }

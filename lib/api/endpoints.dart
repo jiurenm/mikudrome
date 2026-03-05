@@ -7,6 +7,7 @@ abstract final class ApiEndpoints {
   // Tracks
   static const String tracks = '$_prefix/tracks';
   static String track(int id) => '$_prefix/tracks/$id';
+  static String trackDownloadMv(int id) => '$_prefix/tracks/$id/download-mv';
 
   // Albums
   static const String albums = '$_prefix/albums';

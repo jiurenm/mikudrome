@@ -6,6 +6,59 @@ import '../models/track.dart';
 import '../api/api.dart';
 import '../theme/app_theme.dart';
 
+/// Shows a brief message at the top of the screen (overlay).
+void _showTopMessage(BuildContext context, String message, {required bool isError}) {
+  final overlay = Overlay.of(context);
+  late OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (ctx) => Positioned(
+      top: MediaQuery.paddingOf(ctx).top + 16,
+      left: 24,
+      right: 24,
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          decoration: BoxDecoration(
+            color: isError ? Colors.red.shade800 : AppTheme.mikuGreen,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Icon(
+                isError ? Icons.error_outline : Icons.check_circle_outline,
+                color: isError ? Colors.white : Colors.black,
+                size: 22,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: TextStyle(
+                    color: isError ? Colors.white : Colors.black,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+  overlay.insert(entry);
+  Future.delayed(const Duration(seconds: 3), () {
+    entry.remove();
+  });
+}
+
 /// Album detail: hero + PLAY ALL + track list from API.
 class AlbumDetailScreen extends StatefulWidget {
   const AlbumDetailScreen({
@@ -169,6 +222,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                         ..._tracks.asMap().entries.map((e) => _TrackRow(
                               index: e.key + 1,
                               track: e.value,
+                              baseUrl: widget.baseUrl,
+                              onDownloadComplete: _loadAlbum,
                             )),
                       ]),
                     ),
@@ -400,10 +455,17 @@ class _TrackListHeader extends StatelessWidget {
 }
 
 class _TrackRow extends StatefulWidget {
-  const _TrackRow({required this.index, required this.track});
+  const _TrackRow({
+    required this.index,
+    required this.track,
+    required this.baseUrl,
+    required this.onDownloadComplete,
+  });
 
   final int index;
   final Track track;
+  final String baseUrl;
+  final VoidCallback onDownloadComplete;
 
   @override
   State<_TrackRow> createState() => _TrackRowState();
@@ -411,6 +473,28 @@ class _TrackRow extends StatefulWidget {
 
 class _TrackRowState extends State<_TrackRow> {
   bool _hovering = false;
+
+  void _openDownloadMvDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => _DownloadMvDialog(
+        trackTitle: widget.track.title,
+        trackId: widget.track.id,
+        baseUrl: widget.baseUrl,
+        onSuccess: () {
+          widget.onDownloadComplete();
+          if (context.mounted) {
+            _showTopMessage(context, 'MV 已下载并关联到曲目', isError: false);
+          }
+        },
+        onError: (message) {
+          if (context.mounted) {
+            _showTopMessage(context, message, isError: true);
+          }
+        },
+      ),
+    );
+  }
 
   String get _vocalLine {
     final p = widget.track.producer.trim();
@@ -522,12 +606,13 @@ class _TrackRowState extends State<_TrackRow> {
                                 ),
                           ),
                         ),
-                      if (!track.hasVideo && track.format.isEmpty)
+                      if (!track.hasVideo) ...[
+                        if (track.format.isNotEmpty) const SizedBox(width: 12),
                         AnimatedOpacity(
                           duration: const Duration(milliseconds: 150),
                           opacity: _hovering ? 1 : 0,
                           child: IconButton(
-                            onPressed: () {},
+                            onPressed: () => _openDownloadMvDialog(context),
                             style: IconButton.styleFrom(
                               foregroundColor: AppTheme.textMuted,
                               minimumSize: Size.zero,
@@ -550,6 +635,7 @@ class _TrackRowState extends State<_TrackRow> {
                             icon: const Icon(Icons.download, size: 20),
                           ),
                         ),
+                      ],
                     ],
                   ),
                 ),
@@ -572,6 +658,115 @@ class _TrackRowState extends State<_TrackRow> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _DownloadMvDialog extends StatefulWidget {
+  const _DownloadMvDialog({
+    required this.trackTitle,
+    required this.trackId,
+    required this.baseUrl,
+    required this.onSuccess,
+    required this.onError,
+  });
+
+  final String trackTitle;
+  final int trackId;
+  final String baseUrl;
+  final VoidCallback onSuccess;
+  final void Function(String message) onError;
+
+  @override
+  State<_DownloadMvDialog> createState() => _DownloadMvDialogState();
+}
+
+class _DownloadMvDialogState extends State<_DownloadMvDialog> {
+  final _urlController = TextEditingController();
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _urlController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final url = _urlController.text.trim();
+    if (url.isEmpty) {
+      widget.onError('请输入视频链接（如 YouTube）');
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      await ApiClient(baseUrl: widget.baseUrl).downloadTrackMv(widget.trackId, url);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      widget.onSuccess();
+    } catch (e) {
+      if (!mounted) return;
+      widget.onError(e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppTheme.cardBg,
+      title: Text(
+        '下载 MV',
+        style: TextStyle(color: AppTheme.textPrimary),
+      ),
+      content: SizedBox(
+        width: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.trackTitle,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: AppTheme.textMuted,
+                  ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _urlController,
+              enabled: !_loading,
+              decoration: InputDecoration(
+                labelText: '视频链接（YouTube / Bilibili 等）',
+                hintText: 'https://...',
+                border: const OutlineInputBorder(),
+                filled: true,
+                fillColor: AppTheme.mikuDark,
+              ),
+              style: TextStyle(color: AppTheme.textPrimary),
+              onSubmitted: (_) => _submit(),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _loading ? null : () => Navigator.of(context).pop(),
+          child: Text('取消', style: TextStyle(color: AppTheme.textMuted)),
+        ),
+        FilledButton(
+          onPressed: _loading ? null : _submit,
+          style: FilledButton.styleFrom(backgroundColor: AppTheme.mikuGreen, foregroundColor: Colors.black),
+          child: _loading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('下载'),
+        ),
+      ],
     );
   }
 }

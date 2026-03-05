@@ -38,6 +38,25 @@ class ApiClient {
     return Track.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
+  /// Download MV for a track from [url] (e.g. YouTube) via backend yt-dlp, then associate with track.
+  /// Returns the updated track's video_path and video_thumb_path on success.
+  Future<({String videoPath, String videoThumbPath})> downloadTrackMv(int trackId, String url) async {
+    final res = await http.post(
+      Uri.parse(_url(ApiEndpoints.trackDownloadMv(trackId))),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'url': url}),
+    );
+    if (res.statusCode != 200) {
+      final msg = res.body.isNotEmpty ? res.body : 'Download failed';
+      throw ApiException(msg, res.statusCode);
+    }
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    return (
+      videoPath: data['video_path'] as String? ?? '',
+      videoThumbPath: data['video_thumb_path'] as String? ?? '',
+    );
+  }
+
   // --- Albums ---
 
   Future<List<Album>> getAlbums() async {

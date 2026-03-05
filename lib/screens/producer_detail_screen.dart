@@ -758,7 +758,7 @@ class _FeaturedMVsGrid extends StatelessWidget {
   }
 }
 
-class _MVCard extends StatelessWidget {
+class _MVCard extends StatefulWidget {
   const _MVCard({
     required this.imageUrl,
     required this.title,
@@ -774,36 +774,46 @@ class _MVCard extends StatelessWidget {
   final String baseUrl;
 
   @override
+  State<_MVCard> createState() => _MVCardState();
+}
+
+class _MVCardState extends State<_MVCard> {
+  bool _hovering = false;
+
+  @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () {
-        // Could open video player; for now just placeholder
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: imageUrl.isNotEmpty
-                ? Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _placeholder(context),
-                  )
-                : _placeholder(context),
-          ),
-          Container(
-            decoration: BoxDecoration(
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: InkWell(
+        onTap: () {
+          // Could open video player; for now just placeholder
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  Colors.black.withValues(alpha: 0.8),
-                ],
-              ),
+              child: widget.imageUrl.isNotEmpty
+                  ? Image.network(
+                      widget.imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _placeholder(context),
+                    )
+                  : _placeholder(context),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.8),
+                  ],
+                ),
             ),
           ),
           Positioned(
@@ -814,14 +824,14 @@ class _MVCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
+                  widget.title,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
                       ),
                 ),
                 Text(
-                  subtitle,
+                  widget.subtitle,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: AppTheme.mikuGreen,
                         fontWeight: FontWeight.w900,
@@ -831,13 +841,18 @@ class _MVCard extends StatelessWidget {
             ),
           ),
           Center(
-            child: Icon(
-              Icons.play_circle_outline,
-              color: Colors.white.withValues(alpha: 0.9),
-              size: 48,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 180),
+              opacity: _hovering ? 1 : 0,
+              child: Icon(
+                Icons.play_circle_outline,
+                color: Colors.white.withValues(alpha: 0.9),
+                size: 48,
+              ),
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
