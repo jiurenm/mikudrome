@@ -529,7 +529,7 @@ class _TrackRowState extends State<_TrackRow> {
                 SizedBox(
                   width: 32,
                   child: Text(
-                    index.toString().padLeft(2, '0'),
+                    track.displayNumber(index),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: numberColor,
                         ),
@@ -607,34 +607,30 @@ class _TrackRowState extends State<_TrackRow> {
                                 ),
                           ),
                         ),
-                      if (!track.hasVideo) ...[
+                      if (!track.hasVideo && _hovering) ...[
                         if (track.format.isNotEmpty) const SizedBox(width: 12),
-                        AnimatedOpacity(
-                          duration: const Duration(milliseconds: 150),
-                          opacity: _hovering ? 1 : 0,
-                          child: IconButton(
-                            onPressed: () => _openDownloadMvDialog(context),
-                            style: IconButton.styleFrom(
-                              foregroundColor: AppTheme.textMuted,
-                              minimumSize: Size.zero,
-                              padding: const EdgeInsets.all(8),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ).copyWith(
-                              overlayColor: MaterialStateProperty.resolveWith<Color?>((states) {
-                                if (states.contains(MaterialState.hovered)) {
-                                  return AppTheme.textPrimary.withValues(alpha: 0.08);
-                                }
-                                return null;
-                              }),
-                              foregroundColor: MaterialStateProperty.resolveWith<Color>((states) {
-                                if (states.contains(MaterialState.hovered)) {
-                                  return AppTheme.textPrimary;
-                                }
-                                return AppTheme.textMuted;
-                              }),
-                            ),
-                            icon: const Icon(Icons.download, size: 20),
+                        IconButton(
+                          onPressed: () => _openDownloadMvDialog(context),
+                          style: IconButton.styleFrom(
+                            foregroundColor: AppTheme.textMuted,
+                            minimumSize: Size.zero,
+                            padding: const EdgeInsets.all(8),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ).copyWith(
+                            overlayColor: MaterialStateProperty.resolveWith<Color?>((states) {
+                              if (states.contains(MaterialState.hovered)) {
+                                return AppTheme.textPrimary.withValues(alpha: 0.08);
+                              }
+                              return null;
+                            }),
+                            foregroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+                              if (states.contains(MaterialState.hovered)) {
+                                return AppTheme.textPrimary;
+                              }
+                              return AppTheme.textMuted;
+                            }),
                           ),
+                          icon: const Icon(Icons.download, size: 20),
                         ),
                       ],
                     ],

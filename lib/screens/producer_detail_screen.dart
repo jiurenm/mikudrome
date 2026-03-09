@@ -489,7 +489,7 @@ class _ProducerTrackRowState extends State<_ProducerTrackRow> {
                 SizedBox(
                   width: 32,
                   child: Text(
-                    index.toString().padLeft(2, '0'),
+                    track.displayNumber(index),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: numberColor,
                         ),
@@ -567,33 +567,29 @@ class _ProducerTrackRowState extends State<_ProducerTrackRow> {
                                 ),
                           ),
                         ),
-                      if (!track.hasVideo && track.format.isEmpty)
-                        AnimatedOpacity(
-                          duration: const Duration(milliseconds: 150),
-                          opacity: _hovering ? 1 : 0,
-                          child: IconButton(
-                            onPressed: () {},
-                            style: IconButton.styleFrom(
-                              foregroundColor: AppTheme.textMuted,
-                              minimumSize: Size.zero,
-                              padding: const EdgeInsets.all(8),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ).copyWith(
-                              overlayColor: MaterialStateProperty.resolveWith<Color?>((states) {
-                                if (states.contains(MaterialState.hovered)) {
-                                  return AppTheme.textPrimary.withValues(alpha: 0.08);
-                                }
-                                return null;
-                              }),
-                              foregroundColor: MaterialStateProperty.resolveWith<Color>((states) {
-                                if (states.contains(MaterialState.hovered)) {
-                                  return AppTheme.textPrimary;
-                                }
-                                return AppTheme.textMuted;
-                              }),
-                            ),
-                            icon: const Icon(Icons.download, size: 20),
+                      if (!track.hasVideo && track.format.isEmpty && _hovering)
+                        IconButton(
+                          onPressed: () {},
+                          style: IconButton.styleFrom(
+                            foregroundColor: AppTheme.textMuted,
+                            minimumSize: Size.zero,
+                            padding: const EdgeInsets.all(8),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ).copyWith(
+                            overlayColor: MaterialStateProperty.resolveWith<Color?>((states) {
+                              if (states.contains(MaterialState.hovered)) {
+                                return AppTheme.textPrimary.withValues(alpha: 0.08);
+                              }
+                              return null;
+                            }),
+                            foregroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+                              if (states.contains(MaterialState.hovered)) {
+                                return AppTheme.textPrimary;
+                              }
+                              return AppTheme.textMuted;
+                            }),
                           ),
+                          icon: const Icon(Icons.download, size: 20),
                         ),
                     ],
                   ),

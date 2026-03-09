@@ -30,9 +30,9 @@ var ThumbExts = []string{".jpg", ".jpeg", ".png", ".webp"}
 // extracted_cover.jpg is written when we extract from a track's embedded art.
 var CoverNames = []string{"Cover.jpg", "cover.jpg", "Jacket.jpg", "jacket.jpg", "folder.jpg", "Folder.jpg", "extracted_cover.jpg", "extracted_cover.png"}
 
-// Scan walks mediaRoot, finds audio files, and for each audio reads metadata (title, track#, producer, vocal),
-// looks for same-named video. Assumes structure media/Artist/Album/*.flac. If album dir has no cover file,
-// extracts cover from the first track that has embedded art.
+// Scan walks mediaRoot, finds audio files, and for each audio reads metadata (title, track#, disc#, album, producer, vocal),
+// looks for same-named video. Assumes structure media/Artist/Album/*.flac. Album title comes from metadata when
+// present, otherwise falls back to folder name. If album dir has no cover file, extracts cover from embedded art.
 func Scan(mediaRoot string, s *store.Store) error {
 	audioPaths := make(map[string]string) // base name (no ext) -> full path
 	err := filepath.Walk(mediaRoot, func(path string, info os.FileInfo, err error) error {
@@ -80,10 +80,12 @@ func Scan(mediaRoot string, s *store.Store) error {
 
 		title := fallbackTitle
 		trackNumber := 0
+		discNumber := 1
 		producer := ""
 		vocal := ""
 		year := 0
 		durationSeconds := 0
+		albumTitleFromMeta := ""
 		if m, err := readMetadata(audioPath); err == nil {
 			if t := m.Title(); t != "" {
 				title = t
@@ -91,8 +93,14 @@ func Scan(mediaRoot string, s *store.Store) error {
 			if n, _ := m.Track(); n > 0 {
 				trackNumber = n
 			}
+			if d, _ := m.Disc(); d > 0 {
+				discNumber = d
+			}
 			producer = strings.TrimSpace(m.Composer())
 			vocal = m.Artist()
+			if a := m.Album(); a != "" {
+				albumTitleFromMeta = strings.TrimSpace(a)
+			}
 			if y := m.Year(); y > 0 {
 				year = y
 			}
@@ -116,7 +124,10 @@ func Scan(mediaRoot string, s *store.Store) error {
 			albumDir := dirAbs
 			artistDir := filepath.Dir(albumDir) // P主 folder (media/Artist)
 			artist := filepath.Base(artistDir)
-			albumTitle := filepath.Base(albumDir)
+			albumTitle := albumTitleFromMeta
+			if albumTitle == "" {
+				albumTitle = filepath.Base(albumDir)
+			}
 			coverPath := findCoverInDir(albumDir)
 			if coverPath == "" {
 				coverPath = extractCoverFromTrack(audioPath, albumDir)
@@ -137,7 +148,7 @@ func Scan(mediaRoot string, s *store.Store) error {
 			// Track at media root: still upsert producer for listing
 			producerID, _ = s.UpsertProducer(producer, "")
 		}
-		if err := s.UpsertTrack(title, audioPath, videoPath, videoThumbPath, albumID, producerID, trackNumber, producer, vocal, year, durationSeconds, format); err != nil {
+		if err := s.UpsertTrack(title, audioPath, videoPath, videoThumbPath, albumID, producerID, discNumber, trackNumber, producer, vocal, year, durationSeconds, format); err != nil {
 			return err
 		}
 	}
