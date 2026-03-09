@@ -6,7 +6,7 @@
 
 ## 技术栈
 
-* **Server:** Go 1.21+ · SQLite（pure Go：modernc.org/sqlite）· REST API
+* **Server:** Go 1.26+ · SQLite（pure Go：modernc.org/sqlite）· REST API
 * **Client:** Flutter 3.x · `video_player`
 
 ---
@@ -15,7 +15,7 @@
 
 | 依赖      | 版本     |
 | ------- | ------ |
-| Go      | ≥ 1.21 |
+| Go      | ≥ 1.26 |
 | Flutter | 3.x    |
 
 ```bash
@@ -27,7 +27,23 @@ flutter doctor
 
 ## 快速开始
 
-### 一键运行（推荐）
+### Docker 部署（推荐）
+
+```bash
+# 使用 docker-compose
+docker-compose up -d
+
+# 或使用 docker build
+docker build -t mikudrome .
+docker run -d -p 8080:8080 \
+  -v $(pwd)/media:/app/media \
+  -v $(pwd)/data:/app/data \
+  mikudrome
+```
+
+访问 http://localhost:8080 使用 Web 客户端。
+
+### 本地运行
 
 ```bash
 make build    # 构建后端 + Flutter Web

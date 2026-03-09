@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  mikudrome:
+    build: .
+    container_name: mikudrome
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./media:/app/media          # 媒体文件目录
+      - ./data:/app/data            # 数据库目录
+    environment:
+      - MEDIA_ROOT=/app/media
+      - DB_PATH=/app/data/mikudrome.db
+      - HTTP_ADDR=:8080
+      - WEB_ROOT=/app/build/web
+      - TZ=Asia/Shanghai
+    restart: unless-stopped

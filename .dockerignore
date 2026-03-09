@@ -1,0 +1,31 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+bin/
+build/
+.dart_tool/
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Media files
+media/
+*.mp3
+*.flac
+*.mp4
+*.mkv
+*.webp
+*.jpg
+*.png
+
+# IDE
+.vscode/
+.idea/
+
+# Misc
+*.log
+.DS_Store
