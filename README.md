@@ -115,6 +115,9 @@ API 地址通过环境变量 `API_BASE_URL` 在构建时注入（与后端一致
 | GET    | `/api/albums`              |
 | GET    | `/api/albums/:id`          |
 | GET    | `/api/albums/:id/cover`    |
+| GET    | `/api/producers`           |
+| GET    | `/api/producers/:id`       |
+| GET    | `/api/producers/:id/avatar`|
 | GET    | `/api/stream/:id/audio`    |
 | GET    | `/api/stream/:id/video`    |
 | GET    | `/api/db/backup`           |

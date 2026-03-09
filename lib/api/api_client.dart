@@ -86,9 +86,9 @@ class ApiClient {
   }
 
   Future<({Producer producer, List<Track> tracks, List<Album> albums})?> getProducer(
-    String name,
+    int id,
   ) async {
-    final res = await http.get(Uri.parse(_url(ApiEndpoints.producer(name))));
+    final res = await http.get(Uri.parse(_url(ApiEndpoints.producer(id))));
     if (res.statusCode == 404) return null;
     if (res.statusCode != 200) {
       throw ApiException('Failed to load producer', res.statusCode);
@@ -140,8 +140,8 @@ class ApiClient {
       _url(ApiEndpoints.albumCover(albumId));
 
   /// Full URL for producer avatar (artist.jpg in P主 folder). 404 if not set.
-  String producerAvatarUrl(String producerName) =>
-      _url(ApiEndpoints.producerAvatar(producerName));
+  String producerAvatarUrl(int producerId) =>
+      _url(ApiEndpoints.producerAvatar(producerId));
 
   // --- DB (optional, for future use) ---
 

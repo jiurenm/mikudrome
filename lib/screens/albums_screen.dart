@@ -8,13 +8,14 @@ import 'album_detail_screen.dart';
 /// Main library: album grid from API (media/Artist/Album), with search.
 /// When [onAlbumTap] is set, opens album in-shell; otherwise pushes a new route.
 class AlbumsScreen extends StatefulWidget {
-  const AlbumsScreen({
+  AlbumsScreen({
     super.key,
-    this.baseUrl = ApiConfig.defaultBaseUrl,
+    this.baseUrl = '',
     this.onAlbumTap,
   });
 
   final String baseUrl;
+  String get _effectiveBaseUrl => baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
   final ValueChanged<Album>? onAlbumTap;
 
   @override
@@ -39,7 +40,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
       _error = null;
     });
     try {
-      final list = await ApiClient(baseUrl: widget.baseUrl).getAlbums();
+      final list = await ApiClient(baseUrl: widget._effectiveBaseUrl).getAlbums();
       setState(() {
         _albums = list;
         _loading = false;
@@ -168,7 +169,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
                               MaterialPageRoute<void>(
                                 builder: (context) => AlbumDetailScreen(
                                   album: album,
-                                  baseUrl: widget.baseUrl,
+                                  baseUrl: widget._effectiveBaseUrl,
                                 ),
                               ),
                             );

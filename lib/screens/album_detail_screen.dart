@@ -61,15 +61,16 @@ void _showTopMessage(BuildContext context, String message, {required bool isErro
 
 /// Album detail: hero + PLAY ALL + track list from API.
 class AlbumDetailScreen extends StatefulWidget {
-  const AlbumDetailScreen({
+  AlbumDetailScreen({
     super.key,
     required this.album,
-    this.baseUrl = ApiConfig.defaultBaseUrl,
+    this.baseUrl = '',
     this.onProducerTap,
   });
 
   final Album album;
   final String baseUrl;
+  String get _effectiveBaseUrl => baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
   final ValueChanged<Producer>? onProducerTap;
 
   @override
@@ -93,7 +94,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
       _error = null;
     });
     try {
-      final result = await ApiClient(baseUrl: widget.baseUrl).getAlbum(widget.album.id);
+      final result = await ApiClient(baseUrl: widget._effectiveBaseUrl).getAlbum(widget.album.id);
       if (result == null || !mounted) return;
       setState(() {
         _tracks = result.tracks;
@@ -121,7 +122,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                   child: _HeroSection(
                     album: widget.album,
                     tracks: _tracks,
-                    baseUrl: widget.baseUrl,
+                    baseUrl: widget._effectiveBaseUrl,
                     onProducerTap: widget.onProducerTap,
                   ),
                 ),
@@ -222,7 +223,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                         ..._tracks.asMap().entries.map((e) => _TrackRow(
                               index: e.key + 1,
                               track: e.value,
-                              baseUrl: widget.baseUrl,
+                              baseUrl: widget._effectiveBaseUrl,
                               onDownloadComplete: _loadAlbum,
                             )),
                       ]),
@@ -338,13 +339,13 @@ class _HeroSection extends StatelessWidget {
                   Row(
                     children: [
                       MouseRegion(
-                        cursor: album.producerName.isNotEmpty && onProducerTap != null
+                        cursor: album.producerId > 0 && onProducerTap != null
                             ? SystemMouseCursors.click
                             : SystemMouseCursors.basic,
                         child: GestureDetector(
-                          onTap: album.producerName.isNotEmpty && onProducerTap != null
+                          onTap: album.producerId > 0 && onProducerTap != null
                               ? () => onProducerTap!(Producer(
-                                    id: album.producerName,
+                                    id: album.producerId,
                                     name: album.producerName,
                                     trackCount: 0,
                                     albumCount: 0,
@@ -357,13 +358,13 @@ class _HeroSection extends StatelessWidget {
                               child: SizedBox(
                                 width: 24,
                                 height: 24,
-                                child: album.producerName.isEmpty
+                                child: album.producerName.isEmpty || album.producerId == 0
                                     ? const ColoredBox(
                                         color: AppTheme.cardBg,
                                         child: Icon(Icons.person, size: 16, color: AppTheme.textMuted),
                                       )
                                     : Image.network(
-                                        ApiClient(baseUrl: baseUrl).producerAvatarUrl(album.producerName),
+                                        ApiClient(baseUrl: baseUrl).producerAvatarUrl(album.producerId),
                                         fit: BoxFit.cover,
                                         errorBuilder: (_, __, ___) => const ColoredBox(
                                           color: AppTheme.cardBg,
@@ -376,11 +377,11 @@ class _HeroSection extends StatelessWidget {
                             Text(
                               album.producerName,
                               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                    color: onProducerTap != null
+                                    color: album.producerId > 0 && onProducerTap != null
                                         ? AppTheme.mikuGreen
                                         : AppTheme.textPrimary,
                                     fontWeight: FontWeight.w700,
-                                    decoration: onProducerTap != null
+                                    decoration: album.producerId > 0 && onProducerTap != null
                                         ? TextDecoration.underline
                                         : null,
                                     decorationColor: AppTheme.mikuGreen,

@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -77,19 +76,20 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/producers/") && r.Method == http.MethodGet {
-		nameEnc := strings.TrimPrefix(r.URL.Path, "/api/producers/")
-		if nameEnc != "" {
-			parts := strings.SplitN(nameEnc, "/", 2)
-			if len(parts) == 2 && parts[1] == "avatar" {
-				if name, err := url.PathUnescape(parts[0]); err == nil && name != "" {
-					h.serveProducerAvatar(w, r, name)
+		trimmed := strings.TrimPrefix(r.URL.Path, "/api/producers/")
+		if trimmed != "" {
+			parts := strings.SplitN(trimmed, "/", 2)
+			idStr := parts[0]
+			if id, err := strconv.ParseInt(idStr, 10, 64); err == nil && id > 0 {
+				if len(parts) == 2 && parts[1] == "avatar" {
+					h.serveProducerAvatar(w, r, id)
+				} else if len(parts) == 1 {
+					h.getProducer(w, r, id)
 				} else {
-					http.Error(w, "invalid producer name", http.StatusBadRequest)
+					http.NotFound(w, r)
 				}
-			} else if name, err := url.PathUnescape(nameEnc); err == nil {
-				h.getProducer(w, r, name)
 			} else {
-				http.Error(w, "invalid producer name", http.StatusBadRequest)
+				http.Error(w, "invalid producer id", http.StatusBadRequest)
 			}
 			return
 		}
@@ -248,8 +248,8 @@ func (h *Handler) listProducers(w http.ResponseWriter, _ *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"producers": producers})
 }
 
-func (h *Handler) getProducer(w http.ResponseWriter, _ *http.Request, name string) {
-	producer, ok, err := h.store.GetProducerByName(name)
+func (h *Handler) getProducer(w http.ResponseWriter, _ *http.Request, id int64) {
+	producer, ok, err := h.store.GetProducerByID(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -258,12 +258,12 @@ func (h *Handler) getProducer(w http.ResponseWriter, _ *http.Request, name strin
 		http.NotFound(w, nil)
 		return
 	}
-	tracks, err := h.store.GetTracksByProducer(producer.Name)
+	tracks, err := h.store.GetTracksByProducer(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	albums, err := h.store.GetAlbumsByProducer(producer.Name)
+	albums, err := h.store.GetAlbumsByProducer(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -276,8 +276,8 @@ func (h *Handler) getProducer(w http.ResponseWriter, _ *http.Request, name strin
 	})
 }
 
-func (h *Handler) serveProducerAvatar(w http.ResponseWriter, r *http.Request, name string) {
-	producer, ok, err := h.store.GetProducerByName(name)
+func (h *Handler) serveProducerAvatar(w http.ResponseWriter, r *http.Request, id int64) {
+	producer, ok, err := h.store.GetProducerByID(id)
 	if err != nil || !ok || producer.AvatarPath == "" {
 		http.NotFound(w, r)
 		return

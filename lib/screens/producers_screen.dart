@@ -7,13 +7,14 @@ import 'producer_detail_screen.dart';
 
 /// Producers index: grid of circular avatars + stats, alphabet scroller (miku_produce.html).
 class ProducersScreen extends StatefulWidget {
-  const ProducersScreen({
+  ProducersScreen({
     super.key,
-    this.baseUrl = ApiConfig.defaultBaseUrl,
+    this.baseUrl = '',
     this.onProducerTap,
   });
 
   final String baseUrl;
+  String get _effectiveBaseUrl => baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
   final ValueChanged<Producer>? onProducerTap;
 
   @override
@@ -37,7 +38,7 @@ class _ProducersScreenState extends State<ProducersScreen> {
       _error = null;
     });
     try {
-      final list = await ApiClient(baseUrl: widget.baseUrl).getProducers();
+      final list = await ApiClient(baseUrl: widget._effectiveBaseUrl).getProducers();
       setState(() {
         _producers = list;
         _loading = false;
@@ -148,7 +149,7 @@ class _ProducersScreenState extends State<ProducersScreen> {
                 final p = list[index];
                 return _ProducerCard(
                   producer: p,
-                  baseUrl: widget.baseUrl,
+                  baseUrl: widget._effectiveBaseUrl,
                   onTap: () {
                     if (widget.onProducerTap != null) {
                       widget.onProducerTap!(p);
@@ -157,7 +158,7 @@ class _ProducersScreenState extends State<ProducersScreen> {
                         MaterialPageRoute<void>(
                           builder: (context) => ProducerDetailScreen(
                             producer: p,
-                            baseUrl: widget.baseUrl,
+                            baseUrl: widget._effectiveBaseUrl,
                           ),
                         ),
                       );
@@ -246,7 +247,7 @@ class _ProducerCardState extends State<_ProducerCard> {
                 customBorder: const CircleBorder(),
                 child: ClipOval(
                   child: Image.network(
-                    ApiClient(baseUrl: widget.baseUrl).producerAvatarUrl(widget.producer.name),
+                    ApiClient(baseUrl: widget.baseUrl).producerAvatarUrl(widget.producer.id),
                     width: 128,
                     height: 128,
                     fit: BoxFit.cover,

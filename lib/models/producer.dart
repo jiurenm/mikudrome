@@ -8,7 +8,7 @@ class Producer {
     this.avatarSeed,
   });
 
-  final String id;
+  final int id;
   final String name;
   final int trackCount;
   final int albumCount;
@@ -18,9 +18,10 @@ class Producer {
       'https://api.dicebear.com/7.x/identicon/svg?seed=${avatarSeed ?? id}';
 
   factory Producer.fromJson(Map<String, dynamic> json) {
+    final id = json['id'] as int? ?? 0;
     final name = json['name'] as String? ?? '';
     return Producer(
-      id: name,
+      id: id,
       name: name,
       trackCount: json['track_count'] as int? ?? 0,
       albumCount: json['album_count'] as int? ?? 0,

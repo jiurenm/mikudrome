@@ -9,15 +9,16 @@ import 'album_detail_screen.dart';
 
 /// Producer profile: hero with blurred avatar, tabs, Discography, Featured MVs (miku_produce_detail.html).
 class ProducerDetailScreen extends StatefulWidget {
-  const ProducerDetailScreen({
+  ProducerDetailScreen({
     super.key,
     required this.producer,
-    this.baseUrl = ApiConfig.defaultBaseUrl,
+    this.baseUrl = '',
     this.onAlbumTap,
   });
 
   final Producer producer;
   final String baseUrl;
+  String get _effectiveBaseUrl => baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
   final ValueChanged<Album>? onAlbumTap;
 
   @override
@@ -46,7 +47,7 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
       _error = null;
     });
     try {
-      final result = await ApiClient(baseUrl: widget.baseUrl).getProducer(widget.producer.name);
+      final result = await ApiClient(baseUrl: widget._effectiveBaseUrl).getProducer(widget.producer.id);
       if (result == null || !mounted) return;
       setState(() {
         _loadedProducer = result.producer;
@@ -75,7 +76,7 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
             child: CustomScrollView(
               slivers: [
                 SliverToBoxAdapter(
-                  child: _HeroSection(producer: _displayProducer, baseUrl: widget.baseUrl),
+                  child: _HeroSection(producer: _displayProducer, baseUrl: widget._effectiveBaseUrl),
                 ),
                 SliverToBoxAdapter(
                   child: _TabBar(
@@ -114,7 +115,7 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                               const SizedBox(height: 32),
                               _DiscographyGrid(
                                 albums: _albums,
-                                baseUrl: widget.baseUrl,
+                                baseUrl: widget._effectiveBaseUrl,
                                 onAlbumTap: (album) {
                                   if (widget.onAlbumTap != null) {
                                     widget.onAlbumTap!(album);
@@ -123,7 +124,7 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                                       MaterialPageRoute<void>(
                                         builder: (context) => AlbumDetailScreen(
                                           album: album,
-                                          baseUrl: widget.baseUrl,
+                                          baseUrl: widget._effectiveBaseUrl,
                                         ),
                                       ),
                                     );
@@ -159,7 +160,7 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                                     ..._tracks.asMap().entries.map((e) => _ProducerTrackRow(
                                           index: e.key + 1,
                                           track: e.value,
-                                          baseUrl: widget.baseUrl,
+                                          baseUrl: widget._effectiveBaseUrl,
                                         )),
                                   ],
                                 ]),
@@ -180,7 +181,7 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                                   const SizedBox(height: 24),
                                   _FeaturedMVsGrid(
                                     tracks: _tracksWithMv,
-                                    baseUrl: widget.baseUrl,
+                                    baseUrl: widget._effectiveBaseUrl,
                                   ),
                                 ]),
                               ),
@@ -202,7 +203,7 @@ class _HeroSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avatarUrl = ApiClient(baseUrl: baseUrl).producerAvatarUrl(producer.name);
+    final avatarUrl = ApiClient(baseUrl: baseUrl).producerAvatarUrl(producer.id);
     return Stack(
       children: [
         SizedBox(

@@ -111,7 +111,7 @@ func Scan(mediaRoot string, s *store.Store) error {
 		}
 		format := ffprobeFormat
 
-		var albumID int64
+		var albumID, producerID int64
 		if dirAbs != mediaRootAbs {
 			albumDir := dirAbs
 			artistDir := filepath.Dir(albumDir) // P主 folder (media/Artist)
@@ -121,17 +121,23 @@ func Scan(mediaRoot string, s *store.Store) error {
 			if coverPath == "" {
 				coverPath = extractCoverFromTrack(audioPath, albumDir)
 			}
-			id, err := s.UpsertAlbum(albumDir, artist, albumTitle, coverPath)
+			// P主: upsert by name, get id; avatar from artist.jpg in P主 folder
+			avatarPath := findArtistAvatar(artistDir)
+			if producer != "" {
+				producerID, _ = s.UpsertProducer(producer, avatarPath)
+			} else if artist != "" {
+				producerID, _ = s.UpsertProducer(artist, avatarPath)
+			}
+			id, err := s.UpsertAlbum(albumDir, artist, albumTitle, coverPath, producerID)
 			if err != nil {
 				return err
 			}
 			albumID = id
-			// P主头像: artist.jpg in P主 folder
-			if avatarPath := findArtistAvatar(artistDir); avatarPath != "" && producer != "" {
-				_ = s.UpsertProducerAvatar(producer, avatarPath)
-			}
+		} else if producer != "" {
+			// Track at media root: still upsert producer for listing
+			producerID, _ = s.UpsertProducer(producer, "")
 		}
-		if err := s.UpsertTrack(title, audioPath, videoPath, videoThumbPath, albumID, trackNumber, producer, vocal, year, durationSeconds, format); err != nil {
+		if err := s.UpsertTrack(title, audioPath, videoPath, videoThumbPath, albumID, producerID, trackNumber, producer, vocal, year, durationSeconds, format); err != nil {
 			return err
 		}
 	}

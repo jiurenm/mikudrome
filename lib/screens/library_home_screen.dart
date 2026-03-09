@@ -27,7 +27,6 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     switch (route) {
       case ShellRoute.albums:
         return AlbumsScreen(
-          baseUrl: ApiConfig.defaultBaseUrl,
           onAlbumTap: (album) => setState(() {
             _selectedAlbum = album;
             _selectedProducer = null;
@@ -35,7 +34,6 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         );
       case ShellRoute.producers:
         return ProducersScreen(
-          baseUrl: ApiConfig.defaultBaseUrl,
           onProducerTap: (producer) => setState(() {
             _selectedProducer = producer;
             _selectedAlbum = null;
@@ -70,7 +68,6 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     if (_selectedAlbum != null) {
       content = AlbumDetailScreen(
         album: _selectedAlbum!,
-        baseUrl: ApiConfig.defaultBaseUrl,
         onProducerTap: (producer) => setState(() {
           _selectedProducer = producer;
           _selectedAlbum = null;
@@ -80,7 +77,6 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     } else if (_selectedProducer != null) {
       content = ProducerDetailScreen(
         producer: _selectedProducer!,
-        baseUrl: ApiConfig.defaultBaseUrl,
         onAlbumTap: (album) => setState(() {
           _selectedAlbum = album;
           _selectedProducer = null;
