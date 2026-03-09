@@ -25,6 +25,9 @@ func main() {
 	if w := os.Getenv("WEB_ROOT"); w != "" {
 		cfg.WebRoot = w
 	}
+	if p := os.Getenv("YTDLP_PROXY"); p != "" {
+		cfg.YtDlpProxy = p
+	}
 
 	st, err := store.New(cfg.DBPath)
 	if err != nil {
@@ -36,7 +39,7 @@ func main() {
 		log.Printf("scan warning: %v", err)
 	}
 
-	handler := api.New(st, cfg.MediaRoot, cfg.WebRoot)
+	handler := api.New(st, cfg.MediaRoot, cfg.WebRoot, cfg.YtDlpProxy)
 	log.Printf("listening on %s", cfg.HTTPAddr)
 	if err := http.ListenAndServe(cfg.HTTPAddr, handler); err != nil {
 		log.Fatal(err)

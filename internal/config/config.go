@@ -15,6 +15,8 @@ type Config struct {
 	HTTPAddr string
 	// WebRoot is the directory for Flutter web build (static files). Empty disables static serving.
 	WebRoot string
+	// YtDlpProxy is the proxy URL for yt-dlp (e.g. "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080").
+	YtDlpProxy string
 }
 
 // Default returns a config with sensible defaults.

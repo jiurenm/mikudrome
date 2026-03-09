@@ -2,12 +2,16 @@
 # Stage 1: 构建 Flutter Web
 FROM ghcr.io/cirruslabs/flutter:stable AS flutter-builder
 
+# API_BASE_URL: 前端 API 地址。空 = 同源（相对路径，生产环境推荐）
+ARG API_BASE_URL=
+ENV API_BASE_URL=${API_BASE_URL}
+
 WORKDIR /app
 COPY pubspec.yaml pubspec.lock ./
 RUN flutter pub get
 
 COPY . .
-RUN flutter build web --release
+RUN flutter build web --release --dart-define=API_BASE_URL=${API_BASE_URL}
 
 # Stage 2: 构建 Go 后端
 FROM golang:1.26-alpine AS go-builder
@@ -38,7 +42,8 @@ ENV MEDIA_ROOT=/app/media \
     DB_PATH=/app/data/mikudrome.db \
     HTTP_ADDR=:8080 \
     WEB_ROOT=/app/build/web \
-    TZ=Asia/Shanghai
+    TZ=Asia/Shanghai \
+    YTDLP_PROXY=
 
 # 暴露端口
 EXPOSE 8080

@@ -2,7 +2,11 @@ version: '3.8'
 
 services:
   mikudrome:
-    build: .
+    build:
+      context: .
+      args:
+        # API_BASE_URL: 前端 API 地址。空 = 同源（相对路径，生产推荐）
+        API_BASE_URL: ${API_BASE_URL:-}
     container_name: mikudrome
     ports:
       - "8080:8080"
@@ -15,4 +19,5 @@ services:
       - HTTP_ADDR=:8080
       - WEB_ROOT=/app/build/web
       - TZ=Asia/Shanghai
+      - YTDLP_PROXY=  # 例如: http://host.docker.internal:7890 或 socks5://127.0.0.1:1080
     restart: unless-stopped

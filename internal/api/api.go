@@ -17,14 +17,15 @@ import (
 
 // Handler serves the REST API, static file streaming, and Flutter web static files.
 type Handler struct {
-	store     *store.Store
-	mediaRoot string
-	webRoot   string
+	store      *store.Store
+	mediaRoot  string
+	webRoot    string
+	ytdlpProxy string
 }
 
 // New returns an HTTP handler for the API.
-func New(s *store.Store, mediaRoot, webRoot string) *Handler {
-	return &Handler{store: s, mediaRoot: mediaRoot, webRoot: webRoot}
+func New(s *store.Store, mediaRoot, webRoot, ytdlpProxy string) *Handler {
+	return &Handler{store: s, mediaRoot: mediaRoot, webRoot: webRoot, ytdlpProxy: ytdlpProxy}
 }
 
 // ServeHTTP routes /api/tracks, /api/albums, /api/stream/...
@@ -161,14 +162,24 @@ func (h *Handler) downloadTrackMV(w http.ResponseWriter, r *http.Request, idStr 
 	baseName := strings.TrimSuffix(filepath.Base(track.AudioPath), filepath.Ext(track.AudioPath))
 	outputTemplate := filepath.Join(dir, baseName+".%(ext)s")
 	outputTemplate = filepath.ToSlash(outputTemplate)
-	cmd := exec.Command("yt-dlp",
+
+	args := []string{
 		"-f", "bestvideo+bestaudio",
 		"--merge-output-format", "mp4",
 		"--write-thumbnail",
 		"--embed-thumbnail",
 		"-o", outputTemplate,
 		"--no-playlist",
-		videoURL)
+	}
+
+	// 添加代理参数（如果配置了）
+	if h.ytdlpProxy != "" {
+		args = append(args, "--proxy", h.ytdlpProxy)
+	}
+
+	args = append(args, videoURL)
+
+	cmd := exec.Command("yt-dlp", args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		http.Error(w, "yt-dlp failed: "+string(out), http.StatusInternalServerError)
 		return

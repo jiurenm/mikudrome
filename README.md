@@ -76,11 +76,15 @@ make help     # 查看全部命令
 | DB_PATH    | ./mikudrome.db | 数据库路径    |
 | HTTP_ADDR  | :8080          | 监听地址     |
 | WEB_ROOT   | ./build/web    | Flutter Web 构建目录 |
+| YTDLP_PROXY | (空)           | yt-dlp 代理地址（如 `http://127.0.0.1:7890` 或 `socks5://127.0.0.1:1080`） |
+| API_BASE_URL | (空)          | 前端 API 地址（构建时注入）。空 = 同源相对路径；分离部署时设为后端地址如 `http://192.168.1.100:8080` |
 
 示例：
 
 ```bash
-MEDIA_ROOT=/path/to/media WEB_ROOT=/opt/mikudrome/web make run
+MEDIA_ROOT=/path/to/media YTDLP_PROXY=http://127.0.0.1:7890 make run
+# 前后端分离部署时构建前端：
+API_BASE_URL=http://api.example.com:8080 make build
 ```
 
 ---
@@ -94,7 +98,11 @@ MEDIA_ROOT=/path/to/media WEB_ROOT=/opt/mikudrome/web make run
 
 ## 客户端 API 配置
 
-Web 与后端同源部署时（`make run`），无需配置。移动端/桌面端或前后端分离部署时，需在 `lib/api/config.dart` 中修改 `ApiConfig.defaultBaseUrl` 为实际后端地址（如 `http://192.168.1.100:8080`）。
+API 地址通过环境变量 `API_BASE_URL` 在构建时注入（与后端一致）：
+
+- **同源部署**（`make run`、Docker）：不设置或设为空，使用相对路径。
+- **分离部署**：构建时设置 `API_BASE_URL=http://后端地址:端口`。
+- **开发模式**（`make dev`）：默认 `http://127.0.0.1:8080`，可通过 `API_BASE_URL` 覆盖。
 
 ---
 

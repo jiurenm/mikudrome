@@ -1,5 +1,5 @@
 # Mikudrome - 开发与构建命令
-# 环境变量: MEDIA_ROOT, DB_PATH, HTTP_ADDR, WEB_ROOT
+# 环境变量: MEDIA_ROOT, DB_PATH, HTTP_ADDR, WEB_ROOT, API_BASE_URL
 
 .PHONY: help build run dev clean \
 	backend-build backend-run backend-test \
@@ -39,7 +39,7 @@ help:
 	@echo "  make analyze      - Flutter 静态分析"
 	@echo "  make clean        - 清理构建产物"
 	@echo ""
-	@echo "环境变量: MEDIA_ROOT DB_PATH HTTP_ADDR WEB_ROOT"
+	@echo "环境变量: MEDIA_ROOT DB_PATH HTTP_ADDR WEB_ROOT API_BASE_URL"
 
 # === 一键构建 ===
 build: frontend backend
@@ -56,7 +56,7 @@ run: backend
 
 dev:
 	@echo "Flutter dev mode (web-server). Backend: make run"
-	flutter run -d web-server
+	flutter run -d web-server --dart-define=API_BASE_URL=$${API_BASE_URL:-http://127.0.0.1:8080}
 
 # === 后端 ===
 backend: backend-build
@@ -83,7 +83,7 @@ frontend-get:
 	flutter pub get
 
 frontend-build: frontend-get
-	flutter build web
+	flutter build web --dart-define=API_BASE_URL=$${API_BASE_URL:-}
 	@echo "Frontend: $(WEB_ROOT)/"
 
 frontend-run:
