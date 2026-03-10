@@ -43,6 +43,8 @@ type Track struct {
 	Year            int    `json:"year"`    // 年份
 	DurationSeconds int    `json:"duration_seconds"` // 时长（秒）
 	Format          string `json:"format"`           // 码率/格式，如 "24bit FLAC"
+	FileMtime       int64  `json:"-"` // File modification time (Unix timestamp)
+	FileSize        int64  `json:"-"` // File size in bytes
 }
 
 // Store provides SQLite persistence for tracks.
@@ -83,7 +85,8 @@ func migrate(db *sql.DB) error {
 			artist TEXT NOT NULL DEFAULT '',
 			title TEXT NOT NULL,
 			cover_path TEXT NOT NULL DEFAULT '',
-			producer_id INTEGER REFERENCES producers(id)
+			producer_id INTEGER REFERENCES producers(id),
+			dir_mtime INTEGER NOT NULL DEFAULT 0
 		);
 		CREATE INDEX IF NOT EXISTS idx_albums_dir ON albums(dir_path);
 		CREATE INDEX IF NOT EXISTS idx_albums_producer ON albums(producer_id);
@@ -102,7 +105,9 @@ func migrate(db *sql.DB) error {
 			vocal TEXT NOT NULL DEFAULT '',
 			year INTEGER NOT NULL DEFAULT 0,
 			duration_seconds INTEGER NOT NULL DEFAULT 0,
-			format TEXT NOT NULL DEFAULT ''
+			format TEXT NOT NULL DEFAULT '',
+			file_mtime INTEGER NOT NULL DEFAULT 0,
+			file_size INTEGER NOT NULL DEFAULT 0
 		);
 		CREATE INDEX IF NOT EXISTS idx_tracks_audio ON tracks(audio_path);
 		CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album_id);
@@ -397,4 +402,179 @@ func (s *Store) BackupTo(destPath string) error {
 	escaped := strings.ReplaceAll(destPath, "'", "''")
 	_, err := s.db.Exec(`VACUUM INTO '` + escaped + `'`)
 	return err
+}
+
+// TrackMeta holds minimal track metadata for incremental scan comparison.
+type TrackMeta struct {
+	Path    string
+	ModTime int64
+	Size    int64
+}
+
+// GetAllTracksMeta returns a map of audio_path -> TrackMeta for all tracks.
+func (s *Store) GetAllTracksMeta() (map[string]TrackMeta, error) {
+	rows, err := s.db.Query(`SELECT audio_path, file_mtime, file_size FROM tracks`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make(map[string]TrackMeta)
+	for rows.Next() {
+		var tm TrackMeta
+		if err := rows.Scan(&tm.Path, &tm.ModTime, &tm.Size); err != nil {
+			return nil, err
+		}
+		result[tm.Path] = tm
+	}
+	return result, rows.Err()
+}
+
+// DeleteTracksByPaths deletes tracks with the given audio paths.
+func (s *Store) DeleteTracksByPaths(paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(paths))
+	args := make([]any, len(paths))
+	for i, p := range paths {
+		placeholders[i] = "?"
+		args[i] = p
+	}
+	query := `DELETE FROM tracks WHERE audio_path IN (` + strings.Join(placeholders, ",") + `)`
+	_, err := s.db.Exec(query, args...)
+	return err
+}
+
+// CleanOrphanedAlbums deletes albums that have no associated tracks.
+func (s *Store) CleanOrphanedAlbums() error {
+	_, err := s.db.Exec(`DELETE FROM albums WHERE id NOT IN (SELECT DISTINCT album_id FROM tracks WHERE album_id > 0)`)
+	return err
+}
+
+// CleanOrphanedProducers deletes producers that have no associated tracks.
+func (s *Store) CleanOrphanedProducers() error {
+	_, err := s.db.Exec(`DELETE FROM producers WHERE id NOT IN (SELECT DISTINCT producer_id FROM tracks WHERE producer_id > 0)`)
+	return err
+}
+
+// BatchInserter handles batch insertion of tracks with transaction support.
+type BatchInserter struct {
+	store         *Store
+	tx            *sql.Tx
+	producerCache map[string]int64
+	albumCache    map[string]int64
+	producers     []Producer
+	albums        []Album
+	tracks        []Track
+	batchSize     int
+}
+
+// BeginBatch starts a new batch insertion transaction.
+func (s *Store) BeginBatch(batchSize int) (*BatchInserter, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	return &BatchInserter{
+		store:         s,
+		tx:            tx,
+		producerCache: make(map[string]int64),
+		albumCache:    make(map[string]int64),
+		batchSize:     batchSize,
+	}, nil
+}
+
+// Add adds a track, album, and producer to the batch.
+func (b *BatchInserter) Add(track Track, album Album, producer Producer) error {
+	b.producers = append(b.producers, producer)
+	b.albums = append(b.albums, album)
+	b.tracks = append(b.tracks, track)
+
+	if len(b.tracks) >= b.batchSize {
+		return b.Flush()
+	}
+	return nil
+}
+
+// Flush commits the current batch to the database.
+func (b *BatchInserter) Flush() error {
+	if len(b.tracks) == 0 {
+		return nil
+	}
+
+	// Batch upsert producers
+	for _, p := range b.producers {
+		if _, exists := b.producerCache[p.Name]; !exists {
+			result, err := b.tx.Exec(`INSERT OR IGNORE INTO producers (name, avatar_path) VALUES (?, ?)`, p.Name, p.AvatarPath)
+			if err != nil {
+				return err
+			}
+			id, _ := result.LastInsertId()
+			if id == 0 {
+				// Already exists, fetch it
+				err = b.tx.QueryRow(`SELECT id FROM producers WHERE name = ?`, p.Name).Scan(&id)
+				if err != nil {
+					return err
+				}
+			}
+			b.producerCache[p.Name] = id
+		}
+	}
+
+	// Batch upsert albums
+	for i, a := range b.albums {
+		key := a.Artist + "|" + a.Title
+		if _, exists := b.albumCache[key]; !exists {
+			producerID := int64(0)
+			if b.tracks[i].Producer != "" {
+				producerID = b.producerCache[b.tracks[i].Producer]
+			}
+			result, err := b.tx.Exec(`INSERT OR REPLACE INTO albums (dir_path, artist, title, cover_path, producer_id, dir_mtime) VALUES (?, ?, ?, ?, ?, ?)`,
+				a.Artist+"/"+a.Title, a.Artist, a.Title, a.CoverPath, producerID, 0)
+			if err != nil {
+				return err
+			}
+			id, _ := result.LastInsertId()
+			if id == 0 {
+				err = b.tx.QueryRow(`SELECT id FROM albums WHERE artist = ? AND title = ?`, a.Artist, a.Title).Scan(&id)
+				if err != nil {
+					return err
+				}
+			}
+			b.albumCache[key] = id
+		}
+	}
+
+	// Batch insert tracks
+	for i, t := range b.tracks {
+		albumKey := b.albums[i].Artist + "|" + b.albums[i].Title
+		albumID := b.albumCache[albumKey]
+		producerID := b.producerCache[t.Producer]
+
+		_, err := b.tx.Exec(`INSERT OR REPLACE INTO tracks
+			(title, audio_path, video_path, video_thumb_path, album_id, disc_number, track_number,
+			 producer_id, producer, vocal, year, duration_seconds, format, file_mtime, file_size)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			t.Title, t.AudioPath, t.VideoPath, t.VideoThumbPath, albumID, t.DiscNumber, t.TrackNumber,
+			producerID, t.Producer, t.Vocal, t.Year, t.DurationSeconds, t.Format, t.FileMtime, t.FileSize)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Clear buffers
+	b.producers = b.producers[:0]
+	b.albums = b.albums[:0]
+	b.tracks = b.tracks[:0]
+
+	return nil
+}
+
+// Close commits the transaction and closes the batch inserter.
+func (b *BatchInserter) Close() error {
+	if err := b.Flush(); err != nil {
+		b.tx.Rollback()
+		return err
+	}
+	return b.tx.Commit()
 }

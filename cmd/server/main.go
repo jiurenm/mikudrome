@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/mikudrome/mikudrome/internal/config"
 	"github.com/mikudrome/mikudrome/internal/scanner"
@@ -28,6 +29,16 @@ func main() {
 	if p := os.Getenv("YTDLP_PROXY"); p != "" {
 		cfg.YtDlpProxy = p
 	}
+	if w := os.Getenv("SCAN_WORKERS"); w != "" {
+		if n, err := strconv.Atoi(w); err == nil && n > 0 {
+			cfg.ScanWorkers = n
+		}
+	}
+	if b := os.Getenv("SCAN_BATCH_SIZE"); b != "" {
+		if n, err := strconv.Atoi(b); err == nil && n > 0 {
+			cfg.ScanBatchSize = n
+		}
+	}
 
 	st, err := store.New(cfg.DBPath)
 	if err != nil {
@@ -35,9 +46,13 @@ func main() {
 	}
 	defer st.Close()
 
-	if err := scanner.Scan(cfg.MediaRoot, st); err != nil {
-		log.Printf("scan warning: %v", err)
-	}
+	// Start media scanning in background
+	go func() {
+		log.Println("starting background media scan...")
+		if err := scanner.Scan(cfg.MediaRoot, st, cfg.ScanWorkers, cfg.ScanBatchSize); err != nil {
+			log.Printf("scan warning: %v", err)
+		}
+	}()
 
 	handler := api.New(st, cfg.MediaRoot, cfg.WebRoot, cfg.YtDlpProxy)
 	log.Printf("listening on %s", cfg.HTTPAddr)

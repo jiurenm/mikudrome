@@ -17,14 +17,20 @@ type Config struct {
 	WebRoot string
 	// YtDlpProxy is the proxy URL for yt-dlp (e.g. "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080").
 	YtDlpProxy string
+	// ScanWorkers is the number of concurrent workers for media scanning.
+	ScanWorkers int
+	// ScanBatchSize is the batch size for database operations during scanning.
+	ScanBatchSize int
 }
 
 // Default returns a config with sensible defaults.
 func Default() *Config {
 	c := &Config{
-		MediaRoot: ".",
-		DBPath:    "mikudrome.db",
-		HTTPAddr:  ":8080",
+		MediaRoot:     ".",
+		DBPath:        "mikudrome.db",
+		HTTPAddr:      ":8080",
+		ScanWorkers:   4,
+		ScanBatchSize: 100,
 	}
 	if wd, err := os.Getwd(); err == nil {
 		c.MediaRoot = filepath.Join(wd, "media")
