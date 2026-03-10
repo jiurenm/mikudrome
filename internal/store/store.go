@@ -17,14 +17,14 @@ type Producer struct {
 	AvatarPath string `json:"avatar_path,omitempty"` // artist.jpg in P主 folder
 }
 
-// Album represents an album (artist/album folder under media root).
+// Album represents an album.
 type Album struct {
-	ID         int64  `json:"id"`
-	Artist     string `json:"artist"`
-	Title      string `json:"title"`
-	CoverPath  string `json:"cover_path"`
-	TrackCount int    `json:"track_count"`
-	ProducerID int64  `json:"producer_id,omitempty"`
+	ID           int64  `json:"id"`
+	Title        string `json:"title"`
+	CoverPath    string `json:"cover_path"`
+	TrackCount   int    `json:"track_count"`
+	ProducerID   int64  `json:"producer_id,omitempty"`
+	ProducerName string `json:"producer_name,omitempty"` // Denormalized for display
 }
 
 // Track represents a single track with audio and optional video path.
@@ -81,14 +81,12 @@ func migrate(db *sql.DB) error {
 
 		CREATE TABLE IF NOT EXISTS albums (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			dir_path TEXT NOT NULL UNIQUE,
-			artist TEXT NOT NULL DEFAULT '',
-			title TEXT NOT NULL,
+			title TEXT NOT NULL UNIQUE,
 			cover_path TEXT NOT NULL DEFAULT '',
 			producer_id INTEGER REFERENCES producers(id),
 			dir_mtime INTEGER NOT NULL DEFAULT 0
 		);
-		CREATE INDEX IF NOT EXISTS idx_albums_dir ON albums(dir_path);
+		CREATE INDEX IF NOT EXISTS idx_albums_title ON albums(title);
 		CREATE INDEX IF NOT EXISTS idx_albums_producer ON albums(producer_id);
 
 		CREATE TABLE IF NOT EXISTS tracks (
@@ -135,18 +133,18 @@ func (s *Store) UpsertProducer(name, avatarPath string) (int64, error) {
 	return id, err
 }
 
-// UpsertAlbum inserts or updates an album by dir_path. Returns album ID (always by querying, so INSERT vs UPDATE is consistent).
-func (s *Store) UpsertAlbum(dirPath, artist, title, coverPath string, producerID int64) (int64, error) {
+// UpsertAlbum inserts or updates an album by title. Returns album ID.
+func (s *Store) UpsertAlbum(title, coverPath string, producerID int64) (int64, error) {
 	_, err := s.db.Exec(
-		`INSERT INTO albums (dir_path, artist, title, cover_path, producer_id) VALUES (?, ?, ?, ?, ?)
-		 ON CONFLICT(dir_path) DO UPDATE SET artist=excluded.artist, title=excluded.title, cover_path=excluded.cover_path, producer_id=excluded.producer_id`,
-		dirPath, artist, title, coverPath, producerID,
+		`INSERT INTO albums (title, cover_path, producer_id) VALUES (?, ?, ?)
+		 ON CONFLICT(title) DO UPDATE SET cover_path=excluded.cover_path, producer_id=excluded.producer_id`,
+		title, coverPath, producerID,
 	)
 	if err != nil {
 		return 0, err
 	}
 	var id int64
-	err = s.db.QueryRow(`SELECT id FROM albums WHERE dir_path = ?`, dirPath).Scan(&id)
+	err = s.db.QueryRow(`SELECT id FROM albums WHERE title = ?`, title).Scan(&id)
 	return id, err
 }
 
@@ -175,14 +173,16 @@ func (s *Store) UpdateTrackVideo(trackID int64, videoPath, videoThumbPath string
 	return err
 }
 
-// ListAlbums returns all albums ordered by artist, title.
+// ListAlbums returns all albums ordered by title.
 func (s *Store) ListAlbums() ([]Album, error) {
 	rows, err := s.db.Query(`
-		SELECT a.id, a.artist, a.title, a.cover_path, COUNT(t.id) AS track_count, COALESCE(a.producer_id, 0)
+		SELECT a.id, a.title, a.cover_path, COUNT(t.id) AS track_count,
+		       COALESCE(a.producer_id, 0), COALESCE(p.name, '')
 		FROM albums a
 		LEFT JOIN tracks t ON t.album_id = a.id
+		LEFT JOIN producers p ON p.id = a.producer_id
 		GROUP BY a.id
-		ORDER BY a.artist, a.title
+		ORDER BY a.title
 	`)
 	if err != nil {
 		return nil, err
@@ -191,7 +191,7 @@ func (s *Store) ListAlbums() ([]Album, error) {
 	var out []Album
 	for rows.Next() {
 		var a Album
-		if err := rows.Scan(&a.ID, &a.Artist, &a.Title, &a.CoverPath, &a.TrackCount, &a.ProducerID); err != nil {
+		if err := rows.Scan(&a.ID, &a.Title, &a.CoverPath, &a.TrackCount, &a.ProducerID, &a.ProducerName); err != nil {
 			return nil, err
 		}
 		out = append(out, a)
@@ -203,12 +203,14 @@ func (s *Store) ListAlbums() ([]Album, error) {
 func (s *Store) GetAlbumByID(id int64) (Album, bool, error) {
 	var a Album
 	err := s.db.QueryRow(`
-		SELECT a.id, a.artist, a.title, a.cover_path, COUNT(t.id), COALESCE(a.producer_id, 0)
+		SELECT a.id, a.title, a.cover_path, COUNT(t.id),
+		       COALESCE(a.producer_id, 0), COALESCE(p.name, '')
 		FROM albums a
 		LEFT JOIN tracks t ON t.album_id = a.id
+		LEFT JOIN producers p ON p.id = a.producer_id
 		WHERE a.id = ?
 		GROUP BY a.id
-	`, id).Scan(&a.ID, &a.Artist, &a.Title, &a.CoverPath, &a.TrackCount, &a.ProducerID)
+	`, id).Scan(&a.ID, &a.Title, &a.CoverPath, &a.TrackCount, &a.ProducerID, &a.ProducerName)
 	if err == sql.ErrNoRows {
 		return Album{}, false, nil
 	}
@@ -369,11 +371,13 @@ func (s *Store) GetTracksByProducer(id int64) ([]Track, error) {
 // GetAlbumsByProducer returns albums that have at least one track by the given producer id.
 func (s *Store) GetAlbumsByProducer(id int64) ([]Album, error) {
 	rows, err := s.db.Query(`
-		SELECT a.id, a.artist, a.title, a.cover_path, COUNT(t.id) AS track_count, COALESCE(a.producer_id, 0)
+		SELECT a.id, a.title, a.cover_path, COUNT(t.id) AS track_count,
+		       COALESCE(a.producer_id, 0), COALESCE(p.name, '')
 		FROM albums a
 		INNER JOIN tracks t ON t.album_id = a.id AND t.producer_id = ?
+		LEFT JOIN producers p ON p.id = a.producer_id
 		GROUP BY a.id
-		ORDER BY a.artist, a.title
+		ORDER BY a.title
 	`, id)
 	if err != nil {
 		return nil, err
@@ -382,7 +386,7 @@ func (s *Store) GetAlbumsByProducer(id int64) ([]Album, error) {
 	var out []Album
 	for rows.Next() {
 		var a Album
-		if err := rows.Scan(&a.ID, &a.Artist, &a.Title, &a.CoverPath, &a.TrackCount, &a.ProducerID); err != nil {
+		if err := rows.Scan(&a.ID, &a.Title, &a.CoverPath, &a.TrackCount, &a.ProducerID, &a.ProducerName); err != nil {
 			return nil, err
 		}
 		out = append(out, a)
@@ -523,32 +527,30 @@ func (b *BatchInserter) Flush() error {
 
 	// Batch upsert albums
 	for i, a := range b.albums {
-		key := a.Artist + "|" + a.Title
-		if _, exists := b.albumCache[key]; !exists {
+		if _, exists := b.albumCache[a.Title]; !exists {
 			producerID := int64(0)
 			if b.tracks[i].Producer != "" {
 				producerID = b.producerCache[b.tracks[i].Producer]
 			}
-			result, err := b.tx.Exec(`INSERT OR REPLACE INTO albums (dir_path, artist, title, cover_path, producer_id, dir_mtime) VALUES (?, ?, ?, ?, ?, ?)`,
-				a.Artist+"/"+a.Title, a.Artist, a.Title, a.CoverPath, producerID, 0)
+			result, err := b.tx.Exec(`INSERT OR REPLACE INTO albums (title, cover_path, producer_id, dir_mtime) VALUES (?, ?, ?, ?)`,
+				a.Title, a.CoverPath, producerID, 0)
 			if err != nil {
 				return err
 			}
 			id, _ := result.LastInsertId()
 			if id == 0 {
-				err = b.tx.QueryRow(`SELECT id FROM albums WHERE artist = ? AND title = ?`, a.Artist, a.Title).Scan(&id)
+				err = b.tx.QueryRow(`SELECT id FROM albums WHERE title = ?`, a.Title).Scan(&id)
 				if err != nil {
 					return err
 				}
 			}
-			b.albumCache[key] = id
+			b.albumCache[a.Title] = id
 		}
 	}
 
 	// Batch insert tracks
 	for i, t := range b.tracks {
-		albumKey := b.albums[i].Artist + "|" + b.albums[i].Title
-		albumID := b.albumCache[albumKey]
+		albumID := b.albumCache[b.albums[i].Title]
 		producerID := b.producerCache[t.Producer]
 
 		_, err := b.tx.Exec(`INSERT OR REPLACE INTO tracks

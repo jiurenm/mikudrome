@@ -338,69 +338,71 @@ class _HeroSection extends StatelessWidget {
                   const SizedBox(height: 24),
                   Row(
                     children: [
-                      MouseRegion(
-                        cursor: album.producerId > 0 && onProducerTap != null
-                            ? SystemMouseCursors.click
-                            : SystemMouseCursors.basic,
-                        child: GestureDetector(
-                          onTap: album.producerId > 0 && onProducerTap != null
-                              ? () => onProducerTap!(Producer(
-                                    id: album.producerId,
-                                    name: album.producerName,
-                                    trackCount: 0,
-                                    albumCount: 0,
-                                  ))
-                              : null,
-                          child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ClipOval(
-                              child: SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: album.producerName.isEmpty || album.producerId == 0
-                                    ? const ColoredBox(
-                                        color: AppTheme.cardBg,
-                                        child: Icon(Icons.person, size: 16, color: AppTheme.textMuted),
-                                      )
-                                    : Image.network(
-                                        ApiClient(baseUrl: baseUrl).producerAvatarUrl(album.producerId),
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) => const ColoredBox(
+                      if (album.producerName.isNotEmpty) ...[
+                        MouseRegion(
+                          cursor: album.producerId > 0 && onProducerTap != null
+                              ? SystemMouseCursors.click
+                              : SystemMouseCursors.basic,
+                          child: GestureDetector(
+                            onTap: album.producerId > 0 && onProducerTap != null
+                                ? () => onProducerTap!(Producer(
+                                      id: album.producerId,
+                                      name: album.producerName,
+                                      trackCount: 0,
+                                      albumCount: 0,
+                                    ))
+                                : null,
+                            child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ClipOval(
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: album.producerId == 0
+                                      ? const ColoredBox(
                                           color: AppTheme.cardBg,
                                           child: Icon(Icons.person, size: 16, color: AppTheme.textMuted),
+                                        )
+                                      : Image.network(
+                                          ApiClient(baseUrl: baseUrl).producerAvatarUrl(album.producerId),
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => const ColoredBox(
+                                            color: AppTheme.cardBg,
+                                            child: Icon(Icons.person, size: 16, color: AppTheme.textMuted),
+                                          ),
                                         ),
-                                      ),
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              album.producerName,
-                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                    color: album.producerId > 0 && onProducerTap != null
-                                        ? AppTheme.mikuGreen
-                                        : AppTheme.textPrimary,
-                                    fontWeight: FontWeight.w700,
-                                    decoration: album.producerId > 0 && onProducerTap != null
-                                        ? TextDecoration.underline
-                                        : null,
-                                    decorationColor: AppTheme.mikuGreen,
-                                  ),
-                            ),
-                          ],
+                              const SizedBox(width: 12),
+                              Text(
+                                album.producerName,
+                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                      color: album.producerId > 0 && onProducerTap != null
+                                          ? AppTheme.mikuGreen
+                                          : AppTheme.textPrimary,
+                                      fontWeight: FontWeight.w700,
+                                      decoration: album.producerId > 0 && onProducerTap != null
+                                          ? TextDecoration.underline
+                                          : null,
+                                      decorationColor: AppTheme.mikuGreen,
+                                    ),
+                              ),
+                            ],
+                          ),
+                          ),
                         ),
-                        ),
-                      ),
-                      if (year > 0) ...[
                         const SizedBox(width: 16),
+                      ],
+                      if (year > 0) ...[
                         Text(
                           '• $year',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: AppTheme.textMuted,
                               ),
                         ),
+                        const SizedBox(width: 8),
                       ],
-                      const SizedBox(width: 8),
                       Text(
                         durationStr.isNotEmpty
                             ? '• ${album.trackCount} Songs, $durationStr'

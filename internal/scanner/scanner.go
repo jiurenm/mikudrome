@@ -233,7 +233,7 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 		if d, _ := m.Disc(); d > 0 {
 			discNumber = d
 		}
-		producer = strings.TrimSpace(m.Composer())
+		producer = strings.TrimSpace(m.AlbumArtist())
 		vocal = m.Artist()
 		if a := m.Album(); a != "" {
 			albumTitleFromMeta = strings.TrimSpace(a)
@@ -260,24 +260,31 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 	format := ffprobeFormat
 
 	// Build album and producer info
-	var albumArtist, albumTitle, coverPath, avatarPath string
+	var albumTitle, coverPath, avatarPath string
 	if dirAbs != mediaRootAbs {
 		albumDir := dirAbs
 		artistDir := filepath.Dir(albumDir)
-		albumArtist = filepath.Base(artistDir)
+
+		// Check if this is a disc subdirectory (e.g., "Disc 1", "Disc 2")
+		dirName := filepath.Base(albumDir)
+		if strings.HasPrefix(dirName, "Disc ") || strings.HasPrefix(dirName, "CD ") {
+			// Move up one level: the parent is the actual album directory
+			albumDir = artistDir
+			artistDir = filepath.Dir(albumDir)
+		}
+
+		// Use metadata album title as primary source
 		albumTitle = albumTitleFromMeta
 		if albumTitle == "" {
+			// Fallback to folder name only if no metadata
 			albumTitle = filepath.Base(albumDir)
 		}
+
 		coverPath = findCoverInDir(albumDir)
 		if coverPath == "" {
 			coverPath = extractCoverFromTrack(audioPath, albumDir)
 		}
 		avatarPath = findArtistAvatar(artistDir)
-	}
-
-	if producer == "" && albumArtist != "" {
-		producer = albumArtist
 	}
 
 	return scanResult{
@@ -297,7 +304,6 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 			FileSize:        job.size,
 		},
 		album: store.Album{
-			Artist:    albumArtist,
 			Title:     albumTitle,
 			CoverPath: coverPath,
 		},
