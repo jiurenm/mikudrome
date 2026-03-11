@@ -17,6 +17,7 @@ RUN flutter build web --release --dart-define=API_BASE_URL=${API_BASE_URL}
 FROM golang:1.26-alpine AS go-builder
 
 WORKDIR /app
+ENV GOPROXY https://goproxy.cn
 COPY go.mod go.sum ./
 RUN go mod download
 

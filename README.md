@@ -78,6 +78,9 @@ make help     # 查看全部命令
 | WEB_ROOT   | ./build/web    | Flutter Web 构建目录 |
 | YTDLP_PROXY | (空)           | yt-dlp 代理地址（如 `http://127.0.0.1:7890` 或 `socks5://127.0.0.1:1080`） |
 | API_BASE_URL | (空)          | 前端 API 地址（构建时注入）。空 = 同源相对路径；分离部署时设为后端地址如 `http://192.168.1.100:8080` |
+| ENABLE_WATCHER | true        | 启用文件监控，自动检测媒体文件的增删改并触发增量扫描 |
+| SCAN_WORKERS | 4            | 扫描并发数 |
+| SCAN_BATCH_SIZE | 100       | 数据库批量写入大小 |
 
 示例：
 

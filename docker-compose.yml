@@ -20,4 +20,5 @@ services:
       - WEB_ROOT=/app/build/web
       - TZ=Asia/Shanghai
       - YTDLP_PROXY=  # 例如: http://host.docker.internal:7890 或 socks5://127.0.0.1:1080
+      - ENABLE_WATCHER=true  # 启用文件监控，自动检测媒体文件变化
     restart: unless-stopped

@@ -6,10 +6,11 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/mikudrome/mikudrome/internal/api"
 	"github.com/mikudrome/mikudrome/internal/config"
 	"github.com/mikudrome/mikudrome/internal/scanner"
 	"github.com/mikudrome/mikudrome/internal/store"
-	"github.com/mikudrome/mikudrome/internal/api"
+	"github.com/mikudrome/mikudrome/internal/watcher"
 )
 
 func main() {
@@ -39,6 +40,9 @@ func main() {
 			cfg.ScanBatchSize = n
 		}
 	}
+	if w := os.Getenv("ENABLE_WATCHER"); w != "" {
+		cfg.EnableWatcher = w == "true" || w == "1"
+	}
 
 	st, err := store.New(cfg.DBPath)
 	if err != nil {
@@ -52,6 +56,28 @@ func main() {
 		if err := scanner.Scan(cfg.MediaRoot, st, cfg.ScanWorkers, cfg.ScanBatchSize); err != nil {
 			log.Printf("scan warning: %v", err)
 		}
+		log.Println("initial scan completed")
+
+		// Start file system watcher after initial scan (if enabled)
+		if !cfg.EnableWatcher {
+			log.Println("watcher: disabled")
+			return
+		}
+
+		w, err := watcher.New(cfg.MediaRoot, st, cfg.ScanWorkers, cfg.ScanBatchSize)
+		if err != nil {
+			log.Printf("watcher: failed to create: %v", err)
+			return
+		}
+		defer w.Close()
+
+		if err := w.Start(); err != nil {
+			log.Printf("watcher: failed to start: %v", err)
+			return
+		}
+
+		// Keep watcher running
+		select {}
 	}()
 
 	handler := api.New(st, cfg.MediaRoot, cfg.WebRoot, cfg.YtDlpProxy)

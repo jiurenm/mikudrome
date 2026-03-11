@@ -21,6 +21,8 @@ type Config struct {
 	ScanWorkers int
 	// ScanBatchSize is the batch size for database operations during scanning.
 	ScanBatchSize int
+	// EnableWatcher enables automatic file system monitoring for changes.
+	EnableWatcher bool
 }
 
 // Default returns a config with sensible defaults.
@@ -31,6 +33,7 @@ func Default() *Config {
 		HTTPAddr:      ":8080",
 		ScanWorkers:   4,
 		ScanBatchSize: 100,
+		EnableWatcher: true,
 	}
 	if wd, err := os.Getwd(); err == nil {
 		c.MediaRoot = filepath.Join(wd, "media")
