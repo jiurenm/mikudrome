@@ -37,14 +37,23 @@ type Track struct {
 	AlbumID         int64  `json:"album_id,omitempty"`
 	DiscNumber      int    `json:"disc_number"`  // 碟号，多碟专辑时从元数据读取，默认 1
 	TrackNumber     int    `json:"track_number"`
-	ProducerID      int64  `json:"producer_id,omitempty"`
-	Producer        string `json:"producer"` // P主 name (denormalized for display)
-	Vocal           string `json:"vocal"`    // 歌い手 / vocal
-	Year            int    `json:"year"`    // 年份
+	Artists         string `json:"artists"`      // 艺术家，可能包含多个（如 "初音ミク, 镜音リン"）
+	Year            int    `json:"year"`         // 年份
 	DurationSeconds int    `json:"duration_seconds"` // 时长（秒）
 	Format          string `json:"format"`           // 码率/格式，如 "24bit FLAC"
-	FileMtime       int64  `json:"-"` // File modification time (Unix timestamp)
-	FileSize        int64  `json:"-"` // File size in bytes
+	// Extended metadata fields
+	Composer          string `json:"composer,omitempty"`           // 作曲
+	Lyricist          string `json:"lyricist,omitempty"`           // 作词
+	Arranger          string `json:"arranger,omitempty"`           // 编曲
+	Vocal             string `json:"vocal,omitempty"`              // Vocal（如 "初音ミク"）
+	VoiceManipulator  string `json:"voice_manipulator,omitempty"`  // 调教
+	Illustrator       string `json:"illustrator,omitempty"`        // 插画
+	Movie             string `json:"movie,omitempty"`              // PV制作
+	Source            string `json:"source,omitempty"`             // 投稿平台（如 "NicoNico", "YouTube"）
+	Lyrics            string `json:"lyrics,omitempty"`             // 歌词
+	Comment           string `json:"comment,omitempty"`            // 备注
+	FileMtime         int64  `json:"-"` // File modification time (Unix timestamp)
+	FileSize          int64  `json:"-"` // File size in bytes
 }
 
 // Store provides SQLite persistence for tracks.
@@ -98,18 +107,25 @@ func migrate(db *sql.DB) error {
 			album_id INTEGER REFERENCES albums(id),
 			disc_number INTEGER NOT NULL DEFAULT 1,
 			track_number INTEGER NOT NULL DEFAULT 0,
-			producer_id INTEGER REFERENCES producers(id),
-			producer TEXT NOT NULL DEFAULT '',
-			vocal TEXT NOT NULL DEFAULT '',
+			artists TEXT NOT NULL DEFAULT '',
 			year INTEGER NOT NULL DEFAULT 0,
 			duration_seconds INTEGER NOT NULL DEFAULT 0,
 			format TEXT NOT NULL DEFAULT '',
+			composer TEXT NOT NULL DEFAULT '',
+			lyricist TEXT NOT NULL DEFAULT '',
+			arranger TEXT NOT NULL DEFAULT '',
+			vocal TEXT NOT NULL DEFAULT '',
+			voice_manipulator TEXT NOT NULL DEFAULT '',
+			illustrator TEXT NOT NULL DEFAULT '',
+			movie TEXT NOT NULL DEFAULT '',
+			source TEXT NOT NULL DEFAULT '',
+			lyrics TEXT NOT NULL DEFAULT '',
+			comment TEXT NOT NULL DEFAULT '',
 			file_mtime INTEGER NOT NULL DEFAULT 0,
 			file_size INTEGER NOT NULL DEFAULT 0
 		);
 		CREATE INDEX IF NOT EXISTS idx_tracks_audio ON tracks(audio_path);
 		CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album_id);
-		CREATE INDEX IF NOT EXISTS idx_tracks_producer ON tracks(producer_id);
 	`)
 	return err
 }
@@ -155,11 +171,11 @@ func (s *Store) UpdateAlbumCover(albumID int64, coverPath string) error {
 }
 
 // UpsertTrack inserts or updates a track by audio_path.
-func (s *Store) UpsertTrack(title, audioPath, videoPath, videoThumbPath string, albumID, producerID int64, discNumber, trackNumber int, producer, vocal string, year, durationSeconds int, format string) error {
+func (s *Store) UpsertTrack(title, audioPath, videoPath, videoThumbPath string, albumID int64, discNumber, trackNumber int, artists string, year, durationSeconds int, format string) error {
 	_, err := s.db.Exec(
-		`INSERT INTO tracks (title, audio_path, video_path, video_thumb_path, album_id, disc_number, track_number, producer_id, producer, vocal, year, duration_seconds, format) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		 ON CONFLICT(audio_path) DO UPDATE SET title=excluded.title, video_path=excluded.video_path, video_thumb_path=excluded.video_thumb_path, album_id=excluded.album_id, disc_number=excluded.disc_number, track_number=excluded.track_number, producer_id=excluded.producer_id, producer=excluded.producer, vocal=excluded.vocal, year=excluded.year, duration_seconds=excluded.duration_seconds, format=excluded.format`,
-		title, audioPath, videoPath, videoThumbPath, albumID, discNumber, trackNumber, producerID, producer, vocal, year, durationSeconds, format,
+		`INSERT INTO tracks (title, audio_path, video_path, video_thumb_path, album_id, disc_number, track_number, artists, year, duration_seconds, format) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(audio_path) DO UPDATE SET title=excluded.title, video_path=excluded.video_path, video_thumb_path=excluded.video_thumb_path, album_id=excluded.album_id, disc_number=excluded.disc_number, track_number=excluded.track_number, artists=excluded.artists, year=excluded.year, duration_seconds=excluded.duration_seconds, format=excluded.format`,
+		title, audioPath, videoPath, videoThumbPath, albumID, discNumber, trackNumber, artists, year, durationSeconds, format,
 	)
 	return err
 }
@@ -223,7 +239,12 @@ func (s *Store) GetAlbumByID(id int64) (Album, bool, error) {
 // GetTracksByAlbumID returns tracks for an album, ordered by disc_number then track_number then title.
 func (s *Store) GetTracksByAlbumID(albumID int64) ([]Track, error) {
 	rows, err := s.db.Query(
-		`SELECT id, title, audio_path, video_path, COALESCE(video_thumb_path, ''), COALESCE(album_id, 0), COALESCE(disc_number, 1), COALESCE(track_number, 0), COALESCE(producer_id, 0), COALESCE(producer, ''), COALESCE(vocal, ''), COALESCE(year, 0), COALESCE(duration_seconds, 0), COALESCE(format, '') FROM tracks WHERE album_id = ? ORDER BY disc_number, track_number, title`,
+		`SELECT id, title, audio_path, video_path, COALESCE(video_thumb_path, ''), COALESCE(album_id, 0),
+		 COALESCE(disc_number, 1), COALESCE(track_number, 0), COALESCE(artists, ''), COALESCE(year, 0),
+		 COALESCE(duration_seconds, 0), COALESCE(format, ''), COALESCE(composer, ''), COALESCE(lyricist, ''),
+		 COALESCE(arranger, ''), COALESCE(vocal, ''), COALESCE(voice_manipulator, ''), COALESCE(illustrator, ''),
+		 COALESCE(movie, ''), COALESCE(source, ''), COALESCE(lyrics, ''), COALESCE(comment, '')
+		 FROM tracks WHERE album_id = ? ORDER BY disc_number, track_number, title`,
 		albumID,
 	)
 	if err != nil {
@@ -233,7 +254,10 @@ func (s *Store) GetTracksByAlbumID(albumID int64) ([]Track, error) {
 	var out []Track
 	for rows.Next() {
 		var t Track
-		if err := rows.Scan(&t.ID, &t.Title, &t.AudioPath, &t.VideoPath, &t.VideoThumbPath, &t.AlbumID, &t.DiscNumber, &t.TrackNumber, &t.ProducerID, &t.Producer, &t.Vocal, &t.Year, &t.DurationSeconds, &t.Format); err != nil {
+		if err := rows.Scan(&t.ID, &t.Title, &t.AudioPath, &t.VideoPath, &t.VideoThumbPath, &t.AlbumID,
+			&t.DiscNumber, &t.TrackNumber, &t.Artists, &t.Year, &t.DurationSeconds, &t.Format,
+			&t.Composer, &t.Lyricist, &t.Arranger, &t.Vocal, &t.VoiceManipulator, &t.Illustrator,
+			&t.Movie, &t.Source, &t.Lyrics, &t.Comment); err != nil {
 			return nil, err
 		}
 		out = append(out, t)
@@ -243,7 +267,12 @@ func (s *Store) GetTracksByAlbumID(albumID int64) ([]Track, error) {
 
 // ListTracks returns all tracks ordered by title.
 func (s *Store) ListTracks() ([]Track, error) {
-	rows, err := s.db.Query(`SELECT id, title, audio_path, video_path, COALESCE(video_thumb_path, ''), COALESCE(album_id, 0), COALESCE(disc_number, 1), COALESCE(track_number, 0), COALESCE(producer_id, 0), COALESCE(producer, ''), COALESCE(vocal, ''), COALESCE(year, 0), COALESCE(duration_seconds, 0), COALESCE(format, '') FROM tracks ORDER BY title`)
+	rows, err := s.db.Query(`SELECT id, title, audio_path, video_path, COALESCE(video_thumb_path, ''), COALESCE(album_id, 0),
+		 COALESCE(disc_number, 1), COALESCE(track_number, 0), COALESCE(artists, ''), COALESCE(year, 0),
+		 COALESCE(duration_seconds, 0), COALESCE(format, ''), COALESCE(composer, ''), COALESCE(lyricist, ''),
+		 COALESCE(arranger, ''), COALESCE(vocal, ''), COALESCE(voice_manipulator, ''), COALESCE(illustrator, ''),
+		 COALESCE(movie, ''), COALESCE(source, ''), COALESCE(lyrics, ''), COALESCE(comment, '')
+		 FROM tracks ORDER BY title`)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +280,10 @@ func (s *Store) ListTracks() ([]Track, error) {
 	var out []Track
 	for rows.Next() {
 		var t Track
-		if err := rows.Scan(&t.ID, &t.Title, &t.AudioPath, &t.VideoPath, &t.VideoThumbPath, &t.AlbumID, &t.DiscNumber, &t.TrackNumber, &t.ProducerID, &t.Producer, &t.Vocal, &t.Year, &t.DurationSeconds, &t.Format); err != nil {
+		if err := rows.Scan(&t.ID, &t.Title, &t.AudioPath, &t.VideoPath, &t.VideoThumbPath, &t.AlbumID,
+			&t.DiscNumber, &t.TrackNumber, &t.Artists, &t.Year, &t.DurationSeconds, &t.Format,
+			&t.Composer, &t.Lyricist, &t.Arranger, &t.Vocal, &t.VoiceManipulator, &t.Illustrator,
+			&t.Movie, &t.Source, &t.Lyrics, &t.Comment); err != nil {
 			return nil, err
 		}
 		out = append(out, t)
@@ -263,9 +295,17 @@ func (s *Store) ListTracks() ([]Track, error) {
 func (s *Store) GetTrackByID(id int64) (Track, bool, error) {
 	var t Track
 	err := s.db.QueryRow(
-		`SELECT id, title, audio_path, video_path, COALESCE(video_thumb_path, ''), COALESCE(album_id, 0), COALESCE(disc_number, 1), COALESCE(track_number, 0), COALESCE(producer_id, 0), COALESCE(producer, ''), COALESCE(vocal, ''), COALESCE(year, 0), COALESCE(duration_seconds, 0), COALESCE(format, '') FROM tracks WHERE id = ?`,
+		`SELECT id, title, audio_path, video_path, COALESCE(video_thumb_path, ''), COALESCE(album_id, 0),
+		 COALESCE(disc_number, 1), COALESCE(track_number, 0), COALESCE(artists, ''), COALESCE(year, 0),
+		 COALESCE(duration_seconds, 0), COALESCE(format, ''), COALESCE(composer, ''), COALESCE(lyricist, ''),
+		 COALESCE(arranger, ''), COALESCE(vocal, ''), COALESCE(voice_manipulator, ''), COALESCE(illustrator, ''),
+		 COALESCE(movie, ''), COALESCE(source, ''), COALESCE(lyrics, ''), COALESCE(comment, '')
+		 FROM tracks WHERE id = ?`,
 		id,
-	).Scan(&t.ID, &t.Title, &t.AudioPath, &t.VideoPath, &t.VideoThumbPath, &t.AlbumID, &t.DiscNumber, &t.TrackNumber, &t.ProducerID, &t.Producer, &t.Vocal, &t.Year, &t.DurationSeconds, &t.Format)
+	).Scan(&t.ID, &t.Title, &t.AudioPath, &t.VideoPath, &t.VideoThumbPath, &t.AlbumID,
+		&t.DiscNumber, &t.TrackNumber, &t.Artists, &t.Year, &t.DurationSeconds, &t.Format,
+		&t.Composer, &t.Lyricist, &t.Arranger, &t.Vocal, &t.VoiceManipulator, &t.Illustrator,
+		&t.Movie, &t.Source, &t.Lyrics, &t.Comment)
 	if err == sql.ErrNoRows {
 		return Track{}, false, nil
 	}
@@ -275,15 +315,16 @@ func (s *Store) GetTrackByID(id int64) (Track, bool, error) {
 	return t, true, nil
 }
 
-// ListProducers returns all distinct producers from tracks with track and album counts.
+// ListProducers returns all distinct producers from albums with track and album counts.
 func (s *Store) ListProducers() ([]Producer, error) {
 	rows, err := s.db.Query(`
 		SELECT p.id, p.name,
-		       COUNT(t.id) AS track_count,
-		       COUNT(DISTINCT CASE WHEN t.album_id > 0 THEN t.album_id END) AS album_count,
+		       COUNT(DISTINCT t.id) AS track_count,
+		       COUNT(DISTINCT a.id) AS album_count,
 		       COALESCE(p.avatar_path, '') AS avatar_path
 		FROM producers p
-		INNER JOIN tracks t ON t.producer_id = p.id
+		INNER JOIN albums a ON a.producer_id = p.id
+		LEFT JOIN tracks t ON t.album_id = a.id
 		GROUP BY p.id
 		ORDER BY track_count DESC, p.name
 	`)
@@ -307,11 +348,12 @@ func (s *Store) GetProducerByID(id int64) (Producer, bool, error) {
 	var p Producer
 	err := s.db.QueryRow(`
 		SELECT p.id, p.name,
-		       COUNT(t.id) AS track_count,
-		       COUNT(DISTINCT CASE WHEN t.album_id > 0 THEN t.album_id END) AS album_count,
+		       COUNT(DISTINCT t.id) AS track_count,
+		       COUNT(DISTINCT a.id) AS album_count,
 		       COALESCE(p.avatar_path, '') AS avatar_path
 		FROM producers p
-		LEFT JOIN tracks t ON t.producer_id = p.id
+		LEFT JOIN albums a ON a.producer_id = p.id
+		LEFT JOIN tracks t ON t.album_id = a.id
 		WHERE p.id = ?
 		GROUP BY p.id
 	`, id).Scan(&p.ID, &p.Name, &p.TrackCount, &p.AlbumCount, &p.AvatarPath)
@@ -330,11 +372,12 @@ func (s *Store) GetProducerByName(name string) (Producer, bool, error) {
 	var p Producer
 	err := s.db.QueryRow(`
 		SELECT p.id, p.name,
-		       COUNT(t.id) AS track_count,
-		       COUNT(DISTINCT CASE WHEN t.album_id > 0 THEN t.album_id END) AS album_count,
+		       COUNT(DISTINCT t.id) AS track_count,
+		       COUNT(DISTINCT a.id) AS album_count,
 		       COALESCE(p.avatar_path, '') AS avatar_path
 		FROM producers p
-		LEFT JOIN tracks t ON t.producer_id = p.id
+		LEFT JOIN albums a ON a.producer_id = p.id
+		LEFT JOIN tracks t ON t.album_id = a.id
 		WHERE p.name = ?
 		GROUP BY p.id
 	`, name).Scan(&p.ID, &p.Name, &p.TrackCount, &p.AlbumCount, &p.AvatarPath)
@@ -347,10 +390,18 @@ func (s *Store) GetProducerByName(name string) (Producer, bool, error) {
 	return p, true, nil
 }
 
-// GetTracksByProducer returns all tracks by producer id.
+// GetTracksByProducer returns all tracks by producer id (via albums).
 func (s *Store) GetTracksByProducer(id int64) ([]Track, error) {
 	rows, err := s.db.Query(
-		`SELECT id, title, audio_path, video_path, COALESCE(video_thumb_path, ''), COALESCE(album_id, 0), COALESCE(disc_number, 1), COALESCE(track_number, 0), COALESCE(producer_id, 0), COALESCE(producer, ''), COALESCE(vocal, ''), COALESCE(year, 0), COALESCE(duration_seconds, 0), COALESCE(format, '') FROM tracks WHERE producer_id = ? ORDER BY album_id, disc_number, track_number, title`,
+		`SELECT t.id, t.title, t.audio_path, t.video_path, COALESCE(t.video_thumb_path, ''), COALESCE(t.album_id, 0),
+		 COALESCE(t.disc_number, 1), COALESCE(t.track_number, 0), COALESCE(t.artists, ''), COALESCE(t.year, 0),
+		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''), COALESCE(t.composer, ''), COALESCE(t.lyricist, ''),
+		 COALESCE(t.arranger, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''), COALESCE(t.illustrator, ''),
+		 COALESCE(t.movie, ''), COALESCE(t.source, ''), COALESCE(t.lyrics, ''), COALESCE(t.comment, '')
+		FROM tracks t
+		INNER JOIN albums a ON t.album_id = a.id
+		WHERE a.producer_id = ?
+		ORDER BY t.album_id, t.disc_number, t.track_number, t.title`,
 		id,
 	)
 	if err != nil {
@@ -360,7 +411,10 @@ func (s *Store) GetTracksByProducer(id int64) ([]Track, error) {
 	var out []Track
 	for rows.Next() {
 		var t Track
-		if err := rows.Scan(&t.ID, &t.Title, &t.AudioPath, &t.VideoPath, &t.VideoThumbPath, &t.AlbumID, &t.DiscNumber, &t.TrackNumber, &t.ProducerID, &t.Producer, &t.Vocal, &t.Year, &t.DurationSeconds, &t.Format); err != nil {
+		if err := rows.Scan(&t.ID, &t.Title, &t.AudioPath, &t.VideoPath, &t.VideoThumbPath, &t.AlbumID,
+			&t.DiscNumber, &t.TrackNumber, &t.Artists, &t.Year, &t.DurationSeconds, &t.Format,
+			&t.Composer, &t.Lyricist, &t.Arranger, &t.Vocal, &t.VoiceManipulator, &t.Illustrator,
+			&t.Movie, &t.Source, &t.Lyrics, &t.Comment); err != nil {
 			return nil, err
 		}
 		out = append(out, t)
@@ -368,14 +422,15 @@ func (s *Store) GetTracksByProducer(id int64) ([]Track, error) {
 	return out, rows.Err()
 }
 
-// GetAlbumsByProducer returns albums that have at least one track by the given producer id.
+// GetAlbumsByProducer returns albums by the given producer id.
 func (s *Store) GetAlbumsByProducer(id int64) ([]Album, error) {
 	rows, err := s.db.Query(`
 		SELECT a.id, a.title, a.cover_path, COUNT(t.id) AS track_count,
 		       COALESCE(a.producer_id, 0), COALESCE(p.name, '')
 		FROM albums a
-		INNER JOIN tracks t ON t.album_id = a.id AND t.producer_id = ?
+		LEFT JOIN tracks t ON t.album_id = a.id
 		LEFT JOIN producers p ON p.id = a.producer_id
+		WHERE a.producer_id = ?
 		GROUP BY a.id
 		ORDER BY a.title
 	`, id)
@@ -455,9 +510,9 @@ func (s *Store) CleanOrphanedAlbums() error {
 	return err
 }
 
-// CleanOrphanedProducers deletes producers that have no associated tracks.
+// CleanOrphanedProducers deletes producers that have no associated albums.
 func (s *Store) CleanOrphanedProducers() error {
-	_, err := s.db.Exec(`DELETE FROM producers WHERE id NOT IN (SELECT DISTINCT producer_id FROM tracks WHERE producer_id > 0)`)
+	_, err := s.db.Exec(`DELETE FROM producers WHERE id NOT IN (SELECT DISTINCT producer_id FROM albums WHERE producer_id > 0)`)
 	return err
 }
 
@@ -529,8 +584,8 @@ func (b *BatchInserter) Flush() error {
 	for i, a := range b.albums {
 		if _, exists := b.albumCache[a.Title]; !exists {
 			producerID := int64(0)
-			if b.tracks[i].Producer != "" {
-				producerID = b.producerCache[b.tracks[i].Producer]
+			if b.producers[i].Name != "" {
+				producerID = b.producerCache[b.producers[i].Name]
 			}
 			result, err := b.tx.Exec(`INSERT OR REPLACE INTO albums (title, cover_path, producer_id, dir_mtime) VALUES (?, ?, ?, ?)`,
 				a.Title, a.CoverPath, producerID, 0)
@@ -551,14 +606,15 @@ func (b *BatchInserter) Flush() error {
 	// Batch insert tracks
 	for i, t := range b.tracks {
 		albumID := b.albumCache[b.albums[i].Title]
-		producerID := b.producerCache[t.Producer]
 
 		_, err := b.tx.Exec(`INSERT OR REPLACE INTO tracks
 			(title, audio_path, video_path, video_thumb_path, album_id, disc_number, track_number,
-			 producer_id, producer, vocal, year, duration_seconds, format, file_mtime, file_size)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 artists, year, duration_seconds, format, composer, lyricist, arranger, vocal,
+			 voice_manipulator, illustrator, movie, source, lyrics, comment, file_mtime, file_size)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			t.Title, t.AudioPath, t.VideoPath, t.VideoThumbPath, albumID, t.DiscNumber, t.TrackNumber,
-			producerID, t.Producer, t.Vocal, t.Year, t.DurationSeconds, t.Format, t.FileMtime, t.FileSize)
+			t.Artists, t.Year, t.DurationSeconds, t.Format, t.Composer, t.Lyricist, t.Arranger, t.Vocal,
+			t.VoiceManipulator, t.Illustrator, t.Movie, t.Source, t.Lyrics, t.Comment, t.FileMtime, t.FileSize)
 		if err != nil {
 			return err
 		}

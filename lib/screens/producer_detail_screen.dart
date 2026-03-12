@@ -458,12 +458,33 @@ class _ProducerTrackRowState extends State<_ProducerTrackRow> {
   bool _hovering = false;
 
   String get _vocalLine {
-    final p = widget.track.producer.trim();
-    final v = widget.track.vocal.trim();
-    if (p.isNotEmpty && v.isNotEmpty) return '$p feat. $v';
-    if (p.isNotEmpty) return p;
-    if (v.isNotEmpty) return 'feat. $v';
-    return '';
+    final composer = widget.track.composer.trim();
+    final lyricist = widget.track.lyricist.trim();
+    final vocal = widget.track.vocal.trim();
+
+    final parts = <String>[];
+
+    if (composer.isNotEmpty && lyricist.isNotEmpty) {
+      if (composer == lyricist) {
+        parts.add(composer);
+      } else {
+        parts.add('$composer, $lyricist');
+      }
+    } else if (composer.isNotEmpty) {
+      parts.add(composer);
+    } else if (lyricist.isNotEmpty) {
+      parts.add(lyricist);
+    }
+
+    if (vocal.isNotEmpty) {
+      if (parts.isNotEmpty) {
+        parts.add('feat. $vocal');
+      } else {
+        parts.add(vocal);
+      }
+    }
+
+    return parts.join(' ');
   }
 
   @override

@@ -218,46 +218,147 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 	title := fallbackTitle
 	trackNumber := 0
 	discNumber := 1
-	producer := ""
-	vocal := ""
+	albumProducer := "" // AlbumArtist for album-level producer
+	artists := ""       // Artist field, may contain multiple artists
 	year := 0
 	durationSeconds := 0
 	albumTitleFromMeta := ""
-	if m, err := readMetadata(audioPath); err == nil {
-		if t := m.Title(); t != "" {
+	format := ""
+	// Extended metadata fields
+	composer := ""
+	lyricist := ""
+	arranger := ""
+	vocal := ""
+	voiceManipulator := ""
+	illustrator := ""
+	movie := ""
+	source := ""
+	lyrics := ""
+	comment := ""
+
+	// Use ffprobe to read all metadata in one call
+	ffprobeDur, ffprobeFormat, ffprobeTags := runFFprobe(audioPath)
+
+	if ffprobeTags != nil {
+		// Read metadata from ffprobe tags
+		if t, ok := ffprobeTags["title"]; ok && t != "" {
 			title = t
 		}
-		if n, _ := m.Track(); n > 0 {
-			trackNumber = n
+		if a, ok := ffprobeTags["artist"]; ok && a != "" {
+			artists = strings.TrimSpace(a)
 		}
-		if d, _ := m.Disc(); d > 0 {
-			discNumber = d
+		if aa, ok := ffprobeTags["album_artist"]; ok && aa != "" {
+			albumProducer = strings.TrimSpace(aa)
+		} else if aa, ok := ffprobeTags["albumartist"]; ok && aa != "" {
+			albumProducer = strings.TrimSpace(aa)
 		}
-		producer = strings.TrimSpace(m.AlbumArtist())
-		vocal = m.Artist()
-		if a := m.Album(); a != "" {
-			albumTitleFromMeta = strings.TrimSpace(a)
+		if album, ok := ffprobeTags["album"]; ok && album != "" {
+			albumTitleFromMeta = strings.TrimSpace(album)
 		}
-		if y := m.Year(); y > 0 {
-			year = y
+		if dateStr, ok := ffprobeTags["date"]; ok && dateStr != "" {
+			if y, err := strconv.Atoi(dateStr); err == nil && y > 0 {
+				year = y
+			}
 		}
-		durationSeconds = parseDurationFromMetadata(m)
+		if trackStr, ok := ffprobeTags["track"]; ok && trackStr != "" {
+			// Track might be "5" or "5/12"
+			parts := strings.Split(trackStr, "/")
+			if n, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil && n > 0 {
+				trackNumber = n
+			}
+		}
+		if discStr, ok := ffprobeTags["disc"]; ok && discStr != "" {
+			// Disc might be "1" or "1/2"
+			parts := strings.Split(discStr, "/")
+			if d, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil && d > 0 {
+				discNumber = d
+			}
+		}
+		// Read extended metadata fields
+		if c, ok := ffprobeTags["composer"]; ok && c != "" {
+			composer = strings.TrimSpace(c)
+		}
+		if l, ok := ffprobeTags["lyricist"]; ok && l != "" {
+			lyricist = strings.TrimSpace(l)
+		}
+		if arr, ok := ffprobeTags["arranger"]; ok && arr != "" {
+			arranger = strings.TrimSpace(arr)
+		}
+		if v, ok := ffprobeTags["vocal"]; ok && v != "" {
+			vocal = strings.TrimSpace(v)
+		}
+		if vm, ok := ffprobeTags["voice_manipulator"]; ok && vm != "" {
+			voiceManipulator = strings.TrimSpace(vm)
+		}
+		if ill, ok := ffprobeTags["illustrator"]; ok && ill != "" {
+			illustrator = strings.TrimSpace(ill)
+		}
+		if mov, ok := ffprobeTags["movie"]; ok && mov != "" {
+			movie = strings.TrimSpace(mov)
+		}
+		if src, ok := ffprobeTags["source"]; ok && src != "" {
+			source = strings.TrimSpace(src)
+		}
+		if lyr, ok := ffprobeTags["lyrics"]; ok && lyr != "" {
+			lyrics = strings.TrimSpace(lyr)
+		}
+		if cmt, ok := ffprobeTags["comment"]; ok && cmt != "" {
+			comment = strings.TrimSpace(cmt)
+		}
 	}
 
-	// Producer fallback: use album folder artist when Composer is empty
-	mediaRootAbs := mediaRoot
-	if producer == "" && dirAbs != mediaRootAbs {
-		producer = strings.TrimSpace(filepath.Base(filepath.Dir(dirAbs)))
-	}
-
-	ffprobeDur, ffprobeFormat := runFFprobe(audioPath)
-	if durationSeconds == 0 && ffprobeDur > 0 {
+	// Use ffprobe duration and format
+	if ffprobeDur > 0 {
 		durationSeconds = ffprobeDur
 	}
+	format = ffprobeFormat
+
+	// Fallback to tag library if ffprobe failed
+	if title == fallbackTitle || albumTitleFromMeta == "" {
+		if m, err := readMetadata(audioPath); err == nil {
+			if title == fallbackTitle {
+				if t := m.Title(); t != "" {
+					title = t
+				}
+			}
+			if albumTitleFromMeta == "" {
+				if a := m.Album(); a != "" {
+					albumTitleFromMeta = strings.TrimSpace(a)
+				}
+			}
+			if artists == "" {
+				artists = strings.TrimSpace(m.Artist())
+			}
+			if albumProducer == "" {
+				albumProducer = strings.TrimSpace(m.AlbumArtist())
+			}
+			if year == 0 {
+				if y := m.Year(); y > 0 {
+					year = y
+				}
+			}
+			if trackNumber == 0 {
+				if n, _ := m.Track(); n > 0 {
+					trackNumber = n
+				}
+			}
+			if discNumber == 1 {
+				if d, _ := m.Disc(); d > 0 {
+					discNumber = d
+				}
+			}
+			if durationSeconds == 0 {
+				durationSeconds = parseDurationFromMetadata(m)
+			}
+		}
+	}
+
+	// Final fallback for duration: FLAC direct parsing
 	if durationSeconds == 0 && strings.ToLower(filepath.Ext(audioPath)) == ".flac" {
 		durationSeconds = getFLACDuration(audioPath)
 	}
-	format := ffprobeFormat
+
+	mediaRootAbs := mediaRoot
 
 	// Build album and producer info
 	var albumTitle, coverPath, avatarPath string
@@ -289,26 +390,35 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 
 	return scanResult{
 		track: store.Track{
-			Title:           title,
-			AudioPath:       audioPath,
-			VideoPath:       videoPath,
-			VideoThumbPath:  videoThumbPath,
-			DiscNumber:      discNumber,
-			TrackNumber:     trackNumber,
-			Producer:        producer,
-			Vocal:           vocal,
-			Year:            year,
-			DurationSeconds: durationSeconds,
-			Format:          format,
-			FileMtime:       job.modTime,
-			FileSize:        job.size,
+			Title:            title,
+			AudioPath:        audioPath,
+			VideoPath:        videoPath,
+			VideoThumbPath:   videoThumbPath,
+			DiscNumber:       discNumber,
+			TrackNumber:      trackNumber,
+			Artists:          artists,
+			Year:             year,
+			DurationSeconds:  durationSeconds,
+			Format:           format,
+			Composer:         composer,
+			Lyricist:         lyricist,
+			Arranger:         arranger,
+			Vocal:            vocal,
+			VoiceManipulator: voiceManipulator,
+			Illustrator:      illustrator,
+			Movie:            movie,
+			Source:           source,
+			Lyrics:           lyrics,
+			Comment:          comment,
+			FileMtime:        job.modTime,
+			FileSize:         job.size,
 		},
 		album: store.Album{
 			Title:     albumTitle,
 			CoverPath: coverPath,
 		},
 		producer: store.Producer{
-			Name:       producer,
+			Name:       albumProducer,
 			AvatarPath: avatarPath,
 		},
 		err: nil,
@@ -349,19 +459,20 @@ func collectResults(s *store.Store, results <-chan scanResult, batchSize, totalJ
 	return nil
 }
 
-// runFFprobe runs ffprobe once and returns duration (seconds) and format label (e.g. "24bit FLAC"). Empty/0 on failure.
-func runFFprobe(path string) (duration int, formatLabel string) {
+// runFFprobe runs ffprobe once and returns all metadata including duration, format, and tags.
+func runFFprobe(path string) (duration int, formatLabel string, tags map[string]string) {
 	cmd := exec.Command("ffprobe",
 		"-v", "error",
 		"-select_streams", "a:0",
 		"-show_entries", "stream=codec_name,bits_per_sample",
 		"-show_entries", "format=duration,bit_rate",
+		"-show_entries", "format_tags=title,artist,album,album_artist,albumartist,date,track,disc,composer,lyricist,arranger,vocal,voice_manipulator,illustrator,movie,source,lyrics,comment",
 		"-of", "json",
 		path,
 	)
 	out, err := cmd.Output()
 	if err != nil {
-		return 0, ""
+		return 0, "", nil
 	}
 	var probe struct {
 		Streams []struct {
@@ -369,39 +480,45 @@ func runFFprobe(path string) (duration int, formatLabel string) {
 			BitsPerSample *int   `json:"bits_per_sample"`
 		} `json:"streams"`
 		Format struct {
-			Duration string `json:"duration"`
-			BitRate  string `json:"bit_rate"`
+			Duration string            `json:"duration"`
+			BitRate  string            `json:"bit_rate"`
+			Tags     map[string]string `json:"tags"`
 		} `json:"format"`
 	}
 	if err := json.Unmarshal(out, &probe); err != nil {
-		return 0, ""
+		return 0, "", nil
 	}
+
+	// Parse duration
 	if probe.Format.Duration != "" {
 		if sec, err := strconv.ParseFloat(probe.Format.Duration, 64); err == nil && sec > 0 {
 			duration = int(sec + 0.5)
 		}
 	}
-	if len(probe.Streams) == 0 {
-		return duration, ""
-	}
-	s := probe.Streams[0]
-	codec := strings.ToUpper(s.CodecName)
-	if codec == "" {
-		return duration, ""
-	}
-	if s.BitsPerSample != nil && *s.BitsPerSample > 0 {
-		formatLabel = strconv.Itoa(*s.BitsPerSample) + "bit " + codec
-	} else if probe.Format.BitRate != "" {
-		if kbps, err := strconv.Atoi(probe.Format.BitRate); err == nil && kbps > 0 {
-			kbps = (kbps + 500) / 1000
-			formatLabel = strconv.Itoa(kbps) + "kbps " + codec
-		} else {
-			formatLabel = codec
+
+	// Parse format label
+	if len(probe.Streams) > 0 {
+		s := probe.Streams[0]
+		codec := strings.ToUpper(s.CodecName)
+		if codec != "" {
+			if s.BitsPerSample != nil && *s.BitsPerSample > 0 {
+				formatLabel = strconv.Itoa(*s.BitsPerSample) + "bit " + codec
+			} else if probe.Format.BitRate != "" {
+				if kbps, err := strconv.Atoi(probe.Format.BitRate); err == nil && kbps > 0 {
+					kbps = (kbps + 500) / 1000
+					formatLabel = strconv.Itoa(kbps) + "kbps " + codec
+				} else {
+					formatLabel = codec
+				}
+			} else {
+				formatLabel = codec
+			}
 		}
-	} else {
-		formatLabel = codec
 	}
-	return duration, formatLabel
+
+	// Return tags
+	tags = probe.Format.Tags
+	return duration, formatLabel, tags
 }
 
 // getFLACDuration reads FLAC STREAMINFO to get duration. Returns 0 on failure. Used when ffprobe is unavailable.

@@ -7,11 +7,21 @@ class Track {
   final String videoThumbPath; // MV thumbnail (same name as video or ffmpeg-generated)
   final int discNumber; // 碟号，多碟专辑时从元数据读取，默认 1
   final int trackNumber;
-  final String producer; // P主
-  final String vocal;
+  final String artists; // 艺术家，可能包含多个（如 "初音ミク, 镜音リン"）
   final int year;
   final int durationSeconds;
   final String format; // 码率/格式，如 "24bit FLAC"
+  // Extended metadata fields
+  final String composer; // 作曲
+  final String lyricist; // 作词
+  final String arranger; // 编曲
+  final String vocal; // Vocal（如 "初音ミク"）
+  final String voiceManipulator; // 调教
+  final String illustrator; // 插画
+  final String movie; // PV制作
+  final String source; // 投稿平台/视频链接
+  final String lyrics; // 歌词
+  final String comment; // 备注
 
   const Track({
     required this.id,
@@ -21,11 +31,20 @@ class Track {
     this.videoThumbPath = '',
     this.discNumber = 1,
     this.trackNumber = 0,
-    this.producer = '',
-    this.vocal = '',
+    this.artists = '',
     this.year = 0,
     this.durationSeconds = 0,
     this.format = '',
+    this.composer = '',
+    this.lyricist = '',
+    this.arranger = '',
+    this.vocal = '',
+    this.voiceManipulator = '',
+    this.illustrator = '',
+    this.movie = '',
+    this.source = '',
+    this.lyrics = '',
+    this.comment = '',
   });
 
   factory Track.fromJson(Map<String, dynamic> json) {
@@ -37,11 +56,20 @@ class Track {
       videoThumbPath: json['video_thumb_path'] as String? ?? '',
       discNumber: json['disc_number'] as int? ?? 1,
       trackNumber: json['track_number'] as int? ?? 0,
-      producer: json['producer'] as String? ?? '',
-      vocal: json['vocal'] as String? ?? '',
+      artists: json['artists'] as String? ?? '',
       year: json['year'] as int? ?? 0,
       durationSeconds: json['duration_seconds'] as int? ?? 0,
       format: json['format'] as String? ?? '',
+      composer: json['composer'] as String? ?? '',
+      lyricist: json['lyricist'] as String? ?? '',
+      arranger: json['arranger'] as String? ?? '',
+      vocal: json['vocal'] as String? ?? '',
+      voiceManipulator: json['voice_manipulator'] as String? ?? '',
+      illustrator: json['illustrator'] as String? ?? '',
+      movie: json['movie'] as String? ?? '',
+      source: json['source'] as String? ?? '',
+      lyrics: json['lyrics'] as String? ?? '',
+      comment: json['comment'] as String? ?? '',
     );
   }
 

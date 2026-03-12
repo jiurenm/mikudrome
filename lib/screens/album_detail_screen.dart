@@ -484,6 +484,7 @@ class _TrackRowState extends State<_TrackRow> {
         trackTitle: widget.track.title,
         trackId: widget.track.id,
         baseUrl: widget.baseUrl,
+        initialUrl: widget.track.source, // 使用 source 字段预填充
         onSuccess: () {
           widget.onDownloadComplete();
           if (context.mounted) {
@@ -500,12 +501,33 @@ class _TrackRowState extends State<_TrackRow> {
   }
 
   String get _vocalLine {
-    final p = widget.track.producer.trim();
-    final v = widget.track.vocal.trim();
-    if (p.isNotEmpty && v.isNotEmpty) return '$p feat. $v';
-    if (p.isNotEmpty) return p;
-    if (v.isNotEmpty) return 'feat. $v';
-    return '';
+    final composer = widget.track.composer.trim();
+    final lyricist = widget.track.lyricist.trim();
+    final vocal = widget.track.vocal.trim();
+
+    final parts = <String>[];
+
+    if (composer.isNotEmpty && lyricist.isNotEmpty) {
+      if (composer == lyricist) {
+        parts.add(composer);
+      } else {
+        parts.add('$composer, $lyricist');
+      }
+    } else if (composer.isNotEmpty) {
+      parts.add(composer);
+    } else if (lyricist.isNotEmpty) {
+      parts.add(lyricist);
+    }
+
+    if (vocal.isNotEmpty) {
+      if (parts.isNotEmpty) {
+        parts.add('feat. $vocal');
+      } else {
+        parts.add(vocal);
+      }
+    }
+
+    return parts.join(' ');
   }
 
   @override
@@ -666,6 +688,7 @@ class _DownloadMvDialog extends StatefulWidget {
     required this.trackTitle,
     required this.trackId,
     required this.baseUrl,
+    this.initialUrl = '',
     required this.onSuccess,
     required this.onError,
   });
@@ -673,6 +696,7 @@ class _DownloadMvDialog extends StatefulWidget {
   final String trackTitle;
   final int trackId;
   final String baseUrl;
+  final String initialUrl;
   final VoidCallback onSuccess;
   final void Function(String message) onError;
 
@@ -683,6 +707,15 @@ class _DownloadMvDialog extends StatefulWidget {
 class _DownloadMvDialogState extends State<_DownloadMvDialog> {
   final _urlController = TextEditingController();
   bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 预填充 source 字段的 URL
+    if (widget.initialUrl.isNotEmpty) {
+      _urlController.text = widget.initialUrl;
+    }
+  }
 
   @override
   void dispose() {
