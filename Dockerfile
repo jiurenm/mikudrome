@@ -7,11 +7,12 @@ ARG API_BASE_URL=
 ENV API_BASE_URL=${API_BASE_URL}
 
 WORKDIR /app
+RUN flutter precache --web
 COPY pubspec.yaml pubspec.lock ./
 RUN flutter pub get
 
 COPY . .
-RUN flutter build web --release --dart-define=API_BASE_URL=${API_BASE_URL}
+RUN flutter build web --release --wasm --dart-define=API_BASE_URL=${API_BASE_URL}
 
 # Stage 2: 构建 Go 后端
 FROM golang:1.26-alpine AS go-builder
