@@ -490,8 +490,6 @@ class _ProducerTrackRowState extends State<_ProducerTrackRow> {
   @override
   Widget build(BuildContext context) {
     final track = widget.track;
-    final index = widget.index;
-    final numberColor = _hovering ? AppTheme.mikuGreen : AppTheme.textMuted;
     final titleColor = _hovering ? AppTheme.mikuGreen : AppTheme.textPrimary;
 
     return MouseRegion(
@@ -507,16 +505,6 @@ class _ProducerTrackRowState extends State<_ProducerTrackRow> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               children: [
-                SizedBox(
-                  width: 32,
-                  child: Text(
-                    track.displayNumber(index),
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: numberColor,
-                        ),
-                  ),
-                ),
-                const SizedBox(width: 16),
                 Expanded(
                   flex: 6,
                   child: Column(

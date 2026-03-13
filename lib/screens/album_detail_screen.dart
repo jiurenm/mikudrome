@@ -82,6 +82,18 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
   bool _loading = true;
   String? _error;
 
+  // 按碟片分组曲目
+  Map<int, List<Track>> get _tracksByDisc {
+    final Map<int, List<Track>> grouped = {};
+    for (final track in _tracks) {
+      grouped.putIfAbsent(track.discNumber, () => []).add(track);
+    }
+    return grouped;
+  }
+
+  // 是否为多碟专辑
+  bool get _isMultiDisc => _tracksByDisc.keys.length > 1;
+
   @override
   void initState() {
     super.initState();
@@ -219,13 +231,42 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                     padding: const EdgeInsets.fromLTRB(40, 0, 40, 80),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
-                        _TrackListHeader(),
-                        ..._tracks.asMap().entries.map((e) => _TrackRow(
-                              index: e.key + 1,
-                              track: e.value,
-                              baseUrl: widget._effectiveBaseUrl,
-                              onDownloadComplete: _loadAlbum,
-                            )),
+                        if (_isMultiDisc)
+                          // 多碟专辑：按碟片分组显示
+                          ..._tracksByDisc.entries.expand((entry) {
+                            final discNumber = entry.key;
+                            final discTracks = entry.value;
+                            return [
+                              Padding(
+                                padding: const EdgeInsets.only(top: 24, bottom: 12, left: 16),
+                                child: Text(
+                                  'Disc $discNumber',
+                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                        color: AppTheme.mikuGreen,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
+                              ),
+                              _TrackListHeader(),
+                              ...discTracks.asMap().entries.map((e) => _TrackRow(
+                                    index: e.key + 1,
+                                    track: e.value,
+                                    baseUrl: widget._effectiveBaseUrl,
+                                    onDownloadComplete: _loadAlbum,
+                                  )),
+                            ];
+                          })
+                        else
+                          // 单碟专辑：直接显示
+                          ...[
+                            _TrackListHeader(),
+                            ..._tracks.asMap().entries.map((e) => _TrackRow(
+                                  index: e.key + 1,
+                                  track: e.value,
+                                  baseUrl: widget._effectiveBaseUrl,
+                                  onDownloadComplete: _loadAlbum,
+                                )),
+                          ],
                       ]),
                     ),
                   ),

@@ -73,12 +73,9 @@ class Track {
     );
   }
 
-  /// 曲目序号显示，多碟时显示 "1-1"，单碟时显示 "01"
+  /// 曲目序号显示，显示 "01", "02" 等
   String displayNumber(int fallbackIndex) {
     final n = trackNumber > 0 ? trackNumber : fallbackIndex;
-    if (discNumber > 1) {
-      return '$discNumber-${n.toString().padLeft(2, '0')}';
-    }
     return n.toString().padLeft(2, '0');
   }
 
