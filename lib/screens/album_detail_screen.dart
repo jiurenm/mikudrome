@@ -7,7 +7,8 @@ import '../api/api.dart';
 import '../theme/app_theme.dart';
 
 /// Shows a brief message at the top of the screen (overlay).
-void _showTopMessage(BuildContext context, String message, {required bool isError}) {
+void _showTopMessage(BuildContext context, String message,
+    {required bool isError}) {
   final overlay = Overlay.of(context);
   late OverlayEntry entry;
   entry = OverlayEntry(
@@ -70,7 +71,8 @@ class AlbumDetailScreen extends StatefulWidget {
 
   final Album album;
   final String baseUrl;
-  String get _effectiveBaseUrl => baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
+  String get _effectiveBaseUrl =>
+      baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
   final ValueChanged<Producer>? onProducerTap;
 
   @override
@@ -106,7 +108,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
       _error = null;
     });
     try {
-      final result = await ApiClient(baseUrl: widget._effectiveBaseUrl).getAlbum(widget.album.id);
+      final result = await ApiClient(baseUrl: widget._effectiveBaseUrl)
+          .getAlbum(widget.album.id);
       if (result == null || !mounted) return;
       setState(() {
         _tracks = result.tracks;
@@ -152,7 +155,9 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                           children: [
                             Text(_error!, textAlign: TextAlign.center),
                             const SizedBox(height: 16),
-                            FilledButton(onPressed: _loadAlbum, child: const Text('Retry')),
+                            FilledButton(
+                                onPressed: _loadAlbum,
+                                child: const Text('Retry')),
                           ],
                         ),
                       ),
@@ -161,7 +166,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                 else ...[
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 40, vertical: 24),
                       child: Row(
                         children: [
                           // PLAY ALL: 绿色实心圆角按钮
@@ -170,7 +176,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                             style: FilledButton.styleFrom(
                               backgroundColor: AppTheme.mikuGreen,
                               foregroundColor: Colors.black,
-                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 32, vertical: 12),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(24),
                               ),
@@ -183,21 +190,29 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                           OutlinedButton(
                             onPressed: () {},
                             style: ButtonStyle(
-                              side: MaterialStateProperty.resolveWith<BorderSide>((states) {
+                              side:
+                                  MaterialStateProperty.resolveWith<BorderSide>(
+                                      (states) {
                                 if (states.contains(MaterialState.hovered)) {
-                                  return const BorderSide(color: AppTheme.mikuGreen);
+                                  return const BorderSide(
+                                      color: AppTheme.mikuGreen);
                                 }
-                                return const BorderSide(color: AppTheme.textMuted);
+                                return const BorderSide(
+                                    color: AppTheme.textMuted);
                               }),
-                              shape: MaterialStateProperty.all<RoundedRectangleBorder>(
+                              shape: MaterialStateProperty.all<
+                                  RoundedRectangleBorder>(
                                 RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(24),
                                 ),
                               ),
-                              padding: MaterialStateProperty.all<EdgeInsetsGeometry>(
-                                const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                              padding:
+                                  MaterialStateProperty.all<EdgeInsetsGeometry>(
+                                const EdgeInsets.symmetric(
+                                    horizontal: 32, vertical: 12),
                               ),
-                              foregroundColor: MaterialStateProperty.all<Color>(AppTheme.textPrimary),
+                              foregroundColor: MaterialStateProperty.all<Color>(
+                                  AppTheme.textPrimary),
                             ),
                             child: const Icon(Icons.shuffle, size: 22),
                           ),
@@ -208,13 +223,18 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                             style: IconButton.styleFrom(
                               iconSize: 28,
                             ).copyWith(
-                              overlayColor: MaterialStateProperty.resolveWith<Color?>((states) {
+                              overlayColor:
+                                  MaterialStateProperty.resolveWith<Color?>(
+                                      (states) {
                                 if (states.contains(MaterialState.hovered)) {
-                                  return AppTheme.mikuGreen.withValues(alpha: 0.12);
+                                  return AppTheme.mikuGreen
+                                      .withValues(alpha: 0.12);
                                 }
                                 return null;
                               }),
-                              foregroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+                              foregroundColor:
+                                  MaterialStateProperty.resolveWith<Color>(
+                                      (states) {
                                 if (states.contains(MaterialState.hovered)) {
                                   return AppTheme.mikuGreen;
                                 }
@@ -238,35 +258,42 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                             final discTracks = entry.value;
                             return [
                               Padding(
-                                padding: const EdgeInsets.only(top: 24, bottom: 12, left: 16),
+                                padding: const EdgeInsets.only(
+                                    top: 24, bottom: 12, left: 16),
                                 child: Text(
                                   'Disc $discNumber',
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(
                                         color: AppTheme.mikuGreen,
                                         fontWeight: FontWeight.w700,
                                       ),
                                 ),
                               ),
                               _TrackListHeader(),
-                              ...discTracks.asMap().entries.map((e) => _TrackRow(
-                                    index: e.key + 1,
-                                    track: e.value,
-                                    baseUrl: widget._effectiveBaseUrl,
-                                    onDownloadComplete: _loadAlbum,
-                                  )),
+                              ...discTracks
+                                  .asMap()
+                                  .entries
+                                  .map((e) => _TrackRow(
+                                        index: e.key + 1,
+                                        track: e.value,
+                                        baseUrl: widget._effectiveBaseUrl,
+                                        onDownloadComplete: _loadAlbum,
+                                      )),
                             ];
                           })
                         else
                           // 单碟专辑：直接显示
                           ...[
-                            _TrackListHeader(),
-                            ..._tracks.asMap().entries.map((e) => _TrackRow(
-                                  index: e.key + 1,
-                                  track: e.value,
-                                  baseUrl: widget._effectiveBaseUrl,
-                                  onDownloadComplete: _loadAlbum,
-                                )),
-                          ],
+                          _TrackListHeader(),
+                          ..._tracks.asMap().entries.map((e) => _TrackRow(
+                                index: e.key + 1,
+                                track: e.value,
+                                baseUrl: widget._effectiveBaseUrl,
+                                onDownloadComplete: _loadAlbum,
+                              )),
+                        ],
                       ]),
                     ),
                   ),
@@ -350,7 +377,8 @@ class _HeroSection extends StatelessWidget {
                 width: 224,
                 height: 224,
                 color: AppTheme.cardBg,
-                child: const Icon(Icons.album, color: AppTheme.textMuted, size: 64),
+                child: const Icon(Icons.album,
+                    color: AppTheme.textMuted, size: 64),
               ),
             ),
           ),
@@ -394,43 +422,55 @@ class _HeroSection extends StatelessWidget {
                                     ))
                                 : null,
                             child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              ClipOval(
-                                child: SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: album.producerId == 0
-                                      ? const ColoredBox(
-                                          color: AppTheme.cardBg,
-                                          child: Icon(Icons.person, size: 16, color: AppTheme.textMuted),
-                                        )
-                                      : Image.network(
-                                          ApiClient(baseUrl: baseUrl).producerAvatarUrl(album.producerId),
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => const ColoredBox(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                ClipOval(
+                                  child: SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: album.producerId == 0
+                                        ? const ColoredBox(
                                             color: AppTheme.cardBg,
-                                            child: Icon(Icons.person, size: 16, color: AppTheme.textMuted),
+                                            child: Icon(Icons.person,
+                                                size: 16,
+                                                color: AppTheme.textMuted),
+                                          )
+                                        : Image.network(
+                                            ApiClient(baseUrl: baseUrl)
+                                                .producerAvatarUrl(
+                                                    album.producerId),
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) =>
+                                                const ColoredBox(
+                                              color: AppTheme.cardBg,
+                                              child: Icon(Icons.person,
+                                                  size: 16,
+                                                  color: AppTheme.textMuted),
+                                            ),
                                           ),
-                                        ),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                album.producerName,
-                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                      color: album.producerId > 0 && onProducerTap != null
-                                          ? AppTheme.mikuGreen
-                                          : AppTheme.textPrimary,
-                                      fontWeight: FontWeight.w700,
-                                      decoration: album.producerId > 0 && onProducerTap != null
-                                          ? TextDecoration.underline
-                                          : null,
-                                      decorationColor: AppTheme.mikuGreen,
-                                    ),
-                              ),
-                            ],
-                          ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  album.producerName,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleSmall
+                                      ?.copyWith(
+                                        color: album.producerId > 0 &&
+                                                onProducerTap != null
+                                            ? AppTheme.mikuGreen
+                                            : AppTheme.textPrimary,
+                                        fontWeight: FontWeight.w700,
+                                        decoration: album.producerId > 0 &&
+                                                onProducerTap != null
+                                            ? TextDecoration.underline
+                                            : null,
+                                        decorationColor: AppTheme.mikuGreen,
+                                      ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -438,9 +478,10 @@ class _HeroSection extends StatelessWidget {
                       if (year > 0) ...[
                         Text(
                           '• $year',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppTheme.textMuted,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: AppTheme.textMuted,
+                                  ),
                         ),
                         const SizedBox(width: 8),
                       ],
@@ -479,13 +520,17 @@ class _TrackListHeader extends StatelessWidget {
           ),
           Expanded(
             flex: 3,
-            child: Center(child: Text('Tags / MV', style: _headerStyle(context))),
+            child:
+                Center(child: Text('Tags / MV', style: _headerStyle(context))),
           ),
           const SizedBox(width: 16),
-          SizedBox(width: 48, child: Align(
-            alignment: Alignment.centerRight,
-            child: Icon(Icons.access_time, size: 12, color: AppTheme.textMuted),
-          )),
+          SizedBox(
+              width: 48,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Icon(Icons.access_time,
+                    size: 12, color: AppTheme.textMuted),
+              )),
         ],
       ),
     );
@@ -541,35 +586,7 @@ class _TrackRowState extends State<_TrackRow> {
     );
   }
 
-  String get _vocalLine {
-    final composer = widget.track.composer.trim();
-    final lyricist = widget.track.lyricist.trim();
-    final vocal = widget.track.vocal.trim();
-
-    final parts = <String>[];
-
-    if (composer.isNotEmpty && lyricist.isNotEmpty) {
-      if (composer == lyricist) {
-        parts.add(composer);
-      } else {
-        parts.add('$composer, $lyricist');
-      }
-    } else if (composer.isNotEmpty) {
-      parts.add(composer);
-    } else if (lyricist.isNotEmpty) {
-      parts.add(lyricist);
-    }
-
-    if (vocal.isNotEmpty) {
-      if (parts.isNotEmpty) {
-        parts.add('feat. $vocal');
-      } else {
-        parts.add(vocal);
-      }
-    }
-
-    return parts.join(' ');
-  }
+  String get _vocalLine => widget.track.vocalLine;
 
   @override
   Widget build(BuildContext context) {
@@ -617,10 +634,11 @@ class _TrackRowState extends State<_TrackRow> {
                       if (_vocalLine.isNotEmpty)
                         Text(
                           _vocalLine,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppTheme.textMuted,
-                                fontSize: 12,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: AppTheme.textMuted,
+                                    fontSize: 12,
+                                  ),
                         ),
                     ],
                   ),
@@ -632,20 +650,27 @@ class _TrackRowState extends State<_TrackRow> {
                     children: [
                       if (track.hasVideo)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: AppTheme.mikuGreen.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: AppTheme.mikuGreen.withValues(alpha: 0.2)),
+                            border: Border.all(
+                                color:
+                                    AppTheme.mikuGreen.withValues(alpha: 0.2)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.movie, size: 10, color: AppTheme.mikuGreen),
+                              const Icon(Icons.movie,
+                                  size: 10, color: AppTheme.mikuGreen),
                               const SizedBox(width: 4),
                               Text(
                                 'LOCAL MV',
-                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(
                                       color: AppTheme.mikuGreen,
                                       fontSize: 8,
                                       fontWeight: FontWeight.w400,
@@ -654,18 +679,24 @@ class _TrackRowState extends State<_TrackRow> {
                             ],
                           ),
                         ),
-                      if (track.hasVideo && track.format.isNotEmpty) const SizedBox(width: 12),
+                      if (track.hasVideo && track.format.isNotEmpty)
+                        const SizedBox(width: 12),
                       if (track.format.isNotEmpty)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: const Color(0xFF1F2937), // gray-800
                             borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.05)),
                           ),
                           child: Text(
                             track.format,
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
                                   color: const Color(0xFF9CA3AF), // gray-400
                                   fontSize: 8,
                                   fontWeight: FontWeight.w400,
@@ -682,13 +713,18 @@ class _TrackRowState extends State<_TrackRow> {
                             padding: const EdgeInsets.all(8),
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ).copyWith(
-                            overlayColor: MaterialStateProperty.resolveWith<Color?>((states) {
+                            overlayColor:
+                                MaterialStateProperty.resolveWith<Color?>(
+                                    (states) {
                               if (states.contains(MaterialState.hovered)) {
-                                return AppTheme.textPrimary.withValues(alpha: 0.08);
+                                return AppTheme.textPrimary
+                                    .withValues(alpha: 0.08);
                               }
                               return null;
                             }),
-                            foregroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+                            foregroundColor:
+                                MaterialStateProperty.resolveWith<Color>(
+                                    (states) {
                               if (states.contains(MaterialState.hovered)) {
                                 return AppTheme.textPrimary;
                               }
@@ -709,9 +745,9 @@ class _TrackRowState extends State<_TrackRow> {
                     child: Text(
                       track.durationFormatted,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppTheme.textMuted,
-                            fontFeatures: [FontFeature.tabularFigures()],
-                          ),
+                        color: AppTheme.textMuted,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
                     ),
                   ),
                 ),
@@ -772,7 +808,8 @@ class _DownloadMvDialogState extends State<_DownloadMvDialog> {
     }
     setState(() => _loading = true);
     try {
-      await ApiClient(baseUrl: widget.baseUrl).downloadTrackMv(widget.trackId, url);
+      await ApiClient(baseUrl: widget.baseUrl)
+          .downloadTrackMv(widget.trackId, url);
       if (!mounted) return;
       Navigator.of(context).pop();
       widget.onSuccess();
@@ -830,7 +867,9 @@ class _DownloadMvDialogState extends State<_DownloadMvDialog> {
         ),
         FilledButton(
           onPressed: _loading ? null : _submit,
-          style: FilledButton.styleFrom(backgroundColor: AppTheme.mikuGreen, foregroundColor: Colors.black),
+          style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.mikuGreen,
+              foregroundColor: Colors.black),
           child: _loading
               ? const SizedBox(
                   width: 20,

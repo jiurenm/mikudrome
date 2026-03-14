@@ -18,7 +18,8 @@ class ProducerDetailScreen extends StatefulWidget {
 
   final Producer producer;
   final String baseUrl;
-  String get _effectiveBaseUrl => baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
+  String get _effectiveBaseUrl =>
+      baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
   final ValueChanged<Album>? onAlbumTap;
 
   @override
@@ -47,7 +48,8 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
       _error = null;
     });
     try {
-      final result = await ApiClient(baseUrl: widget._effectiveBaseUrl).getProducer(widget.producer.id);
+      final result = await ApiClient(baseUrl: widget._effectiveBaseUrl)
+          .getProducer(widget.producer.id);
       if (result == null || !mounted) return;
       setState(() {
         _loadedProducer = result.producer;
@@ -64,7 +66,8 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
     }
   }
 
-  List<Track> get _tracksWithMv => _tracks.where((t) => t.videoPath.isNotEmpty).toList();
+  List<Track> get _tracksWithMv =>
+      _tracks.where((t) => t.videoPath.isNotEmpty).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -76,7 +79,9 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
             child: CustomScrollView(
               slivers: [
                 SliverToBoxAdapter(
-                  child: _HeroSection(producer: _displayProducer, baseUrl: widget._effectiveBaseUrl),
+                  child: _HeroSection(
+                      producer: _displayProducer,
+                      baseUrl: widget._effectiveBaseUrl),
                 ),
                 SliverToBoxAdapter(
                   child: _TabBar(
@@ -99,7 +104,9 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                           children: [
                             Text(_error!, textAlign: TextAlign.center),
                             const SizedBox(height: 16),
-                            FilledButton(onPressed: _loadProducer, child: const Text('Retry')),
+                            FilledButton(
+                                onPressed: _loadProducer,
+                                child: const Text('Retry')),
                           ],
                         ),
                       ),
@@ -140,28 +147,38 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                                   const SizedBox(height: 8),
                                   Text(
                                     '${_tracks.length} tracks',
-                                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
                                           color: AppTheme.textMuted,
                                         ),
                                   ),
                                   const SizedBox(height: 24),
                                   if (_tracks.isEmpty)
                                     Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 48),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 48),
                                       child: Text(
                                         'No tracks for this producer.',
-                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
                                               color: AppTheme.textMuted,
                                             ),
                                       ),
                                     )
                                   else ...[
                                     _ProducerTrackListHeader(),
-                                    ..._tracks.asMap().entries.map((e) => _ProducerTrackRow(
-                                          index: e.key + 1,
-                                          track: e.value,
-                                          baseUrl: widget._effectiveBaseUrl,
-                                        )),
+                                    ..._tracks
+                                        .asMap()
+                                        .entries
+                                        .map((e) => _ProducerTrackRow(
+                                              index: e.key + 1,
+                                              track: e.value,
+                                              baseUrl: widget._effectiveBaseUrl,
+                                            )),
                                   ],
                                 ]),
                               )
@@ -173,7 +190,10 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                                     alignment: Alignment.centerRight,
                                     child: Text(
                                       '${_tracksWithMv.length} tracks with local MV',
-                                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(
                                             color: AppTheme.textMuted,
                                           ),
                                     ),
@@ -203,7 +223,8 @@ class _HeroSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avatarUrl = ApiClient(baseUrl: baseUrl).producerAvatarUrl(producer.id);
+    final avatarUrl =
+        ApiClient(baseUrl: baseUrl).producerAvatarUrl(producer.id);
     return Stack(
       children: [
         SizedBox(
@@ -240,7 +261,9 @@ class _HeroSection extends StatelessWidget {
                 height: 192,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: AppTheme.mikuGreen.withValues(alpha: 0.2), width: 4),
+                  border: Border.all(
+                      color: AppTheme.mikuGreen.withValues(alpha: 0.2),
+                      width: 4),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.5),
@@ -255,7 +278,8 @@ class _HeroSection extends StatelessWidget {
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(
                       color: AppTheme.cardBg,
-                      child: const Icon(Icons.person, color: AppTheme.textMuted, size: 64),
+                      child: const Icon(Icons.person,
+                          color: AppTheme.textMuted, size: 64),
                     ),
                   ),
                 ),
@@ -289,7 +313,8 @@ class _HeroSection extends StatelessWidget {
                 style: FilledButton.styleFrom(
                   backgroundColor: AppTheme.mikuGreen,
                   foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(24),
                   ),
@@ -318,7 +343,8 @@ class _TabBar extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.mikuDark,
-        border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
+        border: Border(
+            bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 48),
       child: Row(
@@ -344,14 +370,17 @@ class _TabBar extends StatelessWidget {
                   Text(
                     label,
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: isActive ? AppTheme.mikuGreen : AppTheme.textMuted,
+                          color: isActive
+                              ? AppTheme.mikuGreen
+                              : AppTheme.textMuted,
                           fontWeight: FontWeight.w700,
                         ),
                   ),
                   if (showBadge) ...[
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: AppTheme.mikuGreen,
                         borderRadius: BorderRadius.circular(12),
@@ -409,7 +438,8 @@ class _ProducerTrackListHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
-          SizedBox(width: 32, child: Text('#', style: _trackHeaderStyle(context))),
+          SizedBox(
+              width: 32, child: Text('#', style: _trackHeaderStyle(context))),
           const SizedBox(width: 16),
           Expanded(
             flex: 6,
@@ -417,14 +447,16 @@ class _ProducerTrackListHeader extends StatelessWidget {
           ),
           Expanded(
             flex: 3,
-            child: Center(child: Text('Tags / MV', style: _trackHeaderStyle(context))),
+            child: Center(
+                child: Text('Tags / MV', style: _trackHeaderStyle(context))),
           ),
           const SizedBox(width: 16),
           SizedBox(
             width: 48,
             child: Align(
               alignment: Alignment.centerRight,
-              child: Icon(Icons.access_time, size: 12, color: AppTheme.textMuted),
+              child:
+                  Icon(Icons.access_time, size: 12, color: AppTheme.textMuted),
             ),
           ),
         ],
@@ -457,35 +489,7 @@ class _ProducerTrackRow extends StatefulWidget {
 class _ProducerTrackRowState extends State<_ProducerTrackRow> {
   bool _hovering = false;
 
-  String get _vocalLine {
-    final composer = widget.track.composer.trim();
-    final lyricist = widget.track.lyricist.trim();
-    final vocal = widget.track.vocal.trim();
-
-    final parts = <String>[];
-
-    if (composer.isNotEmpty && lyricist.isNotEmpty) {
-      if (composer == lyricist) {
-        parts.add(composer);
-      } else {
-        parts.add('$composer, $lyricist');
-      }
-    } else if (composer.isNotEmpty) {
-      parts.add(composer);
-    } else if (lyricist.isNotEmpty) {
-      parts.add(lyricist);
-    }
-
-    if (vocal.isNotEmpty) {
-      if (parts.isNotEmpty) {
-        parts.add('feat. $vocal');
-      } else {
-        parts.add(vocal);
-      }
-    }
-
-    return parts.join(' ');
-  }
+  String get _vocalLine => widget.track.vocalLine;
 
   @override
   Widget build(BuildContext context) {
@@ -521,10 +525,11 @@ class _ProducerTrackRowState extends State<_ProducerTrackRow> {
                       if (_vocalLine.isNotEmpty)
                         Text(
                           _vocalLine,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppTheme.textMuted,
-                                fontSize: 12,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: AppTheme.textMuted,
+                                    fontSize: 12,
+                                  ),
                         ),
                     ],
                   ),
@@ -536,20 +541,27 @@ class _ProducerTrackRowState extends State<_ProducerTrackRow> {
                     children: [
                       if (track.hasVideo)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: AppTheme.mikuGreen.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: AppTheme.mikuGreen.withValues(alpha: 0.2)),
+                            border: Border.all(
+                                color:
+                                    AppTheme.mikuGreen.withValues(alpha: 0.2)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.movie, size: 10, color: AppTheme.mikuGreen),
+                              const Icon(Icons.movie,
+                                  size: 10, color: AppTheme.mikuGreen),
                               const SizedBox(width: 4),
                               Text(
                                 'LOCAL MV',
-                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(
                                       color: AppTheme.mikuGreen,
                                       fontSize: 8,
                                       fontWeight: FontWeight.w400,
@@ -558,18 +570,24 @@ class _ProducerTrackRowState extends State<_ProducerTrackRow> {
                             ],
                           ),
                         ),
-                      if (track.hasVideo && track.format.isNotEmpty) const SizedBox(width: 12),
+                      if (track.hasVideo && track.format.isNotEmpty)
+                        const SizedBox(width: 12),
                       if (track.format.isNotEmpty)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: const Color(0xFF1F2937),
                             borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.05)),
                           ),
                           child: Text(
                             track.format,
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
                                   color: const Color(0xFF9CA3AF),
                                   fontSize: 8,
                                   fontWeight: FontWeight.w400,
@@ -585,13 +603,18 @@ class _ProducerTrackRowState extends State<_ProducerTrackRow> {
                             padding: const EdgeInsets.all(8),
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ).copyWith(
-                            overlayColor: MaterialStateProperty.resolveWith<Color?>((states) {
+                            overlayColor:
+                                MaterialStateProperty.resolveWith<Color?>(
+                                    (states) {
                               if (states.contains(MaterialState.hovered)) {
-                                return AppTheme.textPrimary.withValues(alpha: 0.08);
+                                return AppTheme.textPrimary
+                                    .withValues(alpha: 0.08);
                               }
                               return null;
                             }),
-                            foregroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+                            foregroundColor:
+                                MaterialStateProperty.resolveWith<Color>(
+                                    (states) {
                               if (states.contains(MaterialState.hovered)) {
                                 return AppTheme.textPrimary;
                               }
@@ -611,9 +634,9 @@ class _ProducerTrackRowState extends State<_ProducerTrackRow> {
                     child: Text(
                       track.durationFormatted,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppTheme.textMuted,
-                            fontFeatures: [FontFeature.tabularFigures()],
-                          ),
+                        color: AppTheme.textMuted,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
                     ),
                   ),
                 ),
@@ -820,43 +843,43 @@ class _MVCardState extends State<_MVCard> {
                     Colors.black.withValues(alpha: 0.8),
                   ],
                 ),
-            ),
-          ),
-          Positioned(
-            left: 16,
-            bottom: 16,
-            right: 16,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.title,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-                Text(
-                  widget.subtitle,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: AppTheme.mikuGreen,
-                        fontWeight: FontWeight.w900,
-                      ),
-                ),
-              ],
-            ),
-          ),
-          Center(
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 180),
-              opacity: _hovering ? 1 : 0,
-              child: Icon(
-                Icons.play_circle_outline,
-                color: Colors.white.withValues(alpha: 0.9),
-                size: 48,
               ),
             ),
-          ),
+            Positioned(
+              left: 16,
+              bottom: 16,
+              right: 16,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.title,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  Text(
+                    widget.subtitle,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: AppTheme.mikuGreen,
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            Center(
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 180),
+                opacity: _hovering ? 1 : 0,
+                child: Icon(
+                  Icons.play_circle_outline,
+                  color: Colors.white.withValues(alpha: 0.9),
+                  size: 48,
+                ),
+              ),
+            ),
           ],
         ),
       ),

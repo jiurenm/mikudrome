@@ -276,16 +276,16 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 		}
 		// Read extended metadata fields
 		if c, ok := ffprobeTags["composer"]; ok && c != "" {
-			composer = strings.TrimSpace(c)
+			composer = normalizeCreditList(c)
 		}
 		if l, ok := ffprobeTags["lyricist"]; ok && l != "" {
-			lyricist = strings.TrimSpace(l)
+			lyricist = normalizeCreditList(l)
 		}
 		if arr, ok := ffprobeTags["arranger"]; ok && arr != "" {
-			arranger = strings.TrimSpace(arr)
+			arranger = normalizeCreditList(arr)
 		}
 		if v, ok := ffprobeTags["vocal"]; ok && v != "" {
-			vocal = strings.TrimSpace(v)
+			vocal = normalizeCreditList(v)
 		}
 		if vm, ok := ffprobeTags["voice_manipulator"]; ok && vm != "" {
 			voiceManipulator = strings.TrimSpace(vm)
@@ -357,6 +357,11 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 	if durationSeconds == 0 && strings.ToLower(filepath.Ext(audioPath)) == ".flac" {
 		durationSeconds = getFLACDuration(audioPath)
 	}
+
+	composer = normalizeCreditList(composer)
+	lyricist = normalizeCreditList(lyricist)
+	arranger = normalizeCreditList(arranger)
+	vocal = normalizeCreditList(vocal)
 
 	mediaRootAbs := mediaRoot
 
@@ -614,6 +619,20 @@ func parseDurationString(s string) int {
 		}
 	}
 	return 0
+}
+
+func normalizeCreditList(value string) string {
+	parts := strings.FieldsFunc(value, func(r rune) bool {
+		return r == ';' || r == '；'
+	})
+	cleaned := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			cleaned = append(cleaned, part)
+		}
+	}
+	return strings.Join(cleaned, "; ")
 }
 
 func readMetadata(path string) (tag.Metadata, error) {

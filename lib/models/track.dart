@@ -4,7 +4,8 @@ class Track {
   final String title;
   final String audioPath;
   final String videoPath;
-  final String videoThumbPath; // MV thumbnail (same name as video or ffmpeg-generated)
+  final String
+      videoThumbPath; // MV thumbnail (same name as video or ffmpeg-generated)
   final int discNumber; // 碟号，多碟专辑时从元数据读取，默认 1
   final int trackNumber;
   final String artists; // 艺术家，可能包含多个（如 "初音ミク, 镜音リン"）
@@ -80,6 +81,46 @@ class Track {
   }
 
   bool get hasVideo => videoPath.isNotEmpty;
+
+  List<String> _splitCredits(String value) {
+    return value
+        .split(RegExp(r'[;；]'))
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+  }
+
+  List<String> _dedupeCredits(Iterable<String> credits) {
+    final seen = <String>{};
+    final result = <String>[];
+    for (final credit in credits) {
+      if (seen.add(credit)) {
+        result.add(credit);
+      }
+    }
+    return result;
+  }
+
+  String get vocalLine {
+    final peopleCredits = _dedupeCredits([
+      ..._splitCredits(composer),
+      ..._splitCredits(lyricist),
+    ]);
+    final vocalCredits = _dedupeCredits(_splitCredits(vocal));
+
+    final parts = <String>[];
+
+    if (peopleCredits.isNotEmpty) {
+      parts.add(peopleCredits.join(', '));
+    }
+
+    if (vocalCredits.isNotEmpty) {
+      final vocalText = vocalCredits.join(', ');
+      parts.add(parts.isNotEmpty ? 'feat. $vocalText' : vocalText);
+    }
+
+    return parts.join(' ');
+  }
 
   /// 时长格式化，如 "3:45" 或 "1:02:30"。
   String get durationFormatted {
