@@ -1,10 +1,37 @@
 import 'package:flutter/material.dart';
 
+import '../models/track.dart';
 import '../theme/app_theme.dart';
+import '../screens/library_home_screen.dart';
 
 /// Persistent bottom bar: now playing + controls + progress + MV indicator.
 class NowPlayingBar extends StatelessWidget {
-  const NowPlayingBar({super.key});
+  const NowPlayingBar({
+    super.key,
+    this.track,
+    this.isPlaying = false,
+    this.progress = 0,
+    this.elapsedLabel = '--:--',
+    this.durationLabel = '--:--',
+    this.playbackMode = PlaybackMode.audio,
+    this.onTogglePlay,
+    this.onPrevious,
+    this.onNext,
+    this.onOpenPlayer,
+  });
+
+  final Track? track;
+  final bool isPlaying;
+  final double progress;
+  final String elapsedLabel;
+  final String durationLabel;
+  final PlaybackMode playbackMode;
+  final VoidCallback? onTogglePlay;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+  final VoidCallback? onOpenPlayer;
+
+  bool get _hasTrack => track != null;
 
   @override
   Widget build(BuildContext context) {
@@ -26,59 +53,72 @@ class NowPlayingBar extends StatelessWidget {
   }
 
   Widget _buildLeft(BuildContext context) {
+    final currentTrack = track;
+    final title = currentTrack?.title ?? 'Nothing playing';
+    final subtitle = currentTrack == null
+        ? 'Select a track from albums or producers'
+        : currentTrack.vocalists.isNotEmpty
+            ? currentTrack.vocalists.join(', ')
+            : currentTrack.composerDisplay;
+
     return SizedBox(
       width: MediaQuery.sizeOf(context).width * 0.25,
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: Image.network(
-              'https://api.dicebear.com/7.x/identicon/svg?seed=nowplaying',
+      child: InkWell(
+        onTap: _hasTrack ? onOpenPlayer : null,
+        borderRadius: BorderRadius.circular(8),
+        child: Row(
+          children: [
+            Container(
               width: 56,
               height: 56,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                width: 56,
-                height: 56,
+              decoration: BoxDecoration(
                 color: AppTheme.cardBg,
-                child: const Icon(Icons.music_note, color: AppTheme.textMuted),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(
+                playbackMode == PlaybackMode.video ? Icons.movie : Icons.music_note,
+                color: _hasTrack ? AppTheme.mikuGreen : AppTheme.textMuted,
               ),
             ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'ノンブレス・オブリージュ',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: AppTheme.textPrimary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'ピノキオピー • 初音ミク',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: AppTheme.mikuGreen,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 0,
-                      ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: AppTheme.textPrimary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: currentTrack != null
+                              ? AppTheme.mikuGreen
+                              : AppTheme.textMuted,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0,
+                        ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.favorite_border, color: AppTheme.textMuted, size: 22),
-            onPressed: () {},
-          ),
-        ],
+            IconButton(
+              icon: const Icon(Icons.open_in_full,
+                  color: AppTheme.textMuted, size: 22),
+              onPressed: _hasTrack ? onOpenPlayer : null,
+              tooltip: 'Open player',
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -93,37 +133,33 @@ class NowPlayingBar extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               IconButton(
-                icon: const Icon(Icons.shuffle, color: AppTheme.textMuted, size: 20),
-                onPressed: () {},
-              ),
-              const SizedBox(width: 16),
-              IconButton(
-                icon: const Icon(Icons.skip_previous, color: AppTheme.textPrimary, size: 28),
-                onPressed: () {},
+                icon: const Icon(Icons.skip_previous,
+                    color: AppTheme.textPrimary, size: 28),
+                onPressed: _hasTrack ? onPrevious : null,
               ),
               const SizedBox(width: 16),
               Material(
-                color: Colors.white,
+                color: _hasTrack ? Colors.white : AppTheme.cardBg,
                 shape: const CircleBorder(),
                 child: InkWell(
-                  onTap: () {},
+                  onTap: _hasTrack ? onTogglePlay : null,
                   customBorder: const CircleBorder(),
-                  child: const SizedBox(
+                  child: SizedBox(
                     width: 40,
                     height: 40,
-                    child: Icon(Icons.play_arrow, color: Colors.black, size: 28),
+                    child: Icon(
+                      isPlaying ? Icons.pause : Icons.play_arrow,
+                      color: _hasTrack ? Colors.black : AppTheme.textMuted,
+                      size: 28,
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 16),
               IconButton(
-                icon: const Icon(Icons.skip_next, color: AppTheme.textPrimary, size: 28),
-                onPressed: () {},
-              ),
-              const SizedBox(width: 16),
-              IconButton(
-                icon: const Icon(Icons.repeat, color: AppTheme.textMuted, size: 20),
-                onPressed: () {},
+                icon: const Icon(Icons.skip_next,
+                    color: AppTheme.textPrimary, size: 28),
+                onPressed: _hasTrack ? onNext : null,
               ),
             ],
           ),
@@ -131,10 +167,9 @@ class NowPlayingBar extends StatelessWidget {
           Row(
             children: [
               Text(
-                '01:24',
+                elapsedLabel,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: AppTheme.textMuted,
-                      fontFeatures: [FontFeature.tabularFigures()],
                     ),
               ),
               const SizedBox(width: 12),
@@ -142,19 +177,19 @@ class NowPlayingBar extends StatelessWidget {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(2),
                   child: LinearProgressIndicator(
-                    value: 0.33,
+                    value: progress.clamp(0, 1),
                     backgroundColor: Colors.white.withValues(alpha: 0.1),
-                    valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.mikuGreen),
+                    valueColor:
+                        const AlwaysStoppedAnimation<Color>(AppTheme.mikuGreen),
                     minHeight: 4,
                   ),
                 ),
               ),
               const SizedBox(width: 12),
               Text(
-                '03:52',
+                durationLabel,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: AppTheme.textMuted,
-                      fontFeatures: [FontFeature.tabularFigures()],
                     ),
               ),
             ],
@@ -165,6 +200,15 @@ class NowPlayingBar extends StatelessWidget {
   }
 
   Widget _buildRight(BuildContext context) {
+    final activeLabel = !_hasTrack
+        ? 'IDLE'
+        : playbackMode == PlaybackMode.video
+            ? 'MV ACTIVE'
+            : 'AUDIO ACTIVE';
+    final activeIcon = playbackMode == PlaybackMode.video
+        ? Icons.movie
+        : Icons.music_note;
+
     return SizedBox(
       width: MediaQuery.sizeOf(context).width * 0.25,
       child: Row(
@@ -173,37 +217,21 @@ class NowPlayingBar extends StatelessWidget {
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.movie, color: AppTheme.mikuGreen, size: 22),
+              Icon(
+                activeIcon,
+                color: _hasTrack ? AppTheme.mikuGreen : AppTheme.textMuted,
+                size: 22,
+              ),
               const SizedBox(height: 2),
               Text(
-                'MV ACTIVE',
+                activeLabel,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppTheme.mikuGreen,
+                      color: _hasTrack ? AppTheme.mikuGreen : AppTheme.textMuted,
                       fontSize: 8,
                       fontWeight: FontWeight.w700,
                     ),
               ),
             ],
-          ),
-          const SizedBox(width: 24),
-          IconButton(
-            icon: const Icon(Icons.queue_music, color: AppTheme.textMuted),
-            onPressed: () {},
-          ),
-          const SizedBox(width: 8),
-          const Icon(Icons.volume_up, color: AppTheme.textMuted, size: 20),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 80,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(2),
-              child: LinearProgressIndicator(
-                value: 0.66,
-                backgroundColor: Colors.white.withValues(alpha: 0.1),
-                valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.textMuted),
-                minHeight: 4,
-              ),
-            ),
           ),
         ],
       ),

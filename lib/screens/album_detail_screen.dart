@@ -67,6 +67,7 @@ class AlbumDetailScreen extends StatefulWidget {
     required this.album,
     this.baseUrl = '',
     this.onProducerTap,
+    this.onPlayTrack,
   });
 
   final Album album;
@@ -74,6 +75,7 @@ class AlbumDetailScreen extends StatefulWidget {
   String get _effectiveBaseUrl =>
       baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
   final ValueChanged<Producer>? onProducerTap;
+  final void Function(Track track, List<Track> queue, int index)? onPlayTrack;
 
   @override
   State<AlbumDetailScreen> createState() => _AlbumDetailScreenState();
@@ -124,6 +126,10 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
     }
   }
 
+  void _playTrack(Track track, int index, {List<Track>? queue}) {
+    widget.onPlayTrack?.call(track, queue ?? _tracks, index);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -172,7 +178,9 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                         children: [
                           // PLAY ALL: 绿色实心圆角按钮
                           FilledButton.icon(
-                            onPressed: () {},
+                            onPressed: _tracks.isEmpty
+                                ? null
+                                : () => _playTrack(_tracks.first, 0),
                             style: FilledButton.styleFrom(
                               backgroundColor: AppTheme.mikuGreen,
                               foregroundColor: Colors.black,
@@ -252,7 +260,6 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
                         if (_isMultiDisc)
-                          // 多碟专辑：按碟片分组显示
                           ..._tracksByDisc.entries.expand((entry) {
                             final discNumber = entry.key;
                             final discTracks = entry.value;
@@ -272,27 +279,29 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                                 ),
                               ),
                               _TrackListHeader(),
-                              ...discTracks
-                                  .asMap()
-                                  .entries
-                                  .map((e) => _TrackRow(
-                                        index: e.key + 1,
-                                        track: e.value,
-                                        baseUrl: widget._effectiveBaseUrl,
-                                        onDownloadComplete: _loadAlbum,
-                                      )),
+                              ...discTracks.asMap().entries.map(
+                                    (e) => _TrackRow(
+                                      index: e.key + 1,
+                                      track: e.value,
+                                      baseUrl: widget._effectiveBaseUrl,
+                                      onDownloadComplete: _loadAlbum,
+                                      onPlay: () =>
+                                          _playTrack(e.value, e.key, queue: discTracks),
+                                    ),
+                                  ),
                             ];
                           })
-                        else
-                          // 单碟专辑：直接显示
-                          ...[
+                        else ...[
                           _TrackListHeader(),
-                          ..._tracks.asMap().entries.map((e) => _TrackRow(
-                                index: e.key + 1,
-                                track: e.value,
-                                baseUrl: widget._effectiveBaseUrl,
-                                onDownloadComplete: _loadAlbum,
-                              )),
+                          ..._tracks.asMap().entries.map(
+                                (e) => _TrackRow(
+                                  index: e.key + 1,
+                                  track: e.value,
+                                  baseUrl: widget._effectiveBaseUrl,
+                                  onDownloadComplete: _loadAlbum,
+                                  onPlay: () => _playTrack(e.value, e.key),
+                                ),
+                              ),
                         ],
                       ]),
                     ),
@@ -549,12 +558,14 @@ class _TrackRow extends StatefulWidget {
     required this.track,
     required this.baseUrl,
     required this.onDownloadComplete,
+    required this.onPlay,
   });
 
   final int index;
   final Track track;
   final String baseUrl;
   final VoidCallback onDownloadComplete;
+  final VoidCallback onPlay;
 
   @override
   State<_TrackRow> createState() => _TrackRowState();
@@ -601,7 +612,7 @@ class _TrackRowState extends State<_TrackRow> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {},
+          onTap: widget.onPlay,
           borderRadius: BorderRadius.circular(8),
           hoverColor: Colors.white.withValues(alpha: 0.03),
           child: Padding(

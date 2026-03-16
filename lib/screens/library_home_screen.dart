@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 
-import '../api/api.dart';
-import '../models/album.dart';
-import '../models/producer.dart';
+import '../models/track.dart';
 import '../theme/app_theme.dart';
+import '../widgets/now_playing_bar.dart';
 import '../widgets/app_shell.dart';
 import 'album_detail_screen.dart';
 import 'albums_screen.dart';
+import 'player_screen.dart';
 import 'producer_detail_screen.dart';
 import 'producers_screen.dart';
+import '../models/album.dart';
+import '../models/producer.dart';
+
+enum PlaybackMode { video, audio }
 
 /// Root screen: app shell + route-based content. Album detail is shown in-shell (sidebar stays).
 class LibraryHomeScreen extends StatefulWidget {
@@ -22,6 +26,24 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   ShellRoute _route = ShellRoute.albums;
   Album? _selectedAlbum;
   Producer? _selectedProducer;
+  List<Track> _playerQueue = const [];
+  int _playerIndex = 0;
+  bool _showPlayer = false;
+  bool _isPlaying = false;
+  double _playbackProgress = 0;
+  String _elapsedLabel = '--:--';
+  String _durationLabel = '--:--';
+  String _playerContextLabel = 'Now Playing';
+  PlaybackMode _playbackMode = PlaybackMode.audio;
+
+  Track? get _currentTrack {
+    if (_playerQueue.isEmpty ||
+        _playerIndex < 0 ||
+        _playerIndex >= _playerQueue.length) {
+      return null;
+    }
+    return _playerQueue[_playerIndex];
+  }
 
   Widget _contentForRoute(ShellRoute route) {
     switch (route) {
@@ -30,6 +52,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           onAlbumTap: (album) => setState(() {
             _selectedAlbum = album;
             _selectedProducer = null;
+            _showPlayer = false;
           }),
         );
       case ShellRoute.producers:
@@ -37,42 +60,177 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           onProducerTap: (producer) => setState(() {
             _selectedProducer = producer;
             _selectedAlbum = null;
+            _showPlayer = false;
           }),
         );
       case ShellRoute.vocalists:
-        return _PlaceholderScreen(
+        return const _PlaceholderScreen(
           title: 'Vocalists',
           subtitle: 'Browse by vocalist (e.g. 初音ミク)',
         );
       case ShellRoute.nasFolders:
-        return _PlaceholderScreen(
+        return const _PlaceholderScreen(
           title: 'NAS Folders',
           subtitle: 'Browse by folder structure',
         );
       case ShellRoute.favorites:
-        return _PlaceholderScreen(
+        return const _PlaceholderScreen(
           title: 'Favorite Tracks',
           subtitle: 'Your liked tracks',
         );
       case ShellRoute.localMv:
-        return _PlaceholderScreen(
+        return const _PlaceholderScreen(
           title: 'Local MV Gallery',
           subtitle: 'All tracks with local MV',
         );
     }
   }
 
+  PlaybackMode _defaultModeForTrack(Track track) =>
+      track.hasVideo ? PlaybackMode.video : PlaybackMode.audio;
+
+  PlaybackMode _nextModeForTrack(Track track) {
+    if (_playbackMode == PlaybackMode.video && !track.hasVideo) {
+      return PlaybackMode.audio;
+    }
+    return track.hasVideo ? _playbackMode : PlaybackMode.audio;
+  }
+
+  void _openPlayerForQueue({
+    required Track track,
+    required List<Track> queue,
+    required int index,
+    required String contextLabel,
+  }) {
+    if (queue.isEmpty) return;
+    final selectedTrack = queue[index.clamp(0, queue.length - 1)];
+    setState(() {
+      _playerQueue = List<Track>.from(queue);
+      _playerIndex = index.clamp(0, queue.length - 1);
+      _playerContextLabel = contextLabel;
+      _playbackMode = _defaultModeForTrack(selectedTrack);
+      _showPlayer = true;
+      _isPlaying = true;
+    });
+  }
+
+  void _selectPlayerTrack(int index) {
+    if (index < 0 || index >= _playerQueue.length) return;
+    final nextTrack = _playerQueue[index];
+    setState(() {
+      _playerIndex = index;
+      _playbackMode = _nextModeForTrack(nextTrack);
+      _showPlayer = true;
+      _isPlaying = true;
+    });
+  }
+
+  void _playPrevious() {
+    if (_playerIndex <= 0) return;
+    final nextIndex = _playerIndex - 1;
+    final nextTrack = _playerQueue[nextIndex];
+    setState(() {
+      _playerIndex = nextIndex;
+      _playbackMode = _nextModeForTrack(nextTrack);
+      _isPlaying = true;
+    });
+  }
+
+  void _playNext() {
+    if (_playerIndex >= _playerQueue.length - 1) return;
+    final nextIndex = _playerIndex + 1;
+    final nextTrack = _playerQueue[nextIndex];
+    setState(() {
+      _playerIndex = nextIndex;
+      _playbackMode = _nextModeForTrack(nextTrack);
+      _isPlaying = true;
+    });
+  }
+
+  void _togglePlayback() {
+    if (_currentTrack == null) return;
+    setState(() {
+      _showPlayer = true;
+    });
+  }
+
+  void _switchPlaybackMode(PlaybackMode mode) {
+    final currentTrack = _currentTrack;
+    if (currentTrack == null) return;
+    if (mode == PlaybackMode.video && !currentTrack.hasVideo) return;
+    setState(() {
+      _playbackMode = mode;
+      _isPlaying = true;
+    });
+  }
+
+  void _openCurrentPlayer() {
+    if (_currentTrack == null) return;
+    setState(() {
+      _showPlayer = true;
+    });
+  }
+
+  void _closePlayer() {
+    setState(() {
+      _showPlayer = false;
+    });
+  }
+
+  void _updatePlaybackUi({
+    required bool isPlaying,
+    required double progress,
+    required String elapsedLabel,
+    required String durationLabel,
+  }) {
+    if (!mounted) return;
+    setState(() {
+      _isPlaying = isPlaying;
+      _playbackProgress = progress;
+      _elapsedLabel = elapsedLabel;
+      _durationLabel = durationLabel;
+    });
+  }
+
+  String _albumContextLabel(Album album) => 'Album / ${album.title}';
+  String _producerContextLabel(Producer producer) =>
+      'Producer / ${producer.name}';
+  String _mvContextLabel(Producer producer) =>
+      'Featured MVs / ${producer.name}';
+
   @override
   Widget build(BuildContext context) {
+    final currentTrack = _currentTrack;
     Widget content;
-    if (_selectedAlbum != null) {
+    if (_showPlayer && currentTrack != null) {
+      content = PlayerScreen(
+        track: currentTrack,
+        queue: _playerQueue,
+        currentIndex: _playerIndex,
+        contextLabel: _playerContextLabel,
+        playbackMode: _playbackMode,
+        onSelectTrack: _selectPlayerTrack,
+        onPrevious: _playPrevious,
+        onNext: _playNext,
+        onClose: _closePlayer,
+        onSwitchPlaybackMode: _switchPlaybackMode,
+        onPlaybackStateChanged: _updatePlaybackUi,
+      );
+    } else if (_selectedAlbum != null) {
       content = AlbumDetailScreen(
         album: _selectedAlbum!,
         onProducerTap: (producer) => setState(() {
           _selectedProducer = producer;
           _selectedAlbum = null;
           _route = ShellRoute.producers;
+          _showPlayer = false;
         }),
+        onPlayTrack: (track, queue, index) => _openPlayerForQueue(
+          track: track,
+          queue: queue,
+          index: index,
+          contextLabel: _albumContextLabel(_selectedAlbum!),
+        ),
       );
     } else if (_selectedProducer != null) {
       content = ProducerDetailScreen(
@@ -81,7 +239,16 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           _selectedAlbum = album;
           _selectedProducer = null;
           _route = ShellRoute.albums;
+          _showPlayer = false;
         }),
+        onPlayTrack: (track, queue, index) => _openPlayerForQueue(
+          track: track,
+          queue: queue,
+          index: index,
+          contextLabel: queue.every((item) => item.hasVideo)
+              ? _mvContextLabel(_selectedProducer!)
+              : _producerContextLabel(_selectedProducer!),
+        ),
       );
     } else {
       content = _contentForRoute(_route);
@@ -89,11 +256,27 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
 
     return AppShell(
       currentRoute: _route,
+      forceSidebarCollapsed: _showPlayer,
       onNavigate: (r) => setState(() {
         _route = r;
         _selectedAlbum = null;
         _selectedProducer = null;
+        _showPlayer = false;
       }),
+      nowPlayingBar: _showPlayer
+          ? const SizedBox.shrink()
+          : NowPlayingBar(
+              track: currentTrack,
+              isPlaying: _isPlaying,
+              progress: _playbackProgress,
+              elapsedLabel: _elapsedLabel,
+              durationLabel: _durationLabel,
+              playbackMode: _playbackMode,
+              onTogglePlay: _togglePlayback,
+              onPrevious: _playPrevious,
+              onNext: _playNext,
+              onOpenPlayer: _openCurrentPlayer,
+            ),
       child: content,
     );
   }

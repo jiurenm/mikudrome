@@ -14,6 +14,7 @@ class ProducerDetailScreen extends StatefulWidget {
     required this.producer,
     this.baseUrl = '',
     this.onAlbumTap,
+    this.onPlayTrack,
   });
 
   final Producer producer;
@@ -21,6 +22,7 @@ class ProducerDetailScreen extends StatefulWidget {
   String get _effectiveBaseUrl =>
       baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
   final ValueChanged<Album>? onAlbumTap;
+  final void Function(Track track, List<Track> queue, int index)? onPlayTrack;
 
   @override
   State<ProducerDetailScreen> createState() => _ProducerDetailScreenState();
@@ -68,6 +70,10 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
 
   List<Track> get _tracksWithMv =>
       _tracks.where((t) => t.videoPath.isNotEmpty).toList();
+
+  void _playTrack(Track track, int index, {List<Track>? queue}) {
+    widget.onPlayTrack?.call(track, queue ?? _tracks, index);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -178,6 +184,7 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                                               index: e.key + 1,
                                               track: e.value,
                                               baseUrl: widget._effectiveBaseUrl,
+                                              onPlay: () => _playTrack(e.value, e.key),
                                             )),
                                   ],
                                 ]),
@@ -202,6 +209,8 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                                   _FeaturedMVsGrid(
                                     tracks: _tracksWithMv,
                                     baseUrl: widget._effectiveBaseUrl,
+                                    onPlay: (track, index) =>
+                                        _playTrack(track, index, queue: _tracksWithMv),
                                   ),
                                 ]),
                               ),
@@ -476,11 +485,13 @@ class _ProducerTrackRow extends StatefulWidget {
     required this.index,
     required this.track,
     required this.baseUrl,
+    required this.onPlay,
   });
 
   final int index;
   final Track track;
   final String baseUrl;
+  final VoidCallback onPlay;
 
   @override
   State<_ProducerTrackRow> createState() => _ProducerTrackRowState();
@@ -502,7 +513,7 @@ class _ProducerTrackRowState extends State<_ProducerTrackRow> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {},
+          onTap: widget.onPlay,
           borderRadius: BorderRadius.circular(8),
           hoverColor: Colors.white.withValues(alpha: 0.03),
           child: Padding(
@@ -750,10 +761,12 @@ class _FeaturedMVsGrid extends StatelessWidget {
   const _FeaturedMVsGrid({
     required this.tracks,
     required this.baseUrl,
+    required this.onPlay,
   });
 
   final List<Track> tracks;
   final String baseUrl;
+  final void Function(Track track, int index) onPlay;
 
   @override
   Widget build(BuildContext context) {
@@ -773,14 +786,17 @@ class _FeaturedMVsGrid extends StatelessWidget {
       crossAxisSpacing: 24,
       childAspectRatio: 16 / 9,
       children: tracks
-          .map((t) => _MVCard(
-                imageUrl: t.videoThumbPath.isNotEmpty
-                    ? ApiClient(baseUrl: baseUrl).streamThumbUrl(t.id)
+          .asMap()
+          .entries
+          .map((entry) => _MVCard(
+                imageUrl: entry.value.videoThumbPath.isNotEmpty
+                    ? ApiClient(baseUrl: baseUrl).streamThumbUrl(entry.value.id)
                     : '',
-                title: t.title,
+                title: entry.value.title,
                 subtitle: 'Local MV',
-                trackId: t.id,
+                trackId: entry.value.id,
                 baseUrl: baseUrl,
+                onTap: () => onPlay(entry.value, entry.key),
               ))
           .toList(),
     );
@@ -794,6 +810,7 @@ class _MVCard extends StatefulWidget {
     required this.subtitle,
     required this.trackId,
     required this.baseUrl,
+    required this.onTap,
   });
 
   final String imageUrl;
@@ -801,6 +818,7 @@ class _MVCard extends StatefulWidget {
   final String subtitle;
   final int trackId;
   final String baseUrl;
+  final VoidCallback onTap;
 
   @override
   State<_MVCard> createState() => _MVCardState();
@@ -815,9 +833,7 @@ class _MVCardState extends State<_MVCard> {
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
       child: InkWell(
-        onTap: () {
-          // Could open video player; for now just placeholder
-        },
+        onTap: widget.onTap,
         borderRadius: BorderRadius.circular(12),
         child: Stack(
           fit: StackFit.expand,

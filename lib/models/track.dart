@@ -6,6 +6,7 @@ class Track {
   final String videoPath;
   final String
       videoThumbPath; // MV thumbnail (same name as video or ffmpeg-generated)
+  final int albumId;
   final int discNumber; // 碟号，多碟专辑时从元数据读取，默认 1
   final int trackNumber;
   final String artists; // 艺术家，可能包含多个（如 "初音ミク, 镜音リン"）
@@ -30,6 +31,7 @@ class Track {
     required this.audioPath,
     required this.videoPath,
     this.videoThumbPath = '',
+    this.albumId = 0,
     this.discNumber = 1,
     this.trackNumber = 0,
     this.artists = '',
@@ -55,6 +57,7 @@ class Track {
       audioPath: json['audio_path'] as String? ?? '',
       videoPath: json['video_path'] as String? ?? '',
       videoThumbPath: json['video_thumb_path'] as String? ?? '',
+      albumId: json['album_id'] as int? ?? 0,
       discNumber: json['disc_number'] as int? ?? 1,
       trackNumber: json['track_number'] as int? ?? 0,
       artists: json['artists'] as String? ?? '',
@@ -84,7 +87,7 @@ class Track {
 
   List<String> _splitCredits(String value) {
     return value
-        .split(RegExp(r'[;；]'))
+        .split(RegExp(r'\s*[;,，；/／]+\s*'))
         .map((part) => part.trim())
         .where((part) => part.isNotEmpty)
         .toList();
@@ -99,6 +102,23 @@ class Track {
       }
     }
     return result;
+  }
+
+  List<String> get composers => _dedupeCredits(_splitCredits(composer));
+
+  List<String> get lyricists => _dedupeCredits(_splitCredits(lyricist));
+
+  List<String> get vocalists => _dedupeCredits(_splitCredits(vocal));
+
+  String get composerDisplay {
+    if (composers.isNotEmpty) return composers.join(', ');
+    if (artists.isNotEmpty) return artists;
+    return 'Unknown';
+  }
+
+  String get lyricistDisplay {
+    if (lyricists.isNotEmpty) return lyricists.join(', ');
+    return 'Unknown';
   }
 
   String get vocalLine {

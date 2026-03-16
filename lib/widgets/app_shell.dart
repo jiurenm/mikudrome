@@ -19,6 +19,8 @@ class AppShell extends StatefulWidget {
     this.currentRoute = ShellRoute.albums,
     this.onNavigate,
     this.initialSidebarCollapsed,
+    this.forceSidebarCollapsed = false,
+    this.nowPlayingBar = const NowPlayingBar(),
   });
 
   final Widget child;
@@ -26,6 +28,8 @@ class AppShell extends StatefulWidget {
   final ValueChanged<ShellRoute>? onNavigate;
   /// If null, uses breakpoint: collapsed when width < [kShellSidebarBreakpoint].
   final bool? initialSidebarCollapsed;
+  final bool forceSidebarCollapsed;
+  final Widget nowPlayingBar;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -35,7 +39,11 @@ class _AppShellState extends State<AppShell> {
   bool? _sidebarCollapsedOverride;
 
   bool _sidebarCollapsed(BuildContext context) {
+    if (widget.forceSidebarCollapsed) return true;
     if (_sidebarCollapsedOverride != null) return _sidebarCollapsedOverride!;
+    if (widget.initialSidebarCollapsed != null) {
+      return widget.initialSidebarCollapsed!;
+    }
     final width = MediaQuery.sizeOf(context).width;
     return width < kShellSidebarBreakpoint;
   }
@@ -72,7 +80,7 @@ class _AppShellState extends State<AppShell> {
               ],
             ),
           ),
-          const NowPlayingBar(),
+          widget.nowPlayingBar,
         ],
       ),
     );

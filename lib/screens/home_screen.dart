@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api/api.dart';
 import '../models/track.dart';
+import 'library_home_screen.dart';
 import 'player_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -43,18 +44,29 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openPlayer(Track track) {
-    if (!track.hasVideo) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No MV for "${track.title}"')),
-      );
-      return;
-    }
-    final videoUrl = _api.streamVideoUrl(track.id);
+    final queue = List<Track>.from(_tracks);
+    final index = queue.indexWhere((item) => item.id == track.id);
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => PlayerScreen(
-          title: track.title,
-          videoUrl: videoUrl,
+          track: track,
+          queue: queue,
+          currentIndex: index < 0 ? 0 : index,
+          contextLabel: 'Home / All Tracks',
+          playbackMode:
+              track.hasVideo ? PlaybackMode.video : PlaybackMode.audio,
+          onSelectTrack: (_) {},
+          onPrevious: () {},
+          onNext: () {},
+          onClose: () => Navigator.of(context).maybePop(),
+          onSwitchPlaybackMode: (_) {},
+          onPlaybackStateChanged: ({
+            required bool isPlaying,
+            required double progress,
+            required String elapsedLabel,
+            required String durationLabel,
+          }) {},
+          baseUrl: _api.baseUrl,
         ),
       ),
     );
