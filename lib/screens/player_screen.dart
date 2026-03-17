@@ -56,6 +56,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   late bool _showQueue;
   bool _isFullscreen = false;
   bool _showFullscreenChrome = true;
+  bool _showLyrics = true;
   Timer? _fullscreenChromeTimer;
 
   ApiClient get _api => ApiClient(baseUrl: widget.baseUrl);
@@ -370,25 +371,121 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ],
                       ),
                     ),
-                    child: Column(
-                      children: [
-                        Expanded(
-                          flex: _isVideoMode ? 8 : 5,
-                          child: Center(
-                            child: _buildMediaArea(context),
-                          ),
-                        ),
-                        if (_isVideoMode)
-                          VideoModeDetails(
-                            title: _track.title,
-                            subtitle: _queueSubtitle,
-                            showSideInfo: queueVisible,
+                    child: _isVideoMode
+                        ? Column(
+                            children: [
+                              Expanded(
+                                flex: 8,
+                                child: Center(
+                                  child: _buildMediaArea(context),
+                                ),
+                              ),
+                              VideoModeDetails(
+                                title: _track.title,
+                                subtitle: _queueSubtitle,
+                                showSideInfo: queueVisible,
+                              ),
+                              _buildControls(context),
+                            ],
                           )
-                        else
-                          TrackInfoSection(track: _track),
-                        _buildControls(context),
-                      ],
-                    ),
+                        : Column(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(28, 28, 28, 8),
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      _track.title,
+                                      textAlign: TextAlign.center,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineMedium
+                                          ?.copyWith(
+                                            color: AppTheme.textPrimary,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: TextButton.icon(
+                                        onPressed: () {
+                                          setState(() {
+                                            _showLyrics = !_showLyrics;
+                                          });
+                                        },
+                                        icon: Icon(
+                                          _showLyrics
+                                              ? Icons.visibility_off
+                                              : Icons.visibility,
+                                          size: 18,
+                                          color: AppTheme.mikuGreen,
+                                        ),
+                                        label: Text(
+                                          _showLyrics
+                                              ? 'Hide lyrics'
+                                              : 'Show lyrics',
+                                          style: const TextStyle(
+                                            color: AppTheme.mikuGreen,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(28, 8, 28, 12),
+                                  child: _showLyrics
+                                      ? Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Flexible(
+                                              flex: 4,
+                                              child: Align(
+                                                alignment: Alignment.topCenter,
+                                                child: Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    _buildMediaArea(context),
+                                                    TrackInfoSection(
+                                                      track: _track,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 24),
+                                            Flexible(
+                                              flex: 6,
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.only(top: 0),
+                                                child: SizedBox.expand(
+                                                  child: LyricsSection(
+                                                    lyrics: _track.lyrics,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : Center(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              _buildMediaArea(context),
+                                              TrackInfoSection(track: _track),
+                                            ],
+                                          ),
+                                        ),
+                                ),
+                              ),
+                              _buildControls(context),
+                            ],
+                          ),
                   ),
                 ),
                 if (queueVisible)

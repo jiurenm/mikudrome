@@ -335,34 +335,31 @@ class AudioArtworkCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(40),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 760),
-        child: Container(
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.03),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: albumCoverUrl.isNotEmpty
-                    ? Image.network(
-                        albumCoverUrl,
-                        height: 320,
-                        width: 320,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => placeholder,
-                      )
-                    : placeholder,
-              ),
-            ],
-          ),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 400),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.03),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: albumCoverUrl.isNotEmpty
+                  ? Image.network(
+                      albumCoverUrl,
+                      width: 280,
+                      height: 280,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => placeholder,
+                    )
+                  : placeholder,
+            ),
+          ],
         ),
       ),
     );
@@ -381,23 +378,14 @@ class TrackInfoSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final vocalists = track.vocalists;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+      padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
       child: Column(
         children: [
-          Text(
-            track.title,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: AppTheme.textPrimary,
-                  fontWeight: FontWeight.w900,
-                ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
           Wrap(
             alignment: WrapAlignment.center,
             crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 24,
-            runSpacing: 12,
+            spacing: 16,
+            runSpacing: 10,
             children: [
               CreditColumn(
                 label: 'Composer',
@@ -405,7 +393,7 @@ class TrackInfoSection extends StatelessWidget {
               ),
               Container(
                 width: 1,
-                height: 32,
+                height: 28,
                 color: Colors.grey.shade700,
               ),
               CreditColumn(
@@ -414,7 +402,7 @@ class TrackInfoSection extends StatelessWidget {
               ),
               Container(
                 width: 1,
-                height: 32,
+                height: 28,
                 color: Colors.grey.shade700,
               ),
               VocalBadgeColumn(vocalists: vocalists),
@@ -422,6 +410,75 @@ class TrackInfoSection extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class LyricsSection extends StatefulWidget {
+  const LyricsSection({
+    super.key,
+    required this.lyrics,
+  });
+
+  final String lyrics;
+
+  @override
+  State<LyricsSection> createState() => _LyricsSectionState();
+}
+
+class _LyricsSectionState extends State<LyricsSection> {
+  late final ScrollController _scrollController;
+
+  bool get _hasLyrics => widget.lyrics.trim().isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: _hasLyrics
+          ? Scrollbar(
+              controller: _scrollController,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                child: SelectableText(
+                  widget.lyrics.trim(),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppTheme.textPrimary,
+                        height: 1.7,
+                      ),
+                ),
+              ),
+            )
+          : Align(
+              alignment: Alignment.topLeft,
+              child: Text(
+                'No lyrics available',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppTheme.textMuted,
+                      fontStyle: FontStyle.italic,
+                    ),
+              ),
+            ),
     );
   }
 }
