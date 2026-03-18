@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../api/api.dart';
+import '../models/timed_lyric_line.dart';
 import '../models/track.dart';
+import '../services/lrc_parser.dart';
 import '../theme/app_theme.dart';
 import '../widgets/player_screen_parts.dart';
 import 'library_home_screen.dart';
@@ -57,6 +59,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool _isFullscreen = false;
   bool _showFullscreenChrome = true;
   bool _showLyrics = true;
+  List<TimedLyricLine> _timedLyrics = const [];
+  int _activeLyricIndex = -1;
   Timer? _fullscreenChromeTimer;
 
   ApiClient get _api => ApiClient(baseUrl: widget.baseUrl);
@@ -75,11 +79,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Duration get _position => _controller?.value.position ?? Duration.zero;
   Duration get _duration => _controller?.value.duration ?? Duration.zero;
   bool get _isPlaying => _controller?.value.isPlaying ?? false;
+  bool get _hasTimedLyrics => _timedLyrics.isNotEmpty;
 
   @override
   void initState() {
     super.initState();
     _showQueue = !_track.hasVideo;
+    _syncLyricsForTrack();
     _initializeController();
   }
 
@@ -87,10 +93,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void didUpdateWidget(covariant PlayerScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.track.id != widget.track.id ||
+        oldWidget.track.lyrics != widget.track.lyrics) {
+      _syncLyricsForTrack();
+    }
+    if (oldWidget.track.id != widget.track.id ||
         oldWidget.playbackMode != widget.playbackMode ||
         oldWidget.baseUrl != widget.baseUrl) {
       _initializeController();
     }
+  }
+
+  void _syncLyricsForTrack() {
+    _timedLyrics = parseLrcLyrics(_track.lyrics);
+    _activeLyricIndex = -1;
   }
 
   Future<void> _initializeController() async {
@@ -146,8 +161,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
         widget.onNext();
         return;
       }
+      final nextActiveIndex = findActiveLyricIndex(_timedLyrics, value.position);
       _emitPlaybackState();
-      setState(() {});
+      if (nextActiveIndex == _activeLyricIndex) {
+        return;
+      }
+      setState(() {
+        _activeLyricIndex = nextActiveIndex;
+      });
     };
     controller.addListener(_controllerListener!);
   }
@@ -466,6 +487,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                 child: SizedBox.expand(
                                                   child: LyricsSection(
                                                     lyrics: _track.lyrics,
+                                                    timedLyrics: _timedLyrics,
+                                                    activeIndex:
+                                                        _hasTimedLyrics
+                                                            ? _activeLyricIndex
+                                                            : -1,
                                                   ),
                                                 ),
                                               ),
