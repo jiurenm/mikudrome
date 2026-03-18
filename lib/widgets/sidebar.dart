@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../theme/app_theme.dart';
 import 'app_shell.dart';
@@ -84,12 +85,12 @@ class Sidebar extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
+              SizedBox(
                 width: 24,
                 height: 24,
-                decoration: const BoxDecoration(
-                  color: AppTheme.mikuGreen,
-                  shape: BoxShape.circle,
+                child: SvgPicture.network(
+                  '/icon.svg',
+                  fit: BoxFit.contain,
                 ),
               ),
               const SizedBox(width: 12),

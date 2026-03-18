@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Mikudrome icon">
+  <defs>
+    <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="pinkGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="64" fill="#0A0A0A" stroke="#111" stroke-width="4"/>
+
+  <path
+    d="M 140 80 L 80 140 L 80 372 L 140 432 L 372 432 L 432 372 L 432 200"
+    fill="none"
+    stroke="#39C5BB"
+    stroke-width="16"
+    filter="url(#neonGlow)"
+  />
+
+  <rect x="424" y="140" width="16" height="16" fill="#39C5BB" filter="url(#neonGlow)"/>
+  <rect x="140" y="72" width="16" height="16" fill="#39C5BB" filter="url(#neonGlow)"/>
+
+  <polygon points="210,180 260,180 190,380 140,380" fill="#39C5BB" filter="url(#neonGlow)"/>
+  <polygon points="320,180 370,180 300,380 250,380" fill="#39C5BB" filter="url(#neonGlow)"/>
+
+  <rect x="210" y="130" width="28" height="28" fill="#FF2E93" filter="url(#pinkGlow)"/>
+  <rect x="320" y="130" width="28" height="28" fill="#FF2E93" filter="url(#pinkGlow)"/>
+
+  <line x1="0" y1="256" x2="512" y2="256" stroke="#ffffff" stroke-opacity="0.05" stroke-width="4"/>
+  <line x1="0" y1="356" x2="512" y2="356" stroke="#ffffff" stroke-opacity="0.05" stroke-width="2"/>
+</svg>
