@@ -111,13 +111,17 @@ class Track {
   List<String> get vocalists => _dedupeCredits(_splitCredits(vocal));
 
   String get composerDisplay {
-    if (composers.isNotEmpty) return composers.join(', ');
-    if (artists.isNotEmpty) return artists;
+    if (composers.isNotEmpty) return composers.join(' x ');
+    if (artists.isNotEmpty) {
+      final artistCredits = _dedupeCredits(_splitCredits(artists));
+      if (artistCredits.isNotEmpty) return artistCredits.join(' x ');
+      return artists;
+    }
     return 'Unknown';
   }
 
   String get lyricistDisplay {
-    if (lyricists.isNotEmpty) return lyricists.join(', ');
+    if (lyricists.isNotEmpty) return lyricists.join(' x ');
     return 'Unknown';
   }
 

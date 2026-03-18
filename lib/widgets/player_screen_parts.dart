@@ -7,6 +7,8 @@ import '../models/track.dart';
 import '../screens/library_home_screen.dart';
 import '../theme/app_theme.dart';
 
+const _trackInfoColumnWidth = 100.0;
+
 class ModeSwitcher extends StatelessWidget {
   const ModeSwitcher({
     super.key,
@@ -50,33 +52,188 @@ class CreditColumn extends StatelessWidget {
     super.key,
     required this.label,
     required this.value,
+    this.valueWidth = _trackInfoColumnWidth,
   });
 
   final String label;
   final String value;
+  final double valueWidth;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: AppTheme.textMuted,
-                letterSpacing: 1.5,
-              ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 18,
-            color: AppTheme.mikuGreen,
-            fontWeight: FontWeight.w500,
+    const valueStyle = TextStyle(
+      fontSize: 18,
+      color: AppTheme.mikuGreen,
+      fontWeight: FontWeight.w500,
+    );
+
+    return SizedBox(
+      width: valueWidth,
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppTheme.textMuted,
+                  letterSpacing: 1.5,
+                ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          textAlign: TextAlign.center,
+          const SizedBox(height: 4),
+          Tooltip(
+            message: value,
+            waitDuration: const Duration(milliseconds: 250),
+            child: _AutoScrollText(
+              text: value,
+              width: valueWidth,
+              style: valueStyle,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AutoScrollText extends StatefulWidget {
+  const _AutoScrollText({
+    required this.text,
+    required this.width,
+    required this.style,
+  });
+
+  final String text;
+  final double width;
+  final TextStyle style;
+
+  @override
+  State<_AutoScrollText> createState() => _AutoScrollTextState();
+}
+
+class _AutoScrollTextState extends State<_AutoScrollText>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  Animation<double>? _offsetAnimation;
+  double _overflow = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _recalculate());
+  }
+
+  @override
+  void didUpdateWidget(covariant _AutoScrollText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text ||
+        oldWidget.width != widget.width ||
+        oldWidget.style != widget.style) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _recalculate());
+    }
+  }
+
+  void _recalculate() {
+    if (!mounted) return;
+    final textPainter = TextPainter(
+      text: TextSpan(text: widget.text, style: widget.style),
+      textDirection: Directionality.of(context),
+      maxLines: 1,
+    )..layout();
+
+    final nextOverflow =
+        (textPainter.width - widget.width).clamp(0, double.infinity).toDouble();
+
+    if ((nextOverflow - _overflow).abs() < 0.5) return;
+
+    _overflow = nextOverflow;
+
+    if (_overflow <= 0) {
+      _offsetAnimation = null;
+      _controller.stop();
+      _controller.reset();
+      if (mounted) setState(() {});
+      return;
+    }
+
+    final travelMs = ((_overflow / 42) * 1000).clamp(1400, 8000).round();
+    const pauseMs = 650;
+
+    _controller.duration = Duration(milliseconds: travelMs * 2 + pauseMs * 2);
+    _offsetAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: ConstantTween<double>(0),
+        weight: pauseMs.toDouble(),
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0, end: _overflow),
+        weight: travelMs.toDouble(),
+      ),
+      TweenSequenceItem(
+        tween: ConstantTween<double>(_overflow),
+        weight: pauseMs.toDouble(),
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: _overflow, end: 0),
+        weight: travelMs.toDouble(),
+      ),
+    ]).animate(_controller);
+
+    _controller
+      ..reset()
+      ..repeat();
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textWidget = Text(
+      widget.text,
+      style: widget.style,
+      maxLines: 1,
+      softWrap: false,
+      overflow: TextOverflow.visible,
+      textAlign: TextAlign.center,
+    );
+
+    if (_overflow <= 0 || _offsetAnimation == null) {
+      return SizedBox(
+        width: widget.width,
+        child: textWidget,
+      );
+    }
+
+    return SizedBox(
+      width: widget.width,
+      child: ClipRect(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            final dx = _offsetAnimation?.value ?? 0;
+            return Transform.translate(
+              offset: Offset(-dx, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: child,
+              ),
+            );
+          },
+          child: Text(
+            widget.text,
+            style: widget.style,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.visible,
+          ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -85,30 +242,47 @@ class VocalBadgeColumn extends StatelessWidget {
   const VocalBadgeColumn({
     super.key,
     required this.vocalists,
+    this.columnWidth = _trackInfoColumnWidth,
   });
 
   final List<String> vocalists;
+  final double columnWidth;
 
   @override
   Widget build(BuildContext context) {
     final values = vocalists.isNotEmpty ? vocalists : const ['Unknown'];
-    return Column(
-      children: [
-        Text(
-          'Vocalists',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: AppTheme.textMuted,
-                letterSpacing: 1.5,
-              ),
-        ),
-        const SizedBox(height: 4),
-        Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 8,
-          runSpacing: 8,
-          children: values.map((value) => VocalBadge(label: value)).toList(),
-        ),
-      ],
+    final vocalText = values.join(', ');
+    const vocalStyle = TextStyle(
+      fontSize: 18,
+      color: AppTheme.mikuGreen,
+      fontWeight: FontWeight.w500,
+    );
+
+    return SizedBox(
+      width: columnWidth,
+      child: Column(
+        children: [
+          Text(
+            'Vocalists',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppTheme.textMuted,
+                  letterSpacing: 1.5,
+                ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Tooltip(
+            message: vocalText,
+            waitDuration: const Duration(milliseconds: 250),
+            child: _AutoScrollText(
+              text: vocalText,
+              width: columnWidth,
+              style: vocalStyle,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
