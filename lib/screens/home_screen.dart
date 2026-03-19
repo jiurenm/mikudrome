@@ -60,6 +60,8 @@ class _HomeScreenState extends State<HomeScreen> {
           onNext: () {},
           onClose: () => Navigator.of(context).maybePop(),
           onSwitchPlaybackMode: (_) {},
+          playbackOrderMode: PlaybackOrderMode.sequential,
+          onCyclePlaybackOrderMode: () {},
           onPlaybackStateChanged: ({
             required bool isPlaying,
             required double progress,

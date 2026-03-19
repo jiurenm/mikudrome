@@ -14,6 +14,8 @@ import '../models/producer.dart';
 
 enum PlaybackMode { video, audio }
 
+enum PlaybackOrderMode { sequential, listLoop, singleLoop }
+
 /// Root screen: app shell + route-based content. Album detail is shown in-shell (sidebar stays).
 class LibraryHomeScreen extends StatefulWidget {
   const LibraryHomeScreen({super.key});
@@ -35,6 +37,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   String _durationLabel = '--:--';
   String _playerContextLabel = 'Now Playing';
   PlaybackMode _playbackMode = PlaybackMode.audio;
+  PlaybackOrderMode _playbackOrderMode = PlaybackOrderMode.sequential;
 
   Track? get _currentTrack {
     if (_playerQueue.isEmpty ||
@@ -125,9 +128,26 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     });
   }
 
+  void _cyclePlaybackOrderMode() {
+    setState(() {
+      _playbackOrderMode = switch (_playbackOrderMode) {
+        PlaybackOrderMode.sequential => PlaybackOrderMode.listLoop,
+        PlaybackOrderMode.listLoop => PlaybackOrderMode.singleLoop,
+        PlaybackOrderMode.singleLoop => PlaybackOrderMode.sequential,
+      };
+    });
+  }
+
   void _playPrevious() {
-    if (_playerIndex <= 0) return;
-    final nextIndex = _playerIndex - 1;
+    if (_playerQueue.isEmpty) return;
+    final nextIndex = switch (_playbackOrderMode) {
+      PlaybackOrderMode.listLoop => _playerIndex > 0
+          ? _playerIndex - 1
+          : (_playerQueue.length > 1 ? _playerQueue.length - 1 : null),
+      PlaybackOrderMode.sequential || PlaybackOrderMode.singleLoop =>
+        _playerIndex > 0 ? _playerIndex - 1 : null,
+    };
+    if (nextIndex == null) return;
     final nextTrack = _playerQueue[nextIndex];
     setState(() {
       _playerIndex = nextIndex;
@@ -137,8 +157,15 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   }
 
   void _playNext() {
-    if (_playerIndex >= _playerQueue.length - 1) return;
-    final nextIndex = _playerIndex + 1;
+    if (_playerQueue.isEmpty) return;
+    final nextIndex = switch (_playbackOrderMode) {
+      PlaybackOrderMode.listLoop => _playerIndex < _playerQueue.length - 1
+          ? _playerIndex + 1
+          : (_playerQueue.length > 1 ? 0 : null),
+      PlaybackOrderMode.sequential || PlaybackOrderMode.singleLoop =>
+        _playerIndex < _playerQueue.length - 1 ? _playerIndex + 1 : null,
+    };
+    if (nextIndex == null) return;
     final nextTrack = _playerQueue[nextIndex];
     setState(() {
       _playerIndex = nextIndex;
@@ -214,6 +241,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         onNext: _playNext,
         onClose: _closePlayer,
         onSwitchPlaybackMode: _switchPlaybackMode,
+        playbackOrderMode: _playbackOrderMode,
+        onCyclePlaybackOrderMode: _cyclePlaybackOrderMode,
         onPlaybackStateChanged: _updatePlaybackUi,
       );
     } else if (_selectedAlbum != null) {

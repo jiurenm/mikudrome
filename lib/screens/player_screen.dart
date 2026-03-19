@@ -24,6 +24,8 @@ class PlayerScreen extends StatefulWidget {
     required this.onNext,
     required this.onClose,
     required this.onSwitchPlaybackMode,
+    required this.playbackOrderMode,
+    required this.onCyclePlaybackOrderMode,
     required this.onPlaybackStateChanged,
     this.baseUrl = '',
   });
@@ -38,6 +40,8 @@ class PlayerScreen extends StatefulWidget {
   final VoidCallback onNext;
   final VoidCallback onClose;
   final ValueChanged<PlaybackMode> onSwitchPlaybackMode;
+  final PlaybackOrderMode playbackOrderMode;
+  final VoidCallback onCyclePlaybackOrderMode;
   final void Function({
     required bool isPlaying,
     required double progress,
@@ -65,8 +69,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   ApiClient get _api => ApiClient(baseUrl: widget.baseUrl);
   Track get _track => widget.track;
-  bool get _hasPrevious => widget.currentIndex > 0;
-  bool get _hasNext => widget.currentIndex < widget.queue.length - 1;
+  bool get _hasPrevious {
+    if (widget.playbackOrderMode == PlaybackOrderMode.listLoop) {
+      return widget.queue.length > 1;
+    }
+    return widget.currentIndex > 0;
+  }
+
+  bool get _hasNext {
+    if (widget.playbackOrderMode == PlaybackOrderMode.listLoop) {
+      return widget.queue.length > 1;
+    }
+    return widget.currentIndex < widget.queue.length - 1;
+  }
+
   bool get _isVideoMode => widget.playbackMode == PlaybackMode.video;
   bool get _canUseVideoMode => _track.hasVideo;
   String get _mediaUrl => _isVideoMode
@@ -80,6 +96,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Duration get _duration => _controller?.value.duration ?? Duration.zero;
   bool get _isPlaying => _controller?.value.isPlaying ?? false;
   bool get _hasTimedLyrics => _timedLyrics.isNotEmpty;
+
+  IconData get _playbackOrderIcon => switch (widget.playbackOrderMode) {
+        PlaybackOrderMode.sequential => Icons.arrow_right_alt,
+        PlaybackOrderMode.listLoop => Icons.repeat,
+        PlaybackOrderMode.singleLoop => Icons.repeat_one,
+      };
+
+  String get _playbackOrderLabel => switch (widget.playbackOrderMode) {
+        PlaybackOrderMode.sequential => '顺序播放',
+        PlaybackOrderMode.listLoop => '列表循环',
+        PlaybackOrderMode.singleLoop => '单曲循环',
+      };
+
+  String get _playbackOrderTooltip => '播放顺序：$_playbackOrderLabel';
 
   @override
   void initState() {
@@ -150,18 +180,27 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _attachControllerListener(VideoPlayerController controller) {
-    _controllerListener = () {
+    _controllerListener = () async {
       if (!mounted || _controller != controller) return;
       final value = controller.value;
       if (!value.isInitialized) return;
       if (value.position >= value.duration &&
           !value.isPlaying &&
-          value.duration > Duration.zero &&
-          _hasNext) {
-        widget.onNext();
-        return;
+          value.duration > Duration.zero) {
+        if (widget.playbackOrderMode == PlaybackOrderMode.singleLoop) {
+          await controller.seekTo(Duration.zero);
+          if (!mounted || _controller != controller) return;
+          await controller.play();
+          _emitPlaybackState();
+          return;
+        }
+        if (_hasNext) {
+          widget.onNext();
+          return;
+        }
       }
-      final nextActiveIndex = findActiveLyricIndex(_timedLyrics, value.position);
+      final nextActiveIndex =
+          findActiveLyricIndex(_timedLyrics, value.position);
       _emitPlaybackState();
       if (nextActiveIndex == _activeLyricIndex) {
         return;
@@ -419,7 +458,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             : Column(
                                 children: [
                                   Padding(
-                                    padding: const EdgeInsets.fromLTRB(28, 28, 28, 8),
+                                    padding: const EdgeInsets.fromLTRB(
+                                        28, 28, 28, 8),
                                     child: Column(
                                       children: [
                                         Text(
@@ -439,7 +479,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                   ),
                                   Expanded(
                                     child: Padding(
-                                      padding: const EdgeInsets.fromLTRB(28, 8, 28, 12),
+                                      padding: const EdgeInsets.fromLTRB(
+                                          28, 8, 28, 12),
                                       child: LayoutBuilder(
                                         builder: (context, constraints) {
                                           final lyricsPanelWidth =
@@ -469,7 +510,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
-                                                        _buildMediaArea(context),
+                                                        _buildMediaArea(
+                                                            context),
                                                         TrackInfoSection(
                                                           track: _track,
                                                         ),
@@ -492,14 +534,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                   begin: _showLyrics ? 0 : 1,
                                                   end: _showLyrics ? 1 : 0,
                                                 ),
-                                                builder:
-                                                    (context, widthFactor, child) {
+                                                builder: (context, widthFactor,
+                                                    child) {
                                                   return SizedBox(
-                                                    width: lyricsPanelWidth * widthFactor,
+                                                    width: lyricsPanelWidth *
+                                                        widthFactor,
                                                     child: ClipRect(
                                                       child: Align(
-                                                        alignment:
-                                                            Alignment.centerRight,
+                                                        alignment: Alignment
+                                                            .centerRight,
                                                         child: child,
                                                       ),
                                                     ),
@@ -518,7 +561,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                       width: lyricsPanelWidth,
                                                       child: LyricsSection(
                                                         lyrics: _track.lyrics,
-                                                        timedLyrics: _timedLyrics,
+                                                        timedLyrics:
+                                                            _timedLyrics,
                                                         activeIndex: _showLyrics &&
                                                                 _hasTimedLyrics
                                                             ? _activeLyricIndex
@@ -614,9 +658,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return const SizedBox.shrink();
     }
     final borderRadius = isFullscreen ? 0.0 : 16.0;
-    final padding = isFullscreen
-        ? EdgeInsets.zero
-        : const EdgeInsets.fromLTRB(8, 4, 8, 8);
+    final padding =
+        isFullscreen ? EdgeInsets.zero : const EdgeInsets.fromLTRB(8, 4, 8, 8);
     return Padding(
       padding: padding,
       child: AspectRatio(
@@ -664,6 +707,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ),
       );
 
+  Widget _buildPlaybackOrderButton({required Color baseColor}) {
+    final isActive = widget.playbackOrderMode != PlaybackOrderMode.sequential;
+    return IconButton(
+      onPressed: widget.onCyclePlaybackOrderMode,
+      icon: Icon(
+        _playbackOrderIcon,
+        size: 26,
+        color: isActive ? AppTheme.mikuGreen : baseColor,
+      ),
+      tooltip: _playbackOrderTooltip,
+      style: IconButton.styleFrom(
+        minimumSize: const Size(50, 50),
+      ),
+    );
+  }
 
   Widget _buildControls(BuildContext context) {
     final duration = _duration;
@@ -748,7 +806,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
                   IconButton(
                     icon: Icon(
-                      _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                      _isPlaying
+                          ? Icons.pause_circle_filled
+                          : Icons.play_circle_fill,
                       size: 48,
                       color: AppTheme.mikuGreen,
                     ),
@@ -772,6 +832,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      _buildPlaybackOrderButton(baseColor: AppTheme.textMuted),
                       if (!_isVideoMode)
                         IconButton(
                           onPressed: () {
@@ -780,7 +841,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             });
                           },
                           icon: Icon(
-                            _showLyrics ? Icons.visibility : Icons.visibility_off,
+                            _showLyrics
+                                ? Icons.visibility
+                                : Icons.visibility_off,
                             size: 26,
                             color: _showLyrics
                                 ? AppTheme.mikuGreen
@@ -794,7 +857,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       IconButton(
                         onPressed: _toggleQueue,
                         icon: Icon(
-                          _showQueue ? Icons.queue_music : Icons.queue_music_outlined,
+                          _showQueue
+                              ? Icons.queue_music
+                              : Icons.queue_music_outlined,
                           size: 26,
                           color: _showQueue
                               ? AppTheme.mikuGreen
@@ -907,7 +972,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
               IconButton(
                 onPressed: _togglePlayback,
                 icon: Icon(
-                  _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                  _isPlaying
+                      ? Icons.pause_circle_filled
+                      : Icons.play_circle_fill,
                   color: AppTheme.mikuGreen,
                   size: 48,
                 ),
@@ -917,6 +984,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 onPressed: _hasNext ? widget.onNext : null,
                 icon: const Icon(Icons.skip_next, color: Colors.white),
               ),
+              const SizedBox(width: 12),
+              _buildPlaybackOrderButton(baseColor: Colors.white70),
             ],
           ),
         ],
