@@ -321,20 +321,16 @@ class PlayerHeader extends StatelessWidget {
     required this.contextLabel,
     required this.playbackMode,
     required this.canUseVideoMode,
-    required this.showQueue,
     required this.onClose,
     required this.onChangedMode,
-    required this.onToggleQueue,
     required this.onEnterFullscreen,
   });
 
   final String contextLabel;
   final PlaybackMode playbackMode;
   final bool canUseVideoMode;
-  final bool showQueue;
   final VoidCallback onClose;
   final ValueChanged<PlaybackMode> onChangedMode;
-  final VoidCallback onToggleQueue;
   final VoidCallback? onEnterFullscreen;
 
   bool get _isVideoMode => playbackMode == PlaybackMode.video;
@@ -407,15 +403,6 @@ class PlayerHeader extends StatelessWidget {
             playbackMode: playbackMode,
             canUseVideoMode: canUseVideoMode,
             onChanged: onChangedMode,
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            onPressed: onToggleQueue,
-            icon: Icon(
-              showQueue ? Icons.queue_music : Icons.queue_music_outlined,
-              color: showQueue ? AppTheme.mikuGreen : AppTheme.textMuted,
-            ),
-            tooltip: showQueue ? 'Hide queue' : 'Show queue',
           ),
           if (_isVideoMode)
             IconButton(

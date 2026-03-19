@@ -326,6 +326,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final queueVisible = _showQueue && width >= (_isVideoMode ? 1280 : 1440);
+    final queuePanelWidth = _isVideoMode ? 320.0 : 280.0;
 
     if (_isFullscreen && _isVideoMode) {
       return Scaffold(
@@ -370,10 +371,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
             contextLabel: widget.contextLabel,
             playbackMode: widget.playbackMode,
             canUseVideoMode: _canUseVideoMode,
-            showQueue: _showQueue,
             onClose: widget.onClose,
             onChangedMode: widget.onSwitchPlaybackMode,
-            onToggleQueue: _toggleQueue,
             onEnterFullscreen: _isVideoMode ? _enterFullscreen : null,
           ),
           Expanded(
@@ -381,148 +380,191 @@ class _PlayerScreenState extends State<PlayerScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          AppTheme.mikuGreen.withValues(alpha: 0.1),
-                          const Color(0xFF1A1A1A),
-                        ],
-                      ),
-                    ),
-                    child: _isVideoMode
-                        ? Column(
-                            children: [
-                              Expanded(
-                                flex: 8,
-                                child: Center(
-                                  child: _buildMediaArea(context),
-                                ),
-                              ),
-                              VideoModeDetails(
-                                title: _track.title,
-                                subtitle: _queueSubtitle,
-                                showSideInfo: queueVisible,
-                              ),
-                              _buildControls(context),
+                  child: AnimatedPadding(
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOutCubic,
+                    padding: EdgeInsets.only(right: queueVisible ? 14 : 0),
+                    child: AnimatedScale(
+                      duration: const Duration(milliseconds: 260),
+                      curve: Curves.easeOutCubic,
+                      scale: queueVisible ? 0.992 : 1,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              AppTheme.mikuGreen.withValues(alpha: 0.1),
+                              const Color(0xFF1A1A1A),
                             ],
-                          )
-                        : Column(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(28, 28, 28, 8),
-                                child: Column(
-                                  children: [
-                                    Text(
-                                      _track.title,
-                                      textAlign: TextAlign.center,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .headlineMedium
-                                          ?.copyWith(
-                                            color: AppTheme.textPrimary,
-                                            fontWeight: FontWeight.w900,
-                                          ),
+                          ),
+                        ),
+                        child: _isVideoMode
+                            ? Column(
+                                children: [
+                                  Expanded(
+                                    flex: 8,
+                                    child: Center(
+                                      child: _buildMediaArea(context),
                                     ),
-                                    const SizedBox(height: 8),
-                                    Align(
-                                      alignment: Alignment.centerRight,
-                                      child: TextButton.icon(
-                                        onPressed: () {
-                                          setState(() {
-                                            _showLyrics = !_showLyrics;
-                                          });
-                                        },
-                                        icon: Icon(
-                                          _showLyrics
-                                              ? Icons.visibility_off
-                                              : Icons.visibility,
-                                          size: 18,
-                                          color: AppTheme.mikuGreen,
-                                        ),
-                                        label: Text(
-                                          _showLyrics
-                                              ? 'Hide lyrics'
-                                              : 'Show lyrics',
-                                          style: const TextStyle(
-                                            color: AppTheme.mikuGreen,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.fromLTRB(28, 8, 28, 12),
-                                  child: _showLyrics
-                                      ? Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Flexible(
-                                              flex: 4,
-                                              child: Align(
-                                                alignment: Alignment.topCenter,
-                                                child: Column(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    _buildMediaArea(context),
-                                                    TrackInfoSection(
-                                                      track: _track,
-                                                    ),
-                                                  ],
-                                                ),
+                                  ),
+                                  VideoModeDetails(
+                                    title: _track.title,
+                                    subtitle: _queueSubtitle,
+                                    showSideInfo: queueVisible,
+                                  ),
+                                  _buildControls(context),
+                                ],
+                              )
+                            : Column(
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(28, 28, 28, 8),
+                                    child: Column(
+                                      children: [
+                                        Text(
+                                          _track.title,
+                                          textAlign: TextAlign.center,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .headlineMedium
+                                              ?.copyWith(
+                                                color: AppTheme.textPrimary,
+                                                fontWeight: FontWeight.w900,
                                               ),
-                                            ),
-                                            const SizedBox(width: 24),
-                                            Flexible(
-                                              flex: 6,
-                                              child: Padding(
-                                                padding:
-                                                    const EdgeInsets.only(top: 0),
-                                                child: SizedBox.expand(
-                                                  child: LyricsSection(
-                                                    lyrics: _track.lyrics,
-                                                    timedLyrics: _timedLyrics,
-                                                    activeIndex:
-                                                        _hasTimedLyrics
-                                                            ? _activeLyricIndex
-                                                            : -1,
+                                        ),
+                                        const SizedBox(height: 8),
+                                      ],
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.fromLTRB(28, 8, 28, 12),
+                                      child: LayoutBuilder(
+                                        builder: (context, constraints) {
+                                          final lyricsPanelWidth =
+                                              (constraints.maxWidth * 0.58)
+                                                  .clamp(320.0, 860.0);
+
+                                          return Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              Expanded(
+                                                child: AnimatedSlide(
+                                                  duration: const Duration(
+                                                      milliseconds: 260),
+                                                  curve: Curves.easeOutCubic,
+                                                  offset: _showLyrics
+                                                      ? const Offset(-0.04, 0)
+                                                      : Offset.zero,
+                                                  child: AnimatedAlign(
+                                                    duration: const Duration(
+                                                        milliseconds: 260),
+                                                    curve: Curves.easeOutCubic,
+                                                    alignment: _showLyrics
+                                                        ? Alignment.topCenter
+                                                        : Alignment.center,
+                                                    child: Column(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        _buildMediaArea(context),
+                                                        TrackInfoSection(
+                                                          track: _track,
+                                                        ),
+                                                      ],
+                                                    ),
                                                   ),
                                                 ),
                                               ),
-                                            ),
-                                          ],
-                                        )
-                                      : Center(
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              _buildMediaArea(context),
-                                              TrackInfoSection(track: _track),
+                                              AnimatedContainer(
+                                                duration: const Duration(
+                                                    milliseconds: 260),
+                                                curve: Curves.easeOutCubic,
+                                                width: _showLyrics ? 24 : 0,
+                                              ),
+                                              TweenAnimationBuilder<double>(
+                                                duration: const Duration(
+                                                    milliseconds: 260),
+                                                curve: Curves.easeOutCubic,
+                                                tween: Tween<double>(
+                                                  begin: _showLyrics ? 0 : 1,
+                                                  end: _showLyrics ? 1 : 0,
+                                                ),
+                                                builder:
+                                                    (context, widthFactor, child) {
+                                                  return SizedBox(
+                                                    width: lyricsPanelWidth * widthFactor,
+                                                    child: ClipRect(
+                                                      child: Align(
+                                                        alignment:
+                                                            Alignment.centerRight,
+                                                        child: child,
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                                child: IgnorePointer(
+                                                  ignoring: !_showLyrics,
+                                                  child: AnimatedSlide(
+                                                    duration: const Duration(
+                                                        milliseconds: 260),
+                                                    curve: Curves.easeOutCubic,
+                                                    offset: _showLyrics
+                                                        ? Offset.zero
+                                                        : const Offset(0.12, 0),
+                                                    child: SizedBox(
+                                                      width: lyricsPanelWidth,
+                                                      child: LyricsSection(
+                                                        lyrics: _track.lyrics,
+                                                        timedLyrics: _timedLyrics,
+                                                        activeIndex: _showLyrics &&
+                                                                _hasTimedLyrics
+                                                            ? _activeLyricIndex
+                                                            : -1,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
                                             ],
-                                          ),
-                                        ),
-                                ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                  _buildControls(context),
+                                ],
                               ),
-                              _buildControls(context),
-                            ],
-                          ),
+                      ),
+                    ),
                   ),
                 ),
-                if (queueVisible)
-                  QueuePanel(
-                    contextLabel: widget.contextLabel,
-                    queue: widget.queue,
-                    currentIndex: widget.currentIndex,
-                    isVideoMode: _isVideoMode,
-                    coverUrlForTrack: _coverUrlForTrack,
-                    onSelectTrack: widget.onSelectTrack,
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  width: queueVisible ? queuePanelWidth : 0,
+                  child: ClipRect(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      widthFactor: queueVisible ? 1 : 0,
+                      child: IgnorePointer(
+                        ignoring: !queueVisible,
+                        child: queueVisible
+                            ? QueuePanel(
+                                contextLabel: widget.contextLabel,
+                                queue: widget.queue,
+                                currentIndex: widget.currentIndex,
+                                isVideoMode: _isVideoMode,
+                                coverUrlForTrack: _coverUrlForTrack,
+                                onSelectTrack: widget.onSelectTrack,
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                    ),
                   ),
+                ),
               ],
             ),
           ),
@@ -698,25 +740,74 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.skip_previous),
+                    icon: const Icon(Icons.skip_previous, size: 30),
                     onPressed: _hasPrevious ? widget.onPrevious : null,
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(52, 52),
+                    ),
                   ),
                   IconButton(
                     icon: Icon(
-                      _isPlaying ? Icons.pause : Icons.play_arrow,
-                      size: 32,
+                      _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                      size: 48,
                       color: AppTheme.mikuGreen,
                     ),
                     onPressed: _togglePlayback,
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(64, 64),
+                    ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.skip_next),
+                    icon: const Icon(Icons.skip_next, size: 30),
                     onPressed: _hasNext ? widget.onNext : null,
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(52, 52),
+                    ),
                   ),
                 ],
               ),
-              const Expanded(
-                child: SizedBox(),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!_isVideoMode)
+                        IconButton(
+                          onPressed: () {
+                            setState(() {
+                              _showLyrics = !_showLyrics;
+                            });
+                          },
+                          icon: Icon(
+                            _showLyrics ? Icons.visibility : Icons.visibility_off,
+                            size: 26,
+                            color: _showLyrics
+                                ? AppTheme.mikuGreen
+                                : AppTheme.textMuted,
+                          ),
+                          tooltip: 'Lyrics',
+                          style: IconButton.styleFrom(
+                            minimumSize: const Size(50, 50),
+                          ),
+                        ),
+                      IconButton(
+                        onPressed: _toggleQueue,
+                        icon: Icon(
+                          _showQueue ? Icons.queue_music : Icons.queue_music_outlined,
+                          size: 26,
+                          color: _showQueue
+                              ? AppTheme.mikuGreen
+                              : AppTheme.textMuted,
+                        ),
+                        tooltip: 'Queue',
+                        style: IconButton.styleFrom(
+                          minimumSize: const Size(50, 50),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
