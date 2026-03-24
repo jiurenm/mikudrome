@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import '../api/api.dart';
@@ -79,6 +81,13 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
     widget.onPlayTrack?.call(track, queue ?? _tracks, index);
   }
 
+  void _shufflePlay() {
+    if (_tracks.isEmpty) return;
+    final shuffled = List<Track>.from(_tracks);
+    shuffled.shuffle(Random());
+    _playTrack(shuffled.first, 0, queue: shuffled);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -92,6 +101,8 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                   child: ProducerHeroSection(
                     producer: _displayProducer,
                     baseUrl: widget._effectiveBaseUrl,
+                    onShuffle: _shufflePlay,
+                    hasTracks: _tracks.isNotEmpty,
                   ),
                 ),
                 SliverToBoxAdapter(

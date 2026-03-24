@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import '../api/api.dart';
@@ -129,6 +131,13 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
     widget.onPlayTrack?.call(track, queue ?? _tracks, index);
   }
 
+  void _shufflePlay() {
+    if (_tracks.isEmpty) return;
+    final shuffled = List<Track>.from(_tracks);
+    shuffled.shuffle(Random());
+    _playTrack(shuffled.first, 0, queue: shuffled);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -173,6 +182,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                     child: AlbumActionBar(
                       tracks: _tracks,
                       onPlayAll: () => _playTrack(_tracks.first, 0),
+                      onShuffle: _shufflePlay,
                     ),
                   ),
                   AlbumTrackList(

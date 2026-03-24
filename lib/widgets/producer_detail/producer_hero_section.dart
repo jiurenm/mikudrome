@@ -9,10 +9,14 @@ class ProducerHeroSection extends StatelessWidget {
     super.key,
     required this.producer,
     required this.baseUrl,
+    required this.onShuffle,
+    required this.hasTracks,
   });
 
   final Producer producer;
   final String baseUrl;
+  final VoidCallback onShuffle;
+  final bool hasTracks;
 
   @override
   Widget build(BuildContext context) {
@@ -103,7 +107,7 @@ class ProducerHeroSection extends StatelessWidget {
                 ),
               ),
               FilledButton.icon(
-                onPressed: () {},
+                onPressed: hasTracks ? onShuffle : null,
                 style: FilledButton.styleFrom(
                   backgroundColor: AppTheme.mikuGreen,
                   foregroundColor: Colors.black,

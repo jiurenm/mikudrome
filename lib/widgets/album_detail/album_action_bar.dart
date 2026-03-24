@@ -8,10 +8,12 @@ class AlbumActionBar extends StatelessWidget {
     super.key,
     required this.tracks,
     required this.onPlayAll,
+    required this.onShuffle,
   });
 
   final List<Track> tracks;
   final VoidCallback onPlayAll;
+  final VoidCallback onShuffle;
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +36,7 @@ class AlbumActionBar extends StatelessWidget {
           ),
           const SizedBox(width: 24),
           OutlinedButton(
-            onPressed: () {},
+            onPressed: tracks.isEmpty ? null : onShuffle,
             style: ButtonStyle(
               side: MaterialStateProperty.resolveWith<BorderSide>((states) {
                 if (states.contains(MaterialState.hovered)) {
