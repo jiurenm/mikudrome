@@ -11,6 +11,13 @@ import '../theme/app_theme.dart';
 import '../widgets/player_screen_parts.dart';
 import 'library_home_screen.dart';
 
+typedef PlayerTogglePlayback = Future<void> Function();
+typedef PlayerSeekToFraction = Future<void> Function(double value);
+typedef PlayerControlsReady = void Function({
+  required PlayerTogglePlayback togglePlayback,
+  required PlayerSeekToFraction seekToFraction,
+});
+
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
     super.key,
@@ -27,6 +34,7 @@ class PlayerScreen extends StatefulWidget {
     required this.playbackOrderMode,
     required this.onCyclePlaybackOrderMode,
     required this.onPlaybackStateChanged,
+    this.onControlsReady,
     this.baseUrl = '',
   });
 
@@ -48,6 +56,7 @@ class PlayerScreen extends StatefulWidget {
     required String elapsedLabel,
     required String durationLabel,
   }) onPlaybackStateChanged;
+  final PlayerControlsReady? onControlsReady;
   final String baseUrl;
 
   @override
@@ -116,12 +125,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
     super.initState();
     _showQueue = !_track.hasVideo;
     _syncLyricsForTrack();
+    widget.onControlsReady?.call(
+      togglePlayback: _togglePlayback,
+      seekToFraction: _seekTo,
+    );
     _initializeController();
   }
 
   @override
   void didUpdateWidget(covariant PlayerScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.onControlsReady != widget.onControlsReady) {
+      widget.onControlsReady?.call(
+        togglePlayback: _togglePlayback,
+        seekToFraction: _seekTo,
+      );
+    }
     if (oldWidget.track.id != widget.track.id ||
         oldWidget.track.lyrics != widget.track.lyrics) {
       _syncLyricsForTrack();
@@ -223,6 +242,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void dispose() {
     _fullscreenChromeTimer?.cancel();
     _detachControllerListener(_controller);
+    widget.onControlsReady?.call(
+      togglePlayback: _noopTogglePlayback,
+      seekToFraction: _noopSeekToFraction,
+    );
     widget.onPlaybackStateChanged(
       isPlaying: false,
       progress: 0,
@@ -232,6 +255,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _controller?.dispose();
     super.dispose();
   }
+
+  Future<void> _noopTogglePlayback() async {}
+
+  Future<void> _noopSeekToFraction(double _) async {}
 
   Future<void> _togglePlayback() async {
     final controller = _controller;

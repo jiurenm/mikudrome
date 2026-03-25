@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../api/api.dart';
 import '../models/track.dart';
 import '../theme/app_theme.dart';
 import '../screens/library_home_screen.dart';
@@ -9,6 +10,8 @@ class NowPlayingBar extends StatelessWidget {
   const NowPlayingBar({
     super.key,
     this.track,
+    this.queue = const [],
+    this.currentIndex = -1,
     this.isPlaying = false,
     this.progress = 0,
     this.elapsedLabel = '--:--',
@@ -17,10 +20,14 @@ class NowPlayingBar extends StatelessWidget {
     this.onTogglePlay,
     this.onPrevious,
     this.onNext,
+    this.onSeekProgress,
     this.onOpenPlayer,
+    this.onSelectQueueTrack,
   });
 
   final Track? track;
+  final List<Track> queue;
+  final int currentIndex;
   final bool isPlaying;
   final double progress;
   final String elapsedLabel;
@@ -29,7 +36,9 @@ class NowPlayingBar extends StatelessWidget {
   final VoidCallback? onTogglePlay;
   final VoidCallback? onPrevious;
   final VoidCallback? onNext;
+  final ValueChanged<double>? onSeekProgress;
   final VoidCallback? onOpenPlayer;
+  final ValueChanged<int>? onSelectQueueTrack;
 
   bool get _hasTrack => track != null;
 
@@ -57,9 +66,10 @@ class NowPlayingBar extends StatelessWidget {
     final title = currentTrack?.title ?? 'Nothing playing';
     final subtitle = currentTrack == null
         ? 'Select a track from albums or producers'
-        : currentTrack.vocalists.isNotEmpty
-            ? currentTrack.vocalists.join(', ')
-            : currentTrack.composerDisplay;
+        : currentTrack.vocalLine;
+    final coverUrl = currentTrack != null && currentTrack.albumId > 0
+        ? ApiClient().albumCoverUrl(currentTrack.albumId.toString())
+        : '';
 
     return SizedBox(
       width: MediaQuery.sizeOf(context).width * 0.25,
@@ -68,18 +78,7 @@ class NowPlayingBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         child: Row(
           children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: AppTheme.cardBg,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Icon(
-                playbackMode == PlaybackMode.video ? Icons.movie : Icons.music_note,
-                color: _hasTrack ? AppTheme.mikuGreen : AppTheme.textMuted,
-              ),
-            ),
+            _buildCoverAvatar(coverUrl),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -111,14 +110,36 @@ class NowPlayingBar extends StatelessWidget {
                 ],
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.open_in_full,
-                  color: AppTheme.textMuted, size: 22),
-              onPressed: _hasTrack ? onOpenPlayer : null,
-              tooltip: 'Open player',
-            ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildCoverAvatar(String coverUrl) {
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppTheme.cardBg,
+      ),
+      child: ClipOval(
+        child: coverUrl.isEmpty
+            ? Icon(
+                playbackMode == PlaybackMode.video ? Icons.movie : Icons.music_note,
+                color: _hasTrack ? AppTheme.mikuGreen : AppTheme.textMuted,
+              )
+            : Image.network(
+                coverUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Icon(
+                  playbackMode == PlaybackMode.video
+                      ? Icons.movie
+                      : Icons.music_note,
+                  color: _hasTrack ? AppTheme.mikuGreen : AppTheme.textMuted,
+                ),
+              ),
       ),
     );
   }
@@ -163,7 +184,7 @@ class NowPlayingBar extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Row(
             children: [
               Text(
@@ -174,14 +195,22 @@ class NowPlayingBar extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(2),
-                  child: LinearProgressIndicator(
-                    value: progress.clamp(0, 1),
-                    backgroundColor: Colors.white.withValues(alpha: 0.1),
-                    valueColor:
-                        const AlwaysStoppedAnimation<Color>(AppTheme.mikuGreen),
-                    minHeight: 4,
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: AppTheme.mikuGreen,
+                    inactiveTrackColor: Colors.white.withValues(alpha: 0.1),
+                    thumbColor: AppTheme.mikuGreen,
+                    overlayColor: AppTheme.mikuGreen.withValues(alpha: 0.15),
+                    trackHeight: 3,
+                    thumbShape:
+                        const RoundSliderThumbShape(enabledThumbRadius: 5),
+                    overlayShape:
+                        const RoundSliderOverlayShape(overlayRadius: 10),
+                    padding: EdgeInsets.zero,
+                  ),
+                  child: Slider(
+                    value: progress.clamp(0.0, 1.0),
+                    onChanged: _hasTrack ? onSeekProgress : null,
                   ),
                 ),
               ),
@@ -199,6 +228,163 @@ class NowPlayingBar extends StatelessWidget {
     );
   }
 
+  Future<void> _showQueuePopover(BuildContext buttonContext) async {
+    if (!_hasTrack || queue.isEmpty || onSelectQueueTrack == null) return;
+    final buttonBox = buttonContext.findRenderObject();
+    final overlayBox = Overlay.of(buttonContext).context.findRenderObject();
+    if (buttonBox is! RenderBox || overlayBox is! RenderBox) return;
+
+    final buttonOffset = buttonBox.localToGlobal(Offset.zero, ancestor: overlayBox);
+    final buttonRect = Rect.fromLTWH(
+      buttonOffset.dx,
+      buttonOffset.dy,
+      buttonBox.size.width,
+      buttonBox.size.height,
+    );
+    const menuWidth = 360.0;
+    const menuMaxHeight = 420.0;
+    final contentHeight = (queue.length * 58.0).clamp(0.0, menuMaxHeight);
+    final estimatedMenuHeight = 45.0 + contentHeight;
+    final desiredTop = buttonRect.top - estimatedMenuHeight - 8;
+    final top = desiredTop.clamp(12.0, overlayBox.size.height - estimatedMenuHeight - 12);
+    final left = (buttonRect.right - menuWidth).clamp(12.0, overlayBox.size.width - menuWidth - 12);
+
+    final selectedIndex = await showMenu<int>(
+      context: buttonContext,
+      color: AppTheme.footerBg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      constraints: const BoxConstraints.tightFor(width: menuWidth),
+      position: RelativeRect.fromLTRB(
+        left,
+        top,
+        (overlayBox.size.width - left - menuWidth).clamp(12.0, double.infinity),
+        (overlayBox.size.height - top - estimatedMenuHeight).clamp(12.0, double.infinity),
+      ),
+      items: [
+        PopupMenuItem<int>(
+          enabled: false,
+          height: 44,
+          child: Row(
+            children: [
+              Text(
+                '当前队列',
+                style: Theme.of(buttonContext).textTheme.titleMedium?.copyWith(
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const Spacer(),
+              Text(
+                '${queue.length} tracks',
+                style: Theme.of(buttonContext).textTheme.labelSmall?.copyWith(
+                      color: AppTheme.textMuted,
+                    ),
+              ),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(height: 1),
+        PopupMenuItem<int>(
+          enabled: false,
+          padding: EdgeInsets.zero,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: menuMaxHeight),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ...queue.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final item = entry.value;
+                    final isCurrent = index == currentIndex;
+                    return InkWell(
+                      onTap: () => Navigator.of(buttonContext).pop(index),
+                      child: SizedBox(
+                        height: 58,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isCurrent
+                                    ? (isPlaying
+                                        ? Icons.graphic_eq
+                                        : Icons.pause)
+                                    : Icons.music_note,
+                                color: isCurrent
+                                    ? AppTheme.mikuGreen
+                                    : AppTheme.textMuted,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(buttonContext)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: isCurrent
+                                                ? AppTheme.mikuGreen
+                                                : AppTheme.textPrimary,
+                                            fontWeight: isCurrent
+                                                ? FontWeight.w700
+                                                : FontWeight.w500,
+                                          ),
+                                    ),
+                                    if (item.vocalLine.isNotEmpty)
+                                      Text(
+                                        item.vocalLine,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(buttonContext)
+                                            .textTheme
+                                            .labelSmall
+                                            ?.copyWith(
+                                              color: AppTheme.textMuted,
+                                            ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                item.durationFormatted,
+                                style: Theme.of(buttonContext)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(
+                                      color: AppTheme.textMuted,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    if (selectedIndex != null) {
+      onSelectQueueTrack?.call(selectedIndex);
+    }
+  }
+
   Widget _buildRight(BuildContext context) {
     final activeLabel = !_hasTrack
         ? 'IDLE'
@@ -214,6 +400,24 @@ class NowPlayingBar extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
+          Builder(
+            builder: (buttonContext) => IconButton(
+              onPressed: _hasTrack
+                  ? () => _showQueuePopover(buttonContext)
+                  : null,
+              tooltip: '当前列表',
+              icon: const Icon(Icons.queue_music, size: 22),
+              color: AppTheme.textMuted,
+            ),
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            icon: const Icon(Icons.open_in_full, size: 22),
+            onPressed: _hasTrack ? onOpenPlayer : null,
+            tooltip: 'Open player',
+            color: AppTheme.textMuted,
+          ),
+          const SizedBox(width: 12),
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

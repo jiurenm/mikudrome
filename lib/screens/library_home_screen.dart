@@ -25,6 +25,9 @@ class LibraryHomeScreen extends StatefulWidget {
 }
 
 class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
+  static Future<void> _noopTogglePlayback() async {}
+
+  static Future<void> _noopSeekToFraction(double _) async {}
   ShellRoute _route = ShellRoute.albums;
   Album? _selectedAlbum;
   Producer? _selectedProducer;
@@ -38,6 +41,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   String _playerContextLabel = 'Now Playing';
   PlaybackMode _playbackMode = PlaybackMode.audio;
   PlaybackOrderMode _playbackOrderMode = PlaybackOrderMode.sequential;
+  PlayerTogglePlayback _playerTogglePlayback = _noopTogglePlayback;
+  PlayerSeekToFraction _playerSeekToFraction = _noopSeekToFraction;
 
   Track? get _currentTrack {
     if (_playerQueue.isEmpty ||
@@ -117,13 +122,13 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     });
   }
 
-  void _selectPlayerTrack(int index) {
+  void _selectPlayerTrack(int index, {bool showPlayer = true}) {
     if (index < 0 || index >= _playerQueue.length) return;
     final nextTrack = _playerQueue[index];
     setState(() {
       _playerIndex = index;
       _playbackMode = _nextModeForTrack(nextTrack);
-      _showPlayer = true;
+      _showPlayer = showPlayer;
       _isPlaying = true;
     });
   }
@@ -174,11 +179,14 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     });
   }
 
-  void _togglePlayback() {
+  Future<void> _togglePlayback() async {
     if (_currentTrack == null) return;
-    setState(() {
-      _showPlayer = true;
-    });
+    await _playerTogglePlayback();
+  }
+
+  Future<void> _seekPlayback(double value) async {
+    if (_currentTrack == null) return;
+    await _playerSeekToFraction(value);
   }
 
   void _switchPlaybackMode(PlaybackMode mode) {
@@ -219,6 +227,14 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     });
   }
 
+  void _registerPlayerControls({
+    required PlayerTogglePlayback togglePlayback,
+    required PlayerSeekToFraction seekToFraction,
+  }) {
+    _playerTogglePlayback = togglePlayback;
+    _playerSeekToFraction = seekToFraction;
+  }
+
   String _albumContextLabel(Album album) => 'Album / ${album.title}';
   String _producerContextLabel(Producer producer) =>
       'Producer / ${producer.name}';
@@ -228,25 +244,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final currentTrack = _currentTrack;
-    Widget content;
-    if (_showPlayer && currentTrack != null) {
-      content = PlayerScreen(
-        track: currentTrack,
-        queue: _playerQueue,
-        currentIndex: _playerIndex,
-        contextLabel: _playerContextLabel,
-        playbackMode: _playbackMode,
-        onSelectTrack: _selectPlayerTrack,
-        onPrevious: _playPrevious,
-        onNext: _playNext,
-        onClose: _closePlayer,
-        onSwitchPlaybackMode: _switchPlaybackMode,
-        playbackOrderMode: _playbackOrderMode,
-        onCyclePlaybackOrderMode: _cyclePlaybackOrderMode,
-        onPlaybackStateChanged: _updatePlaybackUi,
-      );
-    } else if (_selectedAlbum != null) {
-      content = AlbumDetailScreen(
+    Widget mainContent;
+    if (_selectedAlbum != null) {
+      mainContent = AlbumDetailScreen(
         album: _selectedAlbum!,
         onProducerTap: (producer) => setState(() {
           _selectedProducer = producer;
@@ -262,7 +262,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         ),
       );
     } else if (_selectedProducer != null) {
-      content = ProducerDetailScreen(
+      mainContent = ProducerDetailScreen(
         producer: _selectedProducer!,
         onAlbumTap: (album) => setState(() {
           _selectedAlbum = album;
@@ -280,8 +280,35 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         ),
       );
     } else {
-      content = _contentForRoute(_route);
+      mainContent = _contentForRoute(_route);
     }
+
+    final content = Stack(
+      fit: StackFit.expand,
+      children: [
+        mainContent,
+        if (currentTrack != null)
+          Offstage(
+            offstage: !_showPlayer,
+            child: PlayerScreen(
+              track: currentTrack,
+              queue: _playerQueue,
+              currentIndex: _playerIndex,
+              contextLabel: _playerContextLabel,
+              playbackMode: _playbackMode,
+              onSelectTrack: (index) => _selectPlayerTrack(index),
+              onPrevious: _playPrevious,
+              onNext: _playNext,
+              onClose: _closePlayer,
+              onSwitchPlaybackMode: _switchPlaybackMode,
+              playbackOrderMode: _playbackOrderMode,
+              onCyclePlaybackOrderMode: _cyclePlaybackOrderMode,
+              onPlaybackStateChanged: _updatePlaybackUi,
+              onControlsReady: _registerPlayerControls,
+            ),
+          ),
+      ],
+    );
 
     return AppShell(
       currentRoute: _route,
@@ -296,15 +323,20 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           ? const SizedBox.shrink()
           : NowPlayingBar(
               track: currentTrack,
+              queue: _playerQueue,
+              currentIndex: _playerIndex,
               isPlaying: _isPlaying,
               progress: _playbackProgress,
               elapsedLabel: _elapsedLabel,
               durationLabel: _durationLabel,
               playbackMode: _playbackMode,
               onTogglePlay: _togglePlayback,
+              onSeekProgress: _seekPlayback,
               onPrevious: _playPrevious,
               onNext: _playNext,
               onOpenPlayer: _openCurrentPlayer,
+              onSelectQueueTrack: (index) =>
+                  _selectPlayerTrack(index, showPlayer: false),
             ),
       child: content,
     );
