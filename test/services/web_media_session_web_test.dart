@@ -82,6 +82,29 @@ JSObject _createFakeMediaSession({
   return session;
 }
 
+void _invokeNoArgHandler(JSFunction handler) {
+  final callback = (handler as JSExportedDartFunction).toDart as Function;
+  callback();
+}
+
+void _invokeSeekHandler(JSFunction handler, {JSObject? details}) {
+  final callback = (handler as JSExportedDartFunction).toDart as Function;
+  callback(details);
+}
+
+JSObject _seekDetails({Object? seekTime}) {
+  final details = JSObject();
+  if (seekTime != null) {
+    details['seekTime'] = switch (seekTime) {
+      num value => value.toJS,
+      String value => value.toJS,
+      bool value => value.toJS,
+      _ => null,
+    };
+  }
+  return details;
+}
+
 void main() {
   Future<void> noop() async {}
 
@@ -153,6 +176,147 @@ void main() {
         returnsNormally,
       );
       expect(() => service.clear(), returnsNormally);
+    });
+  });
+
+  group('Browser action handler invocation semantics', () {
+    test('play handler invokes callback exactly once', () {
+      final registeredHandlers = <String, JSFunction?>{};
+      final mediaSession = _createFakeMediaSession(
+        onSetActionHandler: (action, handler) {
+          registeredHandlers[action] = handler;
+        },
+        onSetPositionState: (_) {},
+      );
+      final adapter = createBrowserWebMediaSessionAdapterForTest(
+        mediaSession: mediaSession,
+      );
+      final service = createWebMediaSessionServiceForTest(adapter: adapter);
+
+      var playCount = 0;
+      service.setActionHandlers(
+        onPlay: () async {
+          playCount++;
+        },
+        onPause: noop,
+        onPrevious: null,
+        onNext: null,
+        onSeekTo: null,
+      );
+
+      final playHandler = registeredHandlers['play'];
+      expect(playHandler, isNotNull);
+
+      _invokeNoArgHandler(playHandler!);
+      expect(playCount, 1);
+    });
+
+    test('pause handler invokes callback exactly once', () {
+      final registeredHandlers = <String, JSFunction?>{};
+      final mediaSession = _createFakeMediaSession(
+        onSetActionHandler: (action, handler) {
+          registeredHandlers[action] = handler;
+        },
+        onSetPositionState: (_) {},
+      );
+      final adapter = createBrowserWebMediaSessionAdapterForTest(
+        mediaSession: mediaSession,
+      );
+      final service = createWebMediaSessionServiceForTest(adapter: adapter);
+
+      var pauseCount = 0;
+      service.setActionHandlers(
+        onPlay: noop,
+        onPause: () async {
+          pauseCount++;
+        },
+        onPrevious: null,
+        onNext: null,
+        onSeekTo: null,
+      );
+
+      final pauseHandler = registeredHandlers['pause'];
+      expect(pauseHandler, isNotNull);
+
+      _invokeNoArgHandler(pauseHandler!);
+      expect(pauseCount, 1);
+    });
+
+    test('seek handler converts seekTime seconds to milliseconds', () {
+      final registeredHandlers = <String, JSFunction?>{};
+      final mediaSession = _createFakeMediaSession(
+        onSetActionHandler: (action, handler) {
+          registeredHandlers[action] = handler;
+        },
+        onSetPositionState: (_) {},
+      );
+      final adapter = createBrowserWebMediaSessionAdapterForTest(
+        mediaSession: mediaSession,
+      );
+      final service = createWebMediaSessionServiceForTest(adapter: adapter);
+
+      var seekInvocations = 0;
+      double? seekMs;
+      service.setActionHandlers(
+        onPlay: noop,
+        onPause: noop,
+        onPrevious: null,
+        onNext: null,
+        onSeekTo: (value) async {
+          seekInvocations++;
+          seekMs = value;
+        },
+      );
+
+      final seekHandler = registeredHandlers['seekto'];
+      expect(seekHandler, isNotNull);
+
+      _invokeSeekHandler(seekHandler!, details: _seekDetails(seekTime: 12.5));
+      expect(seekInvocations, 1);
+      expect(seekMs, 12500);
+    });
+
+    test('seek handler ignores malformed payloads without throwing', () {
+      final registeredHandlers = <String, JSFunction?>{};
+      final mediaSession = _createFakeMediaSession(
+        onSetActionHandler: (action, handler) {
+          registeredHandlers[action] = handler;
+        },
+        onSetPositionState: (_) {},
+      );
+      final adapter = createBrowserWebMediaSessionAdapterForTest(
+        mediaSession: mediaSession,
+      );
+      final service = createWebMediaSessionServiceForTest(adapter: adapter);
+
+      var seekInvocations = 0;
+      service.setActionHandlers(
+        onPlay: noop,
+        onPause: noop,
+        onPrevious: null,
+        onNext: null,
+        onSeekTo: (_) async {
+          seekInvocations++;
+        },
+      );
+
+      final seekHandler = registeredHandlers['seekto'];
+      expect(seekHandler, isNotNull);
+      final nonNullSeekHandler = seekHandler!;
+
+      expect(
+        () => _invokeSeekHandler(nonNullSeekHandler, details: _seekDetails()),
+        returnsNormally,
+      );
+      expect(
+        () => _invokeSeekHandler(
+          nonNullSeekHandler,
+          details: _seekDetails(seekTime: 'not-a-number'),
+        ),
+        returnsNormally,
+      );
+      expect(() => _invokeSeekHandler(nonNullSeekHandler), returnsNormally);
+      expect(seekInvocations, 0);
     });
   });
 
