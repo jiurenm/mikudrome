@@ -63,6 +63,7 @@ Widget _buildPlayer({
   required int currentIndex,
   required VoidCallback onPrevious,
   required VoidCallback onNext,
+  bool Function()? mediaSessionCanSeek,
 }) {
   return MaterialApp(
     home: PlayerScreen(
@@ -85,6 +86,7 @@ Widget _buildPlayer({
         required String durationLabel,
       }) {},
       mediaSessionService: mediaSession,
+      mediaSessionCanSeek: mediaSessionCanSeek,
       initializeControllerOnStart: false,
     ),
   );
@@ -92,6 +94,40 @@ Widget _buildPlayer({
 
 void main() {
   group('PlayerScreen media session wiring', () {
+    testWidgets('seek handler is gated by seek capability', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1920, 1080));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final mediaSession = _FakeWebMediaSessionService();
+      final queue = [_track(1), _track(1)];
+
+      await tester.pumpWidget(
+        _buildPlayer(
+          mediaSession: mediaSession,
+          queue: queue,
+          currentIndex: 0,
+          onPrevious: () {},
+          onNext: () {},
+          mediaSessionCanSeek: () => false,
+        ),
+      );
+
+      expect(mediaSession.seekToHandler, isNull);
+
+      await tester.pumpWidget(
+        _buildPlayer(
+          mediaSession: mediaSession,
+          queue: queue,
+          currentIndex: 0,
+          onPrevious: () {},
+          onNext: () {},
+          mediaSessionCanSeek: () => true,
+        ),
+      );
+
+      expect(mediaSession.seekToHandler, isNotNull);
+    });
+
     testWidgets(
       'rebind updates prev/next handlers and suppresses stale callbacks',
       (tester) async {

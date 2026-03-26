@@ -41,6 +41,7 @@ class PlayerScreen extends StatefulWidget {
     this.onControlsReady,
     this.baseUrl = '',
     this.mediaSessionService,
+    this.mediaSessionCanSeek,
     this.initializeControllerOnStart = true,
   });
 
@@ -65,6 +66,7 @@ class PlayerScreen extends StatefulWidget {
   final PlayerControlsReady? onControlsReady;
   final String baseUrl;
   final WebMediaSessionService? mediaSessionService;
+  final bool Function()? mediaSessionCanSeek;
   final bool initializeControllerOnStart;
 
   @override
@@ -115,6 +117,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Duration get _duration => _controller?.value.duration ?? Duration.zero;
   bool get _isPlaying => _controller?.value.isPlaying ?? false;
   bool get _hasTimedLyrics => _timedLyrics.isNotEmpty;
+  bool get _canSeekInMediaSession {
+    final injected = widget.mediaSessionCanSeek;
+    if (injected != null) {
+      return injected();
+    }
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) {
+      return false;
+    }
+    return _duration > Duration.zero;
+  }
 
   IconData get _playbackOrderIcon => switch (widget.playbackOrderMode) {
         PlaybackOrderMode.sequential => Icons.arrow_right_alt,
@@ -176,7 +189,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final shouldRebindMediaSession = trackChanged ||
         oldWidget.currentIndex != widget.currentIndex ||
         oldWidget.queue.length != widget.queue.length ||
-        oldWidget.playbackOrderMode != widget.playbackOrderMode;
+        oldWidget.playbackOrderMode != widget.playbackOrderMode ||
+        oldWidget.mediaSessionCanSeek != widget.mediaSessionCanSeek;
     if (shouldRebindMediaSession) {
       _bindMediaSessionHandlers();
       _syncMediaSessionMetadata();
@@ -248,13 +262,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
               widget.onNext();
             }
           : null,
-      onSeekTo: (seekMs) async {
-        final fraction = computeSeekFraction(
-          seekMs: seekMs,
-          durationMs: _duration.inMilliseconds,
-        );
-        await _seekTo(fraction);
-      },
+      onSeekTo: _canSeekInMediaSession
+          ? (seekMs) async {
+              final fraction = computeSeekFraction(
+                seekMs: seekMs,
+                durationMs: _duration.inMilliseconds,
+              );
+              await _seekTo(fraction);
+            }
+          : null,
     );
   }
 
