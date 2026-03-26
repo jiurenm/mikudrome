@@ -4,7 +4,8 @@
 .PHONY: help build run dev clean \
 	backend-build backend-run backend-test \
 	frontend-get frontend-build frontend-run frontend-analyze frontend-test-vm \
-	frontend-test-media-session-browser verify-media-session \
+	frontend-test-media-session-browser verify-media-session verify \
+	test-vm test-media-session-browser \
 	frontend-apk frontend-appbundle frontend-ios \
 	frontend-windows frontend-macos frontend-linux
 
@@ -38,9 +39,14 @@ help:
 	@echo "其他:"
 	@echo "  make test         - 运行后端测试"
 	@echo "  make test-vm      - 运行 Flutter VM-safe 测试（排除浏览器专用测试）"
-	@echo "  make test-media-session-browser - 运行浏览器专用 Media Session 测试"
-	@echo "  make verify-media-session - 顺序运行 VM-safe + 浏览器 Media Session 验证"
+	@echo "  make test-media-session-browser - 运行浏览器专用 Media Session 测试（需要 PATH 中有 google-chrome）"
+	@echo "  make verify-media-session - 顺序运行 test-vm 再运行浏览器 Media Session 测试"
+	@echo "  make verify       - verify-media-session 的别名"
 	@echo "  make analyze      - Flutter 静态分析"
+	@echo ""
+	@echo "浏览器测试前提与限制:"
+	@echo "  - 需安装 Chrome 并可通过命令 google-chrome 启动"
+	@echo "  - 若缺少 Chrome，命令将失败并出现: Failed to find \"google-chrome\" in the search path."
 	@echo "  make clean        - 清理构建产物"
 	@echo ""
 	@echo "环境变量: MEDIA_ROOT DB_PATH HTTP_ADDR WEB_ROOT API_BASE_URL"
@@ -106,7 +112,11 @@ frontend-test-media-session-browser: frontend-get
 
 test-media-session-browser: frontend-test-media-session-browser
 
-verify-media-session: frontend-test-vm frontend-test-media-session-browser
+verify-media-session:
+	$(MAKE) frontend-test-vm
+	$(MAKE) frontend-test-media-session-browser
+
+verify: verify-media-session
 
 # === 移动端 ===
 apk: frontend-get
