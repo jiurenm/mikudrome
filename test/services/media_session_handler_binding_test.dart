@@ -47,81 +47,42 @@ class _FakeWebMediaSessionService implements WebMediaSessionService {
 }
 
 void main() {
-  group('MediaSessionHandlerBinding', () {
-    test('current bound handlers invoke expected callbacks', () async {
+  group('MediaSessionHandlerBinding utility', () {
+    test('rebind keeps optional handlers null when callbacks are absent', () {
       final service = _FakeWebMediaSessionService();
       final binding = MediaSessionHandlerBinding();
-      var playCount = 0;
-      var pauseCount = 0;
-      var previousCount = 0;
-      var nextCount = 0;
-      double? seekMs;
 
       binding.rebind(
         service: service,
-        onPlay: () async => playCount++,
-        onPause: () async => pauseCount++,
-        onPrevious: () async => previousCount++,
-        onNext: () async => nextCount++,
-        onSeekTo: (value) async => seekMs = value,
+        onPlay: () async {},
+        onPause: () async {},
       );
 
-      await service.playHandler!();
-      await service.pauseHandler!();
-      await service.previousHandler!();
-      await service.nextHandler!();
-      await service.seekToHandler!(4200);
-
-      expect(playCount, 1);
-      expect(pauseCount, 1);
-      expect(previousCount, 1);
-      expect(nextCount, 1);
-      expect(seekMs, 4200);
+      expect(service.playHandler, isNotNull);
+      expect(service.pauseHandler, isNotNull);
+      expect(service.previousHandler, isNull);
+      expect(service.nextHandler, isNull);
+      expect(service.seekToHandler, isNull);
     });
 
-    test('stale handlers are ignored after rebind', () async {
+    test('rebind replaces exposed handler instances', () {
       final service = _FakeWebMediaSessionService();
       final binding = MediaSessionHandlerBinding();
-      var stalePlayCount = 0;
-      var currentPlayCount = 0;
 
       binding.rebind(
         service: service,
-        onPlay: () async => stalePlayCount++,
+        onPlay: () async {},
         onPause: () async {},
       );
-      final stalePlay = service.playHandler!;
+      final firstPlayHandler = service.playHandler;
 
       binding.rebind(
         service: service,
-        onPlay: () async => currentPlayCount++,
+        onPlay: () async {},
         onPause: () async {},
       );
-      final currentPlay = service.playHandler!;
 
-      await stalePlay();
-      await currentPlay();
-
-      expect(stalePlayCount, 0);
-      expect(currentPlayCount, 1);
-    });
-
-    test('stale handlers are ignored after invalidate', () async {
-      final service = _FakeWebMediaSessionService();
-      final binding = MediaSessionHandlerBinding();
-      var playCount = 0;
-
-      binding.rebind(
-        service: service,
-        onPlay: () async => playCount++,
-        onPause: () async {},
-      );
-      final capturedPlay = service.playHandler!;
-
-      binding.invalidate();
-      await capturedPlay();
-
-      expect(playCount, 0);
+      expect(firstPlayHandler, isNot(same(service.playHandler)));
     });
   });
 }

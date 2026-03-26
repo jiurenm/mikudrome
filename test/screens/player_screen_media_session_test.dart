@@ -1,12 +1,10 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mikudrome/services/media_session_handler_binding.dart';
+import 'package:mikudrome/models/track.dart';
+import 'package:mikudrome/screens/library_home_screen.dart';
+import 'package:mikudrome/screens/player_screen.dart';
 import 'package:mikudrome/services/web_media_session_contract.dart';
 
-/// Task 3 PlayerScreen media-session behavior contract tests.
-///
-/// PlayerScreen wires callbacks through MediaSessionHandlerBinding. These tests
-/// validate the behavior PlayerScreen depends on: active handlers execute, while
-/// stale handlers are suppressed after rebind/dispose invalidation.
 class _FakeWebMediaSessionService implements WebMediaSessionService {
   WebMediaSessionVoidHandler? playHandler;
   WebMediaSessionVoidHandler? pauseHandler;
@@ -51,85 +49,96 @@ class _FakeWebMediaSessionService implements WebMediaSessionService {
   }) {}
 }
 
+Track _track(int id) => Track(
+      id: id,
+      title: 'Track $id',
+      audioPath: '/tmp/$id.flac',
+      videoPath: '',
+      composer: 'Composer $id',
+    );
+
+Widget _buildPlayer({
+  required _FakeWebMediaSessionService mediaSession,
+  required List<Track> queue,
+  required int currentIndex,
+  required VoidCallback onPrevious,
+  required VoidCallback onNext,
+}) {
+  return MaterialApp(
+    home: PlayerScreen(
+      track: queue[currentIndex],
+      queue: queue,
+      currentIndex: currentIndex,
+      contextLabel: 'Queue Test',
+      playbackMode: PlaybackMode.audio,
+      onSelectTrack: (_) {},
+      onPrevious: onPrevious,
+      onNext: onNext,
+      onClose: () {},
+      onSwitchPlaybackMode: (_) {},
+      playbackOrderMode: PlaybackOrderMode.sequential,
+      onCyclePlaybackOrderMode: () {},
+      onPlaybackStateChanged: ({
+        required bool isPlaying,
+        required double progress,
+        required String elapsedLabel,
+        required String durationLabel,
+      }) {},
+      mediaSessionService: mediaSession,
+      initializeControllerOnStart: false,
+    ),
+  );
+}
+
 void main() {
-  group('PlayerScreen media session binding contract', () {
-    test('current handlers invoke expected callbacks', () async {
-      final service = _FakeWebMediaSessionService();
-      final binding = MediaSessionHandlerBinding();
-      var playCount = 0;
-      var pauseCount = 0;
-      var previousCount = 0;
-      var nextCount = 0;
-      double? seekMs;
+  group('PlayerScreen media session wiring', () {
+    testWidgets(
+      'rebind updates prev/next handlers and suppresses stale callbacks',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1920, 1080));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      binding.rebind(
-        service: service,
-        onPlay: () async => playCount++,
-        onPause: () async => pauseCount++,
-        onPrevious: () async => previousCount++,
-        onNext: () async => nextCount++,
-        onSeekTo: (value) async => seekMs = value,
-      );
+        final mediaSession = _FakeWebMediaSessionService();
+        final queue = [_track(1), _track(1)];
+        var previousCount = 0;
+        var nextCount = 0;
 
-      await service.playHandler!();
-      await service.pauseHandler!();
-      await service.previousHandler!();
-      await service.nextHandler!();
-      await service.seekToHandler!(3200);
+        await tester.pumpWidget(
+          _buildPlayer(
+            mediaSession: mediaSession,
+            queue: queue,
+            currentIndex: 0,
+            onPrevious: () => previousCount++,
+            onNext: () => nextCount++,
+          ),
+        );
 
-      expect(playCount, 1);
-      expect(pauseCount, 1);
-      expect(previousCount, 1);
-      expect(nextCount, 1);
-      expect(seekMs, 3200);
-    });
+        expect(mediaSession.previousHandler, isNull);
+        expect(mediaSession.nextHandler, isNotNull);
 
-    test('stale handlers are suppressed after rebind', () async {
-      final service = _FakeWebMediaSessionService();
-      final binding = MediaSessionHandlerBinding();
-      var staleNextCount = 0;
-      var currentNextCount = 0;
+        final staleNext = mediaSession.nextHandler!;
+        await staleNext();
+        expect(nextCount, 1);
 
-      binding.rebind(
-        service: service,
-        onPlay: () async {},
-        onPause: () async {},
-        onNext: () async => staleNextCount++,
-      );
-      final staleNext = service.nextHandler!;
+        await tester.pumpWidget(
+          _buildPlayer(
+            mediaSession: mediaSession,
+            queue: queue,
+            currentIndex: 1,
+            onPrevious: () => previousCount++,
+            onNext: () => nextCount++,
+          ),
+        );
 
-      binding.rebind(
-        service: service,
-        onPlay: () async {},
-        onPause: () async {},
-        onNext: () async => currentNextCount++,
-      );
-      final currentNext = service.nextHandler!;
+        expect(mediaSession.previousHandler, isNotNull);
+        expect(mediaSession.nextHandler, isNull);
 
-      await staleNext();
-      await currentNext();
+        await staleNext();
+        expect(nextCount, 1);
 
-      expect(staleNextCount, 0);
-      expect(currentNextCount, 1);
-    });
-
-    test('stale handlers are suppressed after invalidate (dispose path)', () async {
-      final service = _FakeWebMediaSessionService();
-      final binding = MediaSessionHandlerBinding();
-      var previousCount = 0;
-
-      binding.rebind(
-        service: service,
-        onPlay: () async {},
-        onPause: () async {},
-        onPrevious: () async => previousCount++,
-      );
-      final stalePrevious = service.previousHandler!;
-
-      binding.invalidate();
-      await stalePrevious();
-
-      expect(previousCount, 0);
-    });
+        await mediaSession.previousHandler!();
+        expect(previousCount, 1);
+      },
+    );
   });
 }

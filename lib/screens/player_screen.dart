@@ -10,6 +10,7 @@ import '../services/lrc_parser.dart';
 import '../services/media_session_action_mapper.dart';
 import '../services/media_session_handler_binding.dart';
 import '../services/web_media_session.dart';
+import '../services/web_media_session_contract.dart';
 import '../theme/app_theme.dart';
 import '../widgets/player_screen_parts.dart';
 import 'library_home_screen.dart';
@@ -39,6 +40,8 @@ class PlayerScreen extends StatefulWidget {
     required this.onPlaybackStateChanged,
     this.onControlsReady,
     this.baseUrl = '',
+    this.mediaSessionService,
+    this.initializeControllerOnStart = true,
   });
 
   final Track track;
@@ -61,6 +64,8 @@ class PlayerScreen extends StatefulWidget {
   }) onPlaybackStateChanged;
   final PlayerControlsReady? onControlsReady;
   final String baseUrl;
+  final WebMediaSessionService? mediaSessionService;
+  final bool initializeControllerOnStart;
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
@@ -78,7 +83,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   List<TimedLyricLine> _timedLyrics = const [];
   int _activeLyricIndex = -1;
   Timer? _fullscreenChromeTimer;
-  final _mediaSession = createWebMediaSessionService();
+  late final WebMediaSessionService _mediaSession;
   final _mediaSessionBinding = MediaSessionHandlerBinding();
 
   ApiClient get _api => ApiClient(baseUrl: widget.baseUrl);
@@ -128,13 +133,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   void initState() {
     super.initState();
+    _mediaSession = widget.mediaSessionService ?? createWebMediaSessionService();
     _showQueue = !_track.hasVideo;
     _syncLyricsForTrack();
     widget.onControlsReady?.call(
       togglePlayback: _togglePlayback,
       seekToFraction: _seekTo,
     );
-    _initializeController();
+    if (widget.initializeControllerOnStart) {
+      _initializeController();
+    } else {
+      _bindMediaSessionHandlers();
+      _syncMediaSessionMetadata();
+      _syncMediaSessionPlaybackState();
+      _isInitializing = false;
+    }
   }
 
   @override
