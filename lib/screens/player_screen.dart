@@ -8,6 +8,7 @@ import '../models/timed_lyric_line.dart';
 import '../models/track.dart';
 import '../services/lrc_parser.dart';
 import '../services/media_session_action_mapper.dart';
+import '../services/media_session_handler_binding.dart';
 import '../services/web_media_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/player_screen_parts.dart';
@@ -19,12 +20,6 @@ typedef PlayerControlsReady = void Function({
   required PlayerTogglePlayback togglePlayback,
   required PlayerSeekToFraction seekToFraction,
 });
-
-bool isMediaSessionBindingCurrent({
-  required int bindVersion,
-  required int currentVersion,
-}) =>
-    bindVersion == currentVersion;
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
@@ -84,7 +79,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   int _activeLyricIndex = -1;
   Timer? _fullscreenChromeTimer;
   final _mediaSession = createWebMediaSessionService();
-  int _mediaSessionBindingVersion = 0;
+  final _mediaSessionBinding = MediaSessionHandlerBinding();
 
   ApiClient get _api => ApiClient(baseUrl: widget.baseUrl);
   Track get _track => widget.track;
@@ -225,45 +220,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _bindMediaSessionHandlers() {
-    final bindVersion = ++_mediaSessionBindingVersion;
-    _mediaSession.setActionHandlers(
-      onPlay: () => _handleMediaSessionPlaybackAction(
-        action: PlaybackAction.play,
-        bindVersion: bindVersion,
-      ),
-      onPause: () => _handleMediaSessionPlaybackAction(
-        action: PlaybackAction.pause,
-        bindVersion: bindVersion,
-      ),
+    _mediaSessionBinding.rebind(
+      service: _mediaSession,
+      onPlay: () => _handleMediaSessionPlaybackAction(action: PlaybackAction.play),
+      onPause: () =>
+          _handleMediaSessionPlaybackAction(action: PlaybackAction.pause),
       onPrevious: _hasPrevious
           ? () async {
-              if (!isMediaSessionBindingCurrent(
-                bindVersion: bindVersion,
-                currentVersion: _mediaSessionBindingVersion,
-              )) {
-                return;
-              }
               widget.onPrevious();
             }
           : null,
       onNext: _hasNext
           ? () async {
-              if (!isMediaSessionBindingCurrent(
-                bindVersion: bindVersion,
-                currentVersion: _mediaSessionBindingVersion,
-              )) {
-                return;
-              }
               widget.onNext();
             }
           : null,
       onSeekTo: (seekMs) async {
-        if (!isMediaSessionBindingCurrent(
-          bindVersion: bindVersion,
-          currentVersion: _mediaSessionBindingVersion,
-        )) {
-          return;
-        }
         final fraction = computeSeekFraction(
           seekMs: seekMs,
           durationMs: _duration.inMilliseconds,
@@ -275,15 +247,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Future<void> _handleMediaSessionPlaybackAction({
     required PlaybackAction action,
-    required int bindVersion,
   }) async {
-    if (!isMediaSessionBindingCurrent(
-      bindVersion: bindVersion,
-      currentVersion: _mediaSessionBindingVersion,
-    )) {
-      return;
-    }
-
     final command = resolvePlaybackCommand(
       isPlaying: _isPlaying,
       action: action,
@@ -362,7 +326,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void dispose() {
     _fullscreenChromeTimer?.cancel();
     _detachControllerListener(_controller);
-    _mediaSessionBindingVersion++;
+    _mediaSessionBinding.invalidate();
     _mediaSession.clear();
     widget.onControlsReady?.call(
       togglePlayback: _noopTogglePlayback,
