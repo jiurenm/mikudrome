@@ -11,12 +11,9 @@ final class _WebMediaSessionService implements WebMediaSessionService {
   void setActionHandlers({
     required WebMediaSessionVoidHandler onPlay,
     required WebMediaSessionVoidHandler onPause,
-    required WebMediaSessionVoidHandler onPrevious,
-    required WebMediaSessionVoidHandler onNext,
-    required WebMediaSessionSeekHandler onSeekTo,
-    required bool canPrevious,
-    required bool canNext,
-    required bool canSeek,
+    WebMediaSessionVoidHandler? onPrevious,
+    WebMediaSessionVoidHandler? onNext,
+    WebMediaSessionSeekHandler? onSeekTo,
   }) {}
 
   @override
