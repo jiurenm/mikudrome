@@ -3,7 +3,8 @@
 
 .PHONY: help build run dev clean \
 	backend-build backend-run backend-test \
-	frontend-get frontend-build frontend-run frontend-analyze \
+	frontend-get frontend-build frontend-run frontend-analyze frontend-test-vm \
+	frontend-test-media-session-browser verify-media-session \
 	frontend-apk frontend-appbundle frontend-ios \
 	frontend-windows frontend-macos frontend-linux
 
@@ -36,6 +37,9 @@ help:
 	@echo ""
 	@echo "其他:"
 	@echo "  make test         - 运行后端测试"
+	@echo "  make test-vm      - 运行 Flutter VM-safe 测试（排除浏览器专用测试）"
+	@echo "  make test-media-session-browser - 运行浏览器专用 Media Session 测试"
+	@echo "  make verify-media-session - 顺序运行 VM-safe + 浏览器 Media Session 验证"
 	@echo "  make analyze      - Flutter 静态分析"
 	@echo "  make clean        - 清理构建产物"
 	@echo ""
@@ -91,6 +95,18 @@ frontend-run:
 
 frontend-analyze:
 	flutter analyze lib/
+
+frontend-test-vm: frontend-get
+	flutter test
+
+test-vm: frontend-test-vm
+
+frontend-test-media-session-browser: frontend-get
+	flutter test --platform chrome test/services/web_media_session_web_test.dart
+
+test-media-session-browser: frontend-test-media-session-browser
+
+verify-media-session: frontend-test-vm frontend-test-media-session-browser
 
 # === 移动端 ===
 apk: frontend-get

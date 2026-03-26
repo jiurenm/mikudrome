@@ -1,3 +1,5 @@
+@TestOn('browser')
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/services/web_media_session_web.dart';
 
