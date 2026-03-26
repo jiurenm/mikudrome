@@ -7,6 +7,8 @@ import '../api/api.dart';
 import '../models/timed_lyric_line.dart';
 import '../models/track.dart';
 import '../services/lrc_parser.dart';
+import '../services/media_session_action_mapper.dart';
+import '../services/web_media_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/player_screen_parts.dart';
 import 'library_home_screen.dart';
@@ -17,6 +19,12 @@ typedef PlayerControlsReady = void Function({
   required PlayerTogglePlayback togglePlayback,
   required PlayerSeekToFraction seekToFraction,
 });
+
+bool isMediaSessionBindingCurrent({
+  required int bindVersion,
+  required int currentVersion,
+}) =>
+    bindVersion == currentVersion;
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
@@ -75,6 +83,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   List<TimedLyricLine> _timedLyrics = const [];
   int _activeLyricIndex = -1;
   Timer? _fullscreenChromeTimer;
+  final _mediaSession = createWebMediaSessionService();
+  int _mediaSessionBindingVersion = 0;
 
   ApiClient get _api => ApiClient(baseUrl: widget.baseUrl);
   Track get _track => widget.track;
@@ -141,14 +151,28 @@ class _PlayerScreenState extends State<PlayerScreen> {
         seekToFraction: _seekTo,
       );
     }
-    if (oldWidget.track.id != widget.track.id ||
-        oldWidget.track.lyrics != widget.track.lyrics) {
+
+    final trackChanged = oldWidget.track.id != widget.track.id;
+    if (trackChanged || oldWidget.track.lyrics != widget.track.lyrics) {
       _syncLyricsForTrack();
     }
-    if (oldWidget.track.id != widget.track.id ||
+
+    final shouldReinitializeController = trackChanged ||
         oldWidget.playbackMode != widget.playbackMode ||
-        oldWidget.baseUrl != widget.baseUrl) {
+        oldWidget.baseUrl != widget.baseUrl;
+    if (shouldReinitializeController) {
       _initializeController();
+      return;
+    }
+
+    final shouldRebindMediaSession = trackChanged ||
+        oldWidget.currentIndex != widget.currentIndex ||
+        oldWidget.queue.length != widget.queue.length ||
+        oldWidget.playbackOrderMode != widget.playbackOrderMode;
+    if (shouldRebindMediaSession) {
+      _bindMediaSessionHandlers();
+      _syncMediaSessionMetadata();
+      _syncMediaSessionPlaybackState();
     }
   }
 
@@ -180,6 +204,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
         await controller.dispose();
         return;
       }
+      _bindMediaSessionHandlers();
+      _syncMediaSessionMetadata();
       setState(() {
         _isInitializing = false;
       });
@@ -196,6 +222,100 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } finally {
       await previous?.dispose();
     }
+  }
+
+  void _bindMediaSessionHandlers() {
+    final bindVersion = ++_mediaSessionBindingVersion;
+    _mediaSession.setActionHandlers(
+      onPlay: () => _handleMediaSessionPlaybackAction(
+        action: PlaybackAction.play,
+        bindVersion: bindVersion,
+      ),
+      onPause: () => _handleMediaSessionPlaybackAction(
+        action: PlaybackAction.pause,
+        bindVersion: bindVersion,
+      ),
+      onPrevious: _hasPrevious
+          ? () async {
+              if (!isMediaSessionBindingCurrent(
+                bindVersion: bindVersion,
+                currentVersion: _mediaSessionBindingVersion,
+              )) {
+                return;
+              }
+              widget.onPrevious();
+            }
+          : null,
+      onNext: _hasNext
+          ? () async {
+              if (!isMediaSessionBindingCurrent(
+                bindVersion: bindVersion,
+                currentVersion: _mediaSessionBindingVersion,
+              )) {
+                return;
+              }
+              widget.onNext();
+            }
+          : null,
+      onSeekTo: (seekMs) async {
+        if (!isMediaSessionBindingCurrent(
+          bindVersion: bindVersion,
+          currentVersion: _mediaSessionBindingVersion,
+        )) {
+          return;
+        }
+        final fraction = computeSeekFraction(
+          seekMs: seekMs,
+          durationMs: _duration.inMilliseconds,
+        );
+        await _seekTo(fraction);
+      },
+    );
+  }
+
+  Future<void> _handleMediaSessionPlaybackAction({
+    required PlaybackAction action,
+    required int bindVersion,
+  }) async {
+    if (!isMediaSessionBindingCurrent(
+      bindVersion: bindVersion,
+      currentVersion: _mediaSessionBindingVersion,
+    )) {
+      return;
+    }
+
+    final command = resolvePlaybackCommand(
+      isPlaying: _isPlaying,
+      action: action,
+    );
+    switch (command) {
+      case PlaybackCommand.play:
+        await _play();
+      case PlaybackCommand.pause:
+        await _pause();
+      case PlaybackCommand.noop:
+        return;
+    }
+  }
+
+  void _syncMediaSessionMetadata() {
+    _mediaSession.setMetadata(
+      title: _track.title,
+      artist: _track.composerDisplay,
+      album: widget.contextLabel,
+      artworkUrl: _albumCoverUrl.isEmpty ? null : _albumCoverUrl,
+    );
+  }
+
+  void _syncMediaSessionPlaybackState() {
+    final durationMs = _duration.inMilliseconds;
+    final positionMs = _position.inMilliseconds.clamp(0, durationMs);
+    _mediaSession.setPlaybackState(isPlaying: _isPlaying);
+    _mediaSession.setPositionState(
+      positionMs: positionMs,
+      durationMs: durationMs,
+      playbackRate: _isPlaying ? 1.0 : 0.0,
+    );
   }
 
   void _attachControllerListener(VideoPlayerController controller) {
@@ -242,6 +362,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void dispose() {
     _fullscreenChromeTimer?.cancel();
     _detachControllerListener(_controller);
+    _mediaSessionBindingVersion++;
+    _mediaSession.clear();
     widget.onControlsReady?.call(
       togglePlayback: _noopTogglePlayback,
       seekToFraction: _noopSeekToFraction,
@@ -260,16 +382,28 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Future<void> _noopSeekToFraction(double _) async {}
 
-  Future<void> _togglePlayback() async {
+  Future<void> _play() async {
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
-    if (controller.value.isPlaying) {
-      await controller.pause();
-    } else {
-      await controller.play();
-    }
+    await controller.play();
     _emitPlaybackState();
     if (mounted) setState(() {});
+  }
+
+  Future<void> _pause() async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    await controller.pause();
+    _emitPlaybackState();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _togglePlayback() async {
+    if (_isPlaying) {
+      await _pause();
+      return;
+    }
+    await _play();
   }
 
   Future<void> _seekTo(double value) async {
@@ -292,6 +426,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       elapsedLabel: _formatDuration(position),
       durationLabel: _formatDuration(duration),
     );
+    _syncMediaSessionPlaybackState();
   }
 
   void _showFullscreenOverlayTemporarily() {
