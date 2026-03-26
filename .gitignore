@@ -41,3 +41,4 @@ web/.dart_tool/
 .env.local
 
 media
+.worktrees/
