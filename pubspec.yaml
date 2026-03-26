@@ -12,6 +12,7 @@ dependencies:
   http: ^1.2.0
   video_player: ^2.8.2
   flutter_svg: ^2.0.17
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:

@@ -1,6 +1,8 @@
-import 'dart:html' as html;
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 
 import 'package:flutter/foundation.dart';
+import 'package:web/web.dart' as web;
 
 import 'web_media_session_contract.dart';
 
@@ -12,6 +14,12 @@ WebMediaSessionService createWebMediaSessionServiceForTest({
   required WebMediaSessionAdapter? adapter,
 }) =>
     _WebMediaSessionService(adapter: adapter);
+
+@visibleForTesting
+BrowserWebMediaSessionAdapter createBrowserWebMediaSessionAdapterForTest({
+  required JSObject mediaSession,
+}) =>
+    BrowserWebMediaSessionAdapter._(mediaSession);
 
 abstract interface class WebMediaSessionAdapter {
   void setMetadata({
@@ -130,16 +138,15 @@ final class _WebMediaSessionService implements WebMediaSessionService {
 final class BrowserWebMediaSessionAdapter implements WebMediaSessionAdapter {
   BrowserWebMediaSessionAdapter._(this._mediaSession);
 
-  final dynamic _mediaSession;
+  final JSObject _mediaSession;
 
   static BrowserWebMediaSessionAdapter? tryCreate() {
     try {
-      final dynamic mediaSession =
-          (html.window.navigator as dynamic).mediaSession;
+      final mediaSession = (web.window.navigator as JSObject)['mediaSession'];
       if (mediaSession == null) {
         return null;
       }
-      return BrowserWebMediaSessionAdapter._(mediaSession);
+      return BrowserWebMediaSessionAdapter._(mediaSession as JSObject);
     } catch (_) {
       return null;
     }
@@ -147,17 +154,26 @@ final class BrowserWebMediaSessionAdapter implements WebMediaSessionAdapter {
 
   @override
   void clearMetadata() {
-    _safe(() => _mediaSession.metadata = null);
+    _safe(() {
+      _mediaSession['metadata'] = null;
+    });
   }
 
   @override
   void clearPlaybackState() {
-    _safe(() => _mediaSession.playbackState = 'none');
+    _safe(() {
+      _mediaSession['playbackState'] = 'none'.toJS;
+    });
   }
 
   @override
   void setActionHandler(String action, Object? handler) {
-    _safe(() => _mediaSession.setActionHandler(action, handler));
+    _safe(() {
+      _mediaSession.callMethodVarArgs(
+        'setActionHandler'.toJS,
+        <JSAny?>[action.toJS, handler as JSFunction?],
+      );
+    });
   }
 
   @override
@@ -168,22 +184,24 @@ final class BrowserWebMediaSessionAdapter implements WebMediaSessionAdapter {
     String? artworkUrl,
   }) {
     _safe(() {
-      final metadata = <String, Object?>{
-        'title': title,
-        'artist': artist,
-        if (album != null && album.isNotEmpty) 'album': album,
-        if (artworkUrl != null && artworkUrl.isNotEmpty)
-          'artwork': <Map<String, String>>[
-            <String, String>{'src': artworkUrl},
-          ],
-      };
-      _mediaSession.metadata = metadata;
+      final metadataInit = web.MediaMetadataInit(title: title, artist: artist);
+      if (album != null && album.isNotEmpty) {
+        metadataInit.album = album;
+      }
+      if (artworkUrl != null && artworkUrl.isNotEmpty) {
+        metadataInit.artwork =
+            <web.MediaImage>[web.MediaImage(src: artworkUrl)].toJS;
+      }
+
+      _mediaSession['metadata'] = web.MediaMetadata(metadataInit);
     });
   }
 
   @override
   void setPlaybackState({required bool isPlaying}) {
-    _safe(() => _mediaSession.playbackState = isPlaying ? 'playing' : 'paused');
+    _safe(() {
+      _mediaSession['playbackState'] = (isPlaying ? 'playing' : 'paused').toJS;
+    });
   }
 
   @override
@@ -193,11 +211,14 @@ final class BrowserWebMediaSessionAdapter implements WebMediaSessionAdapter {
     required double playbackRate,
   }) {
     _safe(() {
-      _mediaSession.setPositionState(<String, Object>{
-        'duration': durationMs <= 0 ? 0 : durationMs / 1000,
-        'playbackRate': playbackRate,
-        'position': positionMs < 0 ? 0 : positionMs / 1000,
-      });
+      final normalized = web.MediaPositionState(
+        duration: durationMs <= 0 ? 0 : durationMs / 1000,
+        playbackRate: playbackRate,
+        position: positionMs < 0 ? 0 : positionMs / 1000,
+      );
+      _mediaSession.callMethodVarArgs('setPositionState'.toJS, <JSAny?>[
+        normalized,
+      ]);
     });
   }
 
@@ -210,17 +231,22 @@ final class BrowserWebMediaSessionAdapter implements WebMediaSessionAdapter {
   }
 }
 
-Function _wrapVoidHandler(WebMediaSessionVoidHandler handler) {
+JSFunction _wrapVoidHandler(WebMediaSessionVoidHandler handler) {
   return () {
     handler();
-  };
+  }.toJS;
 }
 
-Function _wrapSeekHandler(WebMediaSessionSeekHandler handler) {
-  return (dynamic details) {
-    final dynamic seekTime = details?.seekTime;
-    if (seekTime is num) {
-      handler(seekTime.toDouble() * 1000);
+JSFunction _wrapSeekHandler(WebMediaSessionSeekHandler handler) {
+  return ((JSAny? details) {
+    if (details == null) {
+      return;
     }
-  };
+
+    final seekTimeAny = (details as JSObject)['seekTime'];
+    if (seekTimeAny case JSNumber seekTime) {
+      final seekTimeSeconds = seekTime.toDartDouble;
+      handler(seekTimeSeconds * 1000);
+    }
+  }).toJS;
 }
