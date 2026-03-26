@@ -129,6 +129,52 @@ void main() {
     });
 
     testWidgets(
+      'rebind updates handlers when callback identity changes',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1920, 1080));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        final mediaSession = _FakeWebMediaSessionService();
+        final queue = [_track(1), _track(1)];
+        var oldNextCount = 0;
+        var newNextCount = 0;
+
+        await tester.pumpWidget(
+          _buildPlayer(
+            mediaSession: mediaSession,
+            queue: queue,
+            currentIndex: 0,
+            onPrevious: () {},
+            onNext: () => oldNextCount++,
+          ),
+        );
+
+        final staleNext = mediaSession.nextHandler!;
+        await staleNext();
+        expect(oldNextCount, 1);
+        expect(newNextCount, 0);
+
+        await tester.pumpWidget(
+          _buildPlayer(
+            mediaSession: mediaSession,
+            queue: queue,
+            currentIndex: 0,
+            onPrevious: () {},
+            onNext: () => newNextCount++,
+          ),
+        );
+
+        await staleNext();
+        expect(oldNextCount, 1);
+        expect(newNextCount, 0);
+
+        await mediaSession.nextHandler!();
+        expect(oldNextCount, 1);
+        expect(newNextCount, 1);
+      },
+    );
+
+    testWidgets(
       'rebind updates prev/next handlers and suppresses stale callbacks',
       (tester) async {
         await tester.binding.setSurfaceSize(const Size(1920, 1080));

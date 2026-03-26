@@ -190,7 +190,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
         oldWidget.currentIndex != widget.currentIndex ||
         oldWidget.queue.length != widget.queue.length ||
         oldWidget.playbackOrderMode != widget.playbackOrderMode ||
-        oldWidget.mediaSessionCanSeek != widget.mediaSessionCanSeek;
+        oldWidget.mediaSessionCanSeek != widget.mediaSessionCanSeek ||
+        oldWidget.onPrevious != widget.onPrevious ||
+        oldWidget.onNext != widget.onNext;
     if (shouldRebindMediaSession) {
       _bindMediaSessionHandlers();
       _syncMediaSessionMetadata();
@@ -307,7 +309,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _mediaSession.setPositionState(
       positionMs: positionMs,
       durationMs: durationMs,
-      playbackRate: _isPlaying ? 1.0 : 0.0,
+      playbackRate: 1.0,
     );
   }
 
