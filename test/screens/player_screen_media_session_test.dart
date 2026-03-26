@@ -11,6 +11,7 @@ class _FakeWebMediaSessionService implements WebMediaSessionService {
   WebMediaSessionVoidHandler? previousHandler;
   WebMediaSessionVoidHandler? nextHandler;
   WebMediaSessionSeekHandler? seekToHandler;
+  String? metadataArtist;
 
   @override
   void clear() {}
@@ -36,7 +37,9 @@ class _FakeWebMediaSessionService implements WebMediaSessionService {
     required String artist,
     String? album,
     String? artworkUrl,
-  }) {}
+  }) {
+    metadataArtist = artist;
+  }
 
   @override
   void setPlaybackState({required bool isPlaying}) {}
@@ -63,6 +66,7 @@ Widget _buildPlayer({
   required int currentIndex,
   required VoidCallback onPrevious,
   required VoidCallback onNext,
+  ValueChanged<int>? onSelectTrack,
   bool Function()? mediaSessionCanSeek,
 }) {
   return MaterialApp(
@@ -72,7 +76,7 @@ Widget _buildPlayer({
       currentIndex: currentIndex,
       contextLabel: 'Queue Test',
       playbackMode: PlaybackMode.audio,
-      onSelectTrack: (_) {},
+      onSelectTrack: onSelectTrack ?? (_) {},
       onPrevious: onPrevious,
       onNext: onNext,
       onClose: () {},
@@ -94,6 +98,60 @@ Widget _buildPlayer({
 
 void main() {
   group('PlayerScreen media session wiring', () {
+    testWidgets('artist metadata matches vocalLine display', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1920, 1080));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final mediaSession = _FakeWebMediaSessionService();
+      final queue = [
+        const Track(
+          id: 1,
+          title: 'Song',
+          audioPath: '/tmp/1.flac',
+          videoPath: '',
+          composer: 'Producer A',
+          lyricist: 'Lyricist B',
+          vocal: 'Miku',
+        ),
+      ];
+
+      await tester.pumpWidget(
+        _buildPlayer(
+          mediaSession: mediaSession,
+          queue: queue,
+          currentIndex: 0,
+          onPrevious: () {},
+          onNext: () {},
+        ),
+      );
+
+      expect(mediaSession.metadataArtist, queue.first.vocalLine);
+    });
+
+    testWidgets(
+      'single-item queue still registers prev/next handlers for media controls',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1920, 1080));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        final mediaSession = _FakeWebMediaSessionService();
+        final queue = [_track(1)];
+
+        await tester.pumpWidget(
+          _buildPlayer(
+            mediaSession: mediaSession,
+            queue: queue,
+            currentIndex: 0,
+            onPrevious: () {},
+            onNext: () {},
+          ),
+        );
+
+        expect(mediaSession.previousHandler, isNotNull);
+        expect(mediaSession.nextHandler, isNotNull);
+      },
+    );
+
     testWidgets('seek handler is gated by seek capability', (tester) async {
       await tester.binding.setSurfaceSize(const Size(1920, 1080));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -195,7 +253,7 @@ void main() {
           ),
         );
 
-        expect(mediaSession.previousHandler, isNull);
+        expect(mediaSession.previousHandler, isNotNull);
         expect(mediaSession.nextHandler, isNotNull);
 
         final staleNext = mediaSession.nextHandler!;
@@ -213,13 +271,16 @@ void main() {
         );
 
         expect(mediaSession.previousHandler, isNotNull);
-        expect(mediaSession.nextHandler, isNull);
+        expect(mediaSession.nextHandler, isNotNull);
 
         await staleNext();
         expect(nextCount, 1);
 
         await mediaSession.previousHandler!();
         expect(previousCount, 1);
+
+        await mediaSession.nextHandler!();
+        expect(nextCount, 2);
       },
     );
   });

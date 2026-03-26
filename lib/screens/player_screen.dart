@@ -254,16 +254,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
       onPlay: () => _handleMediaSessionPlaybackAction(action: PlaybackAction.play),
       onPause: () =>
           _handleMediaSessionPlaybackAction(action: PlaybackAction.pause),
-      onPrevious: _hasPrevious
-          ? () async {
-              widget.onPrevious();
-            }
-          : null,
-      onNext: _hasNext
-          ? () async {
-              widget.onNext();
-            }
-          : null,
+      onPrevious: () async {
+        widget.onPrevious();
+      },
+      onNext: () async {
+        widget.onNext();
+      },
       onSeekTo: _canSeekInMediaSession
           ? (seekMs) async {
               final fraction = computeSeekFraction(
@@ -296,7 +292,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void _syncMediaSessionMetadata() {
     _mediaSession.setMetadata(
       title: _track.title,
-      artist: _track.composerDisplay,
+      artist: _track.vocalLine,
       album: widget.contextLabel,
       artworkUrl: _albumCoverUrl.isEmpty ? null : _albumCoverUrl,
     );
