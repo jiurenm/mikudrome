@@ -16,6 +16,7 @@ class AlbumTrackRow extends StatefulWidget {
     required this.onDownloadComplete,
     required this.onPlay,
     required this.showTopMessage,
+    this.isCurrentlyPlaying = false,
   });
 
   final int index;
@@ -24,6 +25,7 @@ class AlbumTrackRow extends StatefulWidget {
   final VoidCallback onDownloadComplete;
   final VoidCallback onPlay;
   final AlbumTopMessage showTopMessage;
+  final bool isCurrentlyPlaying;
 
   @override
   State<AlbumTrackRow> createState() => _AlbumTrackRowState();
@@ -61,8 +63,11 @@ class _AlbumTrackRowState extends State<AlbumTrackRow> {
   Widget build(BuildContext context) {
     final track = widget.track;
     final index = widget.index;
-    final numberColor = _hovering ? AppTheme.mikuGreen : AppTheme.textMuted;
-    final titleColor = _hovering ? AppTheme.mikuGreen : AppTheme.textPrimary;
+    final isActive = widget.isCurrentlyPlaying;
+    final numberColor =
+        isActive || _hovering ? AppTheme.mikuGreen : AppTheme.textMuted;
+    final titleColor =
+        isActive || _hovering ? AppTheme.mikuGreen : AppTheme.textPrimary;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
@@ -79,12 +84,16 @@ class _AlbumTrackRowState extends State<AlbumTrackRow> {
               children: [
                 SizedBox(
                   width: 32,
-                  child: Text(
-                    track.displayNumber(index),
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: numberColor,
+                  child: isActive
+                      ? const Icon(Icons.graphic_eq,
+                          size: 18, color: AppTheme.mikuGreen)
+                      : Text(
+                          track.displayNumber(index),
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: numberColor,
+                                  ),
                         ),
-                  ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(

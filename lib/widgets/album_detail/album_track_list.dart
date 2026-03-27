@@ -14,6 +14,7 @@ class AlbumTrackList extends StatelessWidget {
     required this.onDownloadComplete,
     required this.onPlayTrack,
     required this.showTopMessage,
+    this.currentPlayingTrackId,
   });
 
   final List<Track> tracks;
@@ -23,6 +24,7 @@ class AlbumTrackList extends StatelessWidget {
   final VoidCallback onDownloadComplete;
   final void Function(Track track, int index, {List<Track>? queue}) onPlayTrack;
   final AlbumTopMessage showTopMessage;
+  final int? currentPlayingTrackId;
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +57,8 @@ class AlbumTrackList extends StatelessWidget {
                         onPlay: () =>
                             onPlayTrack(e.value, e.key, queue: discTracks),
                         showTopMessage: showTopMessage,
+                        isCurrentlyPlaying:
+                            e.value.id == currentPlayingTrackId,
                       ),
                     ),
               ];
@@ -69,6 +73,7 @@ class AlbumTrackList extends StatelessWidget {
                     onDownloadComplete: onDownloadComplete,
                     onPlay: () => onPlayTrack(e.value, e.key),
                     showTopMessage: showTopMessage,
+                    isCurrentlyPlaying: e.value.id == currentPlayingTrackId,
                   ),
                 ),
           ],

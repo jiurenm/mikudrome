@@ -71,6 +71,7 @@ class AlbumDetailScreen extends StatefulWidget {
     this.baseUrl = '',
     this.onProducerTap,
     this.onPlayTrack,
+    this.currentPlayingTrackId,
   });
 
   final Album album;
@@ -79,6 +80,7 @@ class AlbumDetailScreen extends StatefulWidget {
       baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
   final ValueChanged<Producer>? onProducerTap;
   final void Function(Track track, List<Track> queue, int index)? onPlayTrack;
+  final int? currentPlayingTrackId;
 
   @override
   State<AlbumDetailScreen> createState() => _AlbumDetailScreenState();
@@ -194,6 +196,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                     onPlayTrack: _playTrack,
                     showTopMessage: (message, {required isError}) =>
                         _showTopMessage(context, message, isError: isError),
+                    currentPlayingTrackId: widget.currentPlayingTrackId,
                   ),
                 ],
               ],

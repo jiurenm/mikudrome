@@ -44,6 +44,7 @@ class PlayerScreen extends StatefulWidget {
     this.mediaSessionService,
     this.mediaSessionCanSeek,
     this.initializeControllerOnStart = true,
+    this.initialProgress,
   });
 
   final Track track;
@@ -69,6 +70,7 @@ class PlayerScreen extends StatefulWidget {
   final WebMediaSessionService? mediaSessionService;
   final bool Function()? mediaSessionCanSeek;
   final bool initializeControllerOnStart;
+  final double? initialProgress;
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
@@ -78,6 +80,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   VideoPlayerController? _controller;
   VoidCallback? _controllerListener;
   bool _isInitializing = true;
+  double? _pendingSeekProgress;
   String? _error;
   late bool _showQueue;
   bool _isFullscreen = false;
@@ -147,6 +150,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   void initState() {
     super.initState();
+    _pendingSeekProgress = widget.initialProgress;
     _mediaSession =
         widget.mediaSessionService ?? createWebMediaSessionService();
     _showQueue = !_track.hasVideo;
@@ -226,6 +230,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
       controller.setLooping(false);
       _attachControllerListener(controller);
       await controller.play();
+      // Seek to saved position if resuming from a restored session
+      final seekTo = _pendingSeekProgress;
+      if (seekTo != null && seekTo > 0 && controller.value.duration > Duration.zero) {
+        _pendingSeekProgress = null;
+        final target = controller.value.duration * seekTo;
+        await controller.seekTo(target);
+      }
       if (!mounted || _controller != controller) {
         await controller.dispose();
         return;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/track.dart';
+import '../services/playback_storage.dart';
 import '../theme/app_theme.dart';
 import '../widgets/now_playing_bar.dart';
 import '../widgets/app_shell.dart';
@@ -43,6 +44,70 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   PlaybackOrderMode _playbackOrderMode = PlaybackOrderMode.sequential;
   PlayerTogglePlayback _playerTogglePlayback = _noopTogglePlayback;
   PlayerSeekToFraction _playerSeekToFraction = _noopSeekToFraction;
+
+  bool _restoredNotStarted = false;
+  double? _resumeProgress;
+
+  @override
+  void initState() {
+    super.initState();
+    _restorePlaybackState();
+  }
+
+  String _formatDuration(int totalSeconds) {
+    if (totalSeconds <= 0) return '--:--';
+    final min = (totalSeconds ~/ 60) % 60;
+    final sec = totalSeconds % 60;
+    final hour = totalSeconds ~/ 3600;
+    if (hour > 0) {
+      return '${hour.toString().padLeft(2, '0')}:${min.toString().padLeft(2, '0')}:${sec.toString().padLeft(2, '0')}';
+    }
+    return '${min.toString().padLeft(2, '0')}:${sec.toString().padLeft(2, '0')}';
+  }
+
+  void _restorePlaybackState() {
+    final saved = PlaybackStorage.load();
+    if (saved == null) return;
+    final track = saved.queue.isNotEmpty &&
+            saved.index >= 0 &&
+            saved.index < saved.queue.length
+        ? saved.queue[saved.index]
+        : null;
+    final elapsed = track != null
+        ? (track.durationSeconds * saved.progress).round()
+        : 0;
+    setState(() {
+      _playerQueue = saved.queue;
+      _playerIndex = saved.index;
+      _playbackProgress = saved.progress;
+      _playbackMode = saved.mode;
+      _playbackOrderMode = saved.orderMode;
+      _playerContextLabel = saved.contextLabel;
+      _isPlaying = false;
+      _showPlayer = false;
+      _restoredNotStarted = true;
+      _resumeProgress = saved.progress;
+      if (track != null) {
+        _elapsedLabel = _formatDuration(elapsed);
+        _durationLabel = _formatDuration(track.durationSeconds);
+      }
+    });
+  }
+
+  void _savePlaybackState() {
+    if (_playerQueue.isEmpty) {
+      PlaybackStorage.clear();
+      return;
+    }
+    PlaybackStorage.save(
+      queue: _playerQueue,
+      index: _playerIndex,
+      progress: _playbackProgress,
+      mode: _playbackMode,
+      orderMode: _playbackOrderMode,
+      contextLabel: _playerContextLabel,
+    );
+  }
 
   Track? get _currentTrack {
     if (_playerQueue.isEmpty ||
@@ -119,7 +184,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _playbackMode = _defaultModeForTrack(selectedTrack);
       _showPlayer = true;
       _isPlaying = true;
+      _restoredNotStarted = false;
     });
+    _savePlaybackState();
   }
 
   void _selectPlayerTrack(int index, {bool showPlayer = true}) {
@@ -131,6 +198,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _showPlayer = showPlayer;
       _isPlaying = true;
     });
+    _savePlaybackState();
   }
 
   void _cyclePlaybackOrderMode() {
@@ -141,6 +209,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         PlaybackOrderMode.singleLoop => PlaybackOrderMode.sequential,
       };
     });
+    _savePlaybackState();
   }
 
   void _playPrevious() {
@@ -159,6 +228,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _playbackMode = _nextModeForTrack(nextTrack);
       _isPlaying = true;
     });
+    _savePlaybackState();
   }
 
   void _playNext() {
@@ -177,10 +247,19 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _playbackMode = _nextModeForTrack(nextTrack);
       _isPlaying = true;
     });
+    _savePlaybackState();
   }
 
   Future<void> _togglePlayback() async {
     if (_currentTrack == null) return;
+    if (_restoredNotStarted) {
+      // First play after restore — mount the PlayerScreen
+      setState(() {
+        _restoredNotStarted = false;
+        _isPlaying = true;
+      });
+      return;
+    }
     await _playerTogglePlayback();
   }
 
@@ -212,6 +291,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     });
   }
 
+  double _lastSavedProgress = 0;
+
   void _updatePlaybackUi({
     required bool isPlaying,
     required double progress,
@@ -225,6 +306,11 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _elapsedLabel = elapsedLabel;
       _durationLabel = durationLabel;
     });
+    // Throttle localStorage writes: save every ~5% progress change
+    if ((progress - _lastSavedProgress).abs() > 0.05 || !isPlaying) {
+      _lastSavedProgress = progress;
+      _savePlaybackState();
+    }
   }
 
   void _registerPlayerControls({
@@ -260,6 +346,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           index: index,
           contextLabel: _albumContextLabel(_selectedAlbum!),
         ),
+        currentPlayingTrackId: _currentTrack?.id,
       );
     } else if (_selectedProducer != null) {
       mainContent = ProducerDetailScreen(
@@ -287,7 +374,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       fit: StackFit.expand,
       children: [
         mainContent,
-        if (currentTrack != null)
+        if (currentTrack != null && !_restoredNotStarted)
           Offstage(
             offstage: !_showPlayer,
             child: PlayerScreen(
@@ -304,7 +391,14 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
               playbackOrderMode: _playbackOrderMode,
               onCyclePlaybackOrderMode: _cyclePlaybackOrderMode,
               onPlaybackStateChanged: _updatePlaybackUi,
-              onControlsReady: _registerPlayerControls,
+              onControlsReady: (
+                  {required togglePlayback, required seekToFraction}) {
+                _registerPlayerControls(
+                    togglePlayback: togglePlayback,
+                    seekToFraction: seekToFraction);
+                _resumeProgress = null;
+              },
+              initialProgress: _resumeProgress,
             ),
           ),
       ],
