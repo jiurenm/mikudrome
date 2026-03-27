@@ -67,6 +67,10 @@ class _LyricsSectionState extends State<LyricsSection> {
       _pendingAutoScrollIndex = null;
       _isAutoScrolling = false;
       _highlightSyncTimer?.cancel();
+      // Jump to top instantly on track change — no visible scroll-back.
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(0);
+      }
       _scheduleAutoScrollToActive(force: true);
       return;
     }
