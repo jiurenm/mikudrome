@@ -12,6 +12,7 @@ import '../services/media_session_handler_binding.dart';
 import '../services/web_media_session.dart';
 import '../services/web_media_session_contract.dart';
 import '../theme/app_theme.dart';
+import '../widgets/player/asset_slider_thumb_shape.dart';
 import '../widgets/player_screen_parts.dart';
 import 'library_home_screen.dart';
 
@@ -146,7 +147,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   void initState() {
     super.initState();
-    _mediaSession = widget.mediaSessionService ?? createWebMediaSessionService();
+    _mediaSession =
+        widget.mediaSessionService ?? createWebMediaSessionService();
     _showQueue = !_track.hasVideo;
     _syncLyricsForTrack();
     widget.onControlsReady?.call(
@@ -251,7 +253,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void _bindMediaSessionHandlers() {
     _mediaSessionBinding.rebind(
       service: _mediaSession,
-      onPlay: () => _handleMediaSessionPlaybackAction(action: PlaybackAction.play),
+      onPlay: () =>
+          _handleMediaSessionPlaybackAction(action: PlaybackAction.play),
       onPause: () =>
           _handleMediaSessionPlaybackAction(action: PlaybackAction.pause),
       onPrevious: () async {
@@ -899,6 +902,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
               thumbColor: AppTheme.mikuGreen,
               overlayColor: AppTheme.mikuGreen.withValues(alpha: 0.15),
               trackHeight: 4,
+              thumbShape: const AssetSliderThumbShape(
+                image: AssetImage('lib/assets/thumb.png'),
+                size: 18,
+              ),
             ),
             child: Slider(
               value: progress.clamp(0.0, 1.0),
@@ -1094,6 +1101,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
               thumbColor: AppTheme.mikuGreen,
               overlayColor: AppTheme.mikuGreen.withValues(alpha: 0.15),
               trackHeight: 4,
+              thumbShape: const AssetSliderThumbShape(
+                image: AssetImage('lib/assets/thumb.png'),
+                size: 18,
+              ),
             ),
             child: Slider(
               value: progress.clamp(0.0, 1.0),
