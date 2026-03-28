@@ -12,6 +12,7 @@ import '../services/media_session_handler_binding.dart';
 import '../services/web_media_session.dart';
 import '../services/web_media_session_contract.dart';
 import '../theme/app_theme.dart';
+import '../theme/vocal_theme.dart';
 import '../widgets/player/asset_slider_thumb_shape.dart';
 import '../widgets/player_screen_parts.dart';
 import 'library_home_screen.dart';
@@ -530,6 +531,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final accentColor = VocalThemeProvider.of(context);
     final width = MediaQuery.sizeOf(context).width;
     final queueVisible = _showQueue && width >= (_isVideoMode ? 1280 : 1440);
     final queuePanelWidth = _isVideoMode ? 320.0 : 280.0;
@@ -546,7 +548,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             child: Stack(
               children: [
                 Positioned.fill(
-                  child: Center(child: _buildVideoArea(isFullscreen: true)),
+                  child: Center(child: _buildVideoArea(context, isFullscreen: true)),
                 ),
                 AnimatedPositioned(
                   duration: const Duration(milliseconds: 180),
@@ -600,7 +602,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                             colors: [
-                              AppTheme.mikuGreen.withValues(alpha: 0.1),
+                              accentColor.withValues(alpha: 0.1),
                               const Color(0xFF1A1A1A),
                             ],
                           ),
@@ -779,16 +781,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
               ],
             ),
           ),
-          _buildFooter(),
+          _buildFooter(context),
         ],
       ),
     );
   }
 
   Widget _buildMediaArea(BuildContext context) {
+    final accentColor = VocalThemeProvider.of(context);
     if (_isInitializing) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppTheme.mikuGreen),
+      return Center(
+        child: CircularProgressIndicator(color: accentColor),
       );
     }
 
@@ -813,13 +816,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
 
     if (_isVideoMode) {
-      return _buildVideoArea();
+      return _buildVideoArea(context);
     }
 
     return _buildAudioArea(context);
   }
 
-  Widget _buildVideoArea({bool isFullscreen = false}) {
+  Widget _buildVideoArea(BuildContext context, {bool isFullscreen = false}) {
+    final accentColor = VocalThemeProvider.of(context);
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) {
       return const SizedBox.shrink();
@@ -841,7 +845,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ? null
                 : [
                     BoxShadow(
-                      color: AppTheme.mikuGreen.withValues(alpha: 0.18),
+                      color: accentColor.withValues(alpha: 0.18),
                       blurRadius: 40,
                     ),
                   ],
@@ -874,14 +878,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ),
       );
 
-  Widget _buildPlaybackOrderButton({required Color baseColor}) {
+  Widget _buildPlaybackOrderButton({required Color baseColor, required Color accentColor}) {
     final isActive = widget.playbackOrderMode != PlaybackOrderMode.sequential;
     return IconButton(
       onPressed: widget.onCyclePlaybackOrderMode,
       icon: Icon(
         _playbackOrderIcon,
         size: 26,
-        color: isActive ? AppTheme.mikuGreen : baseColor,
+        color: isActive ? accentColor : baseColor,
       ),
       tooltip: _playbackOrderTooltip,
       style: IconButton.styleFrom(
@@ -891,6 +895,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _buildControls(BuildContext context) {
+    final accentColor = VocalThemeProvider.of(context);
     final duration = _duration;
     final position = _position > duration ? duration : _position;
     final progress = duration.inMilliseconds == 0
@@ -908,10 +913,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
         children: [
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
-              activeTrackColor: AppTheme.mikuGreen,
+              activeTrackColor: accentColor,
               inactiveTrackColor: Colors.grey.shade800,
-              thumbColor: AppTheme.mikuGreen,
-              overlayColor: AppTheme.mikuGreen.withValues(alpha: 0.15),
+              thumbColor: accentColor,
+              overlayColor: accentColor.withValues(alpha: 0.15),
               trackHeight: 4,
               thumbShape: const AssetSliderThumbShape(
                 image: AssetImage('lib/assets/thumb.png'),
@@ -955,11 +960,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           ),
                           icon: Icon(
                             _isVideoMode ? Icons.music_note : Icons.movie,
-                            color: AppTheme.mikuGreen,
+                            color: accentColor,
                           ),
                           label: Text(
                             _isVideoMode ? 'Switch to Audio' : 'Switch to MV',
-                            style: const TextStyle(color: AppTheme.mikuGreen),
+                            style: TextStyle(color: accentColor),
                           ),
                         )
                       : const SizedBox.shrink(),
@@ -981,7 +986,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           ? Icons.pause_circle_filled
                           : Icons.play_circle_fill,
                       size: 48,
-                      color: AppTheme.mikuGreen,
+                      color: accentColor,
                     ),
                     onPressed: _togglePlayback,
                     style: IconButton.styleFrom(
@@ -1003,7 +1008,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _buildPlaybackOrderButton(baseColor: AppTheme.textMuted),
+                      _buildPlaybackOrderButton(baseColor: AppTheme.textMuted, accentColor: accentColor),
                       if (!_isVideoMode)
                         IconButton(
                           onPressed: () {
@@ -1017,7 +1022,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 : Icons.visibility_off,
                             size: 26,
                             color: _showLyrics
-                                ? AppTheme.mikuGreen
+                                ? accentColor
                                 : AppTheme.textMuted,
                           ),
                           tooltip: 'Lyrics',
@@ -1033,7 +1038,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               : Icons.queue_music_outlined,
                           size: 26,
                           color: _showQueue
-                              ? AppTheme.mikuGreen
+                              ? accentColor
                               : AppTheme.textMuted,
                         ),
                         tooltip: 'Queue',
@@ -1084,6 +1089,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _buildFullscreenControls(BuildContext context) {
+    final accentColor = VocalThemeProvider.of(context);
     final duration = _duration;
     final position = _position > duration ? duration : _position;
     final progress = duration.inMilliseconds == 0
@@ -1107,10 +1113,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
         children: [
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
-              activeTrackColor: AppTheme.mikuGreen,
+              activeTrackColor: accentColor,
               inactiveTrackColor: Colors.white24,
-              thumbColor: AppTheme.mikuGreen,
-              overlayColor: AppTheme.mikuGreen.withValues(alpha: 0.15),
+              thumbColor: accentColor,
+              overlayColor: accentColor.withValues(alpha: 0.15),
               trackHeight: 4,
               thumbShape: const AssetSliderThumbShape(
                 image: AssetImage('lib/assets/thumb.png'),
@@ -1150,7 +1156,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   _isPlaying
                       ? Icons.pause_circle_filled
                       : Icons.play_circle_fill,
-                  color: AppTheme.mikuGreen,
+                  color: accentColor,
                   size: 48,
                 ),
               ),
@@ -1160,7 +1166,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 icon: const Icon(Icons.skip_next, color: Colors.white),
               ),
               const SizedBox(width: 12),
-              _buildPlaybackOrderButton(baseColor: Colors.white70),
+              _buildPlaybackOrderButton(baseColor: Colors.white70, accentColor: accentColor),
             ],
           ),
         ],
@@ -1168,14 +1174,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  Widget _buildFooter() {
+  Widget _buildFooter(BuildContext context) {
+    final accentColor = VocalThemeProvider.of(context);
     final modeLabel = _isVideoMode ? 'Local MV Active' : 'Audio Stream Active';
     final vocalists = _track.vocalists.isNotEmpty
         ? _track.vocalists.join(', ')
         : 'Unknown vocalists';
     return Container(
       height: 24,
-      color: AppTheme.mikuGreen,
+      color: accentColor,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       alignment: Alignment.centerLeft,
       child: Text(
