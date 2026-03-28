@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/track.dart';
 import '../services/playback_storage.dart';
 import '../theme/app_theme.dart';
+import '../theme/vocal_theme.dart';
 import '../widgets/now_playing_bar.dart';
 import '../widgets/app_shell.dart';
 import 'album_detail_screen.dart';
@@ -404,35 +405,38 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       ],
     );
 
-    return AppShell(
-      currentRoute: _route,
-      forceSidebarCollapsed: _showPlayer,
-      onNavigate: (r) => setState(() {
-        _route = r;
-        _selectedAlbum = null;
-        _selectedProducer = null;
-        _showPlayer = false;
-      }),
-      nowPlayingBar: _showPlayer
-          ? const SizedBox.shrink()
-          : NowPlayingBar(
-              track: currentTrack,
-              queue: _playerQueue,
-              currentIndex: _playerIndex,
-              isPlaying: _isPlaying,
-              progress: _playbackProgress,
-              elapsedLabel: _elapsedLabel,
-              durationLabel: _durationLabel,
-              playbackMode: _playbackMode,
-              onTogglePlay: _togglePlayback,
-              onSeekProgress: _seekPlayback,
-              onPrevious: _playPrevious,
-              onNext: _playNext,
-              onOpenPlayer: _openCurrentPlayer,
-              onSelectQueueTrack: (index) =>
-                  _selectPlayerTrack(index, showPlayer: false),
-            ),
-      child: content,
+    return VocalThemeProvider(
+      track: currentTrack,
+      child: AppShell(
+        currentRoute: _route,
+        forceSidebarCollapsed: _showPlayer,
+        onNavigate: (r) => setState(() {
+          _route = r;
+          _selectedAlbum = null;
+          _selectedProducer = null;
+          _showPlayer = false;
+        }),
+        nowPlayingBar: _showPlayer
+            ? const SizedBox.shrink()
+            : NowPlayingBar(
+                track: currentTrack,
+                queue: _playerQueue,
+                currentIndex: _playerIndex,
+                isPlaying: _isPlaying,
+                progress: _playbackProgress,
+                elapsedLabel: _elapsedLabel,
+                durationLabel: _durationLabel,
+                playbackMode: _playbackMode,
+                onTogglePlay: _togglePlayback,
+                onSeekProgress: _seekPlayback,
+                onPrevious: _playPrevious,
+                onNext: _playNext,
+                onOpenPlayer: _openCurrentPlayer,
+                onSelectQueueTrack: (index) =>
+                    _selectPlayerTrack(index, showPlayer: false),
+              ),
+        child: content,
+      ),
     );
   }
 }
