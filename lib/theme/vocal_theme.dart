@@ -51,3 +51,62 @@ class VocalColors {
     return Color.fromARGB(255, r ~/ n, g ~/ n, b ~/ n);
   }
 }
+
+class VocalThemeProvider extends StatefulWidget {
+  const VocalThemeProvider({super.key, required this.track, required this.child});
+
+  final Track? track;
+  final Widget child;
+
+  static Color of(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<_VocalThemeData>()?.color
+        ?? VocalColors.defaultColor;
+  }
+
+  @override
+  State<VocalThemeProvider> createState() => _VocalThemeProviderState();
+}
+
+class _VocalThemeProviderState extends State<VocalThemeProvider> {
+  Color _targetColor = VocalColors.defaultColor;
+
+  @override
+  void initState() {
+    super.initState();
+    _targetColor = _resolve();
+  }
+
+  @override
+  void didUpdateWidget(VocalThemeProvider oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.track?.id != widget.track?.id) {
+      setState(() => _targetColor = _resolve());
+    }
+  }
+
+  Color _resolve() {
+    final t = widget.track;
+    return t == null ? VocalColors.defaultColor : VocalColors.resolveColor(t);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<Color?>(
+      tween: ColorTween(end: _targetColor),
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeInOut,
+      builder: (context, color, _) => _VocalThemeData(
+        color: color ?? VocalColors.defaultColor,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+class _VocalThemeData extends InheritedWidget {
+  const _VocalThemeData({required this.color, required super.child});
+  final Color color;
+
+  @override
+  bool updateShouldNotify(_VocalThemeData oldWidget) => color != oldWidget.color;
+}
