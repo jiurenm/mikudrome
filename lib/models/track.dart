@@ -24,6 +24,7 @@ class Track {
   final String source; // 投稿平台/视频链接
   final String lyrics; // 歌词
   final String comment; // 备注
+  final String albumArtist;
 
   const Track({
     required this.id,
@@ -48,6 +49,7 @@ class Track {
     this.source = '',
     this.lyrics = '',
     this.comment = '',
+    this.albumArtist = '',
   });
 
   factory Track.fromJson(Map<String, dynamic> json) {
@@ -74,6 +76,7 @@ class Track {
       source: json['source'] as String? ?? '',
       lyrics: json['lyrics'] as String? ?? '',
       comment: json['comment'] as String? ?? '',
+      albumArtist: json['album_artist'] as String? ?? '',
     );
   }
 
