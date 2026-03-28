@@ -419,8 +419,9 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 			FileSize:         job.size,
 		},
 		album: store.Album{
-			Title:     albumTitle,
-			CoverPath: coverPath,
+			Title:       albumTitle,
+			CoverPath:   coverPath,
+			AlbumArtist: albumProducer,
 		},
 		producer: store.Producer{
 			Name:       albumProducer,
