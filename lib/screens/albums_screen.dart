@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/album.dart';
 import '../api/api.dart';
 import '../theme/app_theme.dart';
+import '../widgets/auto_scroll_text.dart';
 import 'album_detail_screen.dart';
 
 /// Main library: album grid from API (media/Artist/Album), with search.
@@ -148,13 +149,13 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
                 ),
               )
             : SliverPadding(
-                padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
                 sliver: SliverGrid(
                   gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 220,
-                    mainAxisSpacing: 32,
-                    crossAxisSpacing: 32,
-                    childAspectRatio: 0.85,
+                    maxCrossAxisExtent: 180,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 0.80,
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
@@ -201,30 +202,31 @@ class _AlbumCardState extends State<_AlbumCard> {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: widget.onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, c) {
-                final size = c.maxWidth;
-                return MouseRegion(
-                  onEnter: (_) => setState(() => _hovering = true),
-                  onExit: (_) => setState(() => _hovering = false),
-                  child: Stack(
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, c) {
+                  final size = c.maxWidth;
+                  return Stack(
                     clipBehavior: Clip.antiAlias,
                     children: [
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(8),
                         child: Image.network(
                           widget.album.coverUrl,
                           width: size,
                           height: size,
                           fit: BoxFit.cover,
+                          cacheWidth: 360,
                           errorBuilder: (_, __, ___) => Container(
                             width: size,
                             height: size,
@@ -247,7 +249,7 @@ class _AlbumCardState extends State<_AlbumCard> {
                                   child: Icon(
                                     Icons.play_circle_fill,
                                     color: AppTheme.mikuGreen,
-                                    size: 48,
+                                    size: 40,
                                   ),
                                 ),
                               ),
@@ -255,41 +257,35 @@ class _AlbumCardState extends State<_AlbumCard> {
                           ),
                         ),
                     ],
+                  );
+                },
+              ),
+            ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 20,
+            child: AutoScrollText(
+              text: widget.album.title,
+              style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.w700,
                   ),
-                );
-              },
+              active: _hovering,
             ),
           ),
-          const SizedBox(height: 12),
-          Text(
-            widget.album.title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppTheme.textPrimary,
-                  fontWeight: FontWeight.w700,
-                ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            widget.album.producerName,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppTheme.textMuted,
-                ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            widget.album.year > 0
-                ? '${widget.album.year} • ${widget.album.trackCount} Tracks'
-                : '${widget.album.trackCount} Tracks',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppTheme.textMuted,
-                  letterSpacing: 0.5,
-                ),
+          const SizedBox(height: 2),
+          SizedBox(
+            height: 16,
+            child: AutoScrollText(
+              text: widget.album.producerName,
+              style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                    color: AppTheme.textMuted,
+                  ),
+              active: _hovering,
+            ),
           ),
         ],
+      ),
       ),
     );
   }
