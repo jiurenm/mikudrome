@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/album.dart';
 import '../api/api.dart';
 import '../theme/app_theme.dart';
+import '../widgets/auto_scroll_text.dart';
 import 'album_detail_screen.dart';
 
 /// Main library: album grid from API (media/Artist/Album), with search.
@@ -201,21 +202,21 @@ class _AlbumCardState extends State<_AlbumCard> {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: widget.onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, c) {
-                final size = c.maxWidth;
-                return MouseRegion(
-                  onEnter: (_) => setState(() => _hovering = true),
-                  onExit: (_) => setState(() => _hovering = false),
-                  child: Stack(
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, c) {
+                  final size = c.maxWidth;
+                  return Stack(
                     clipBehavior: Clip.antiAlias,
                     children: [
                       ClipRRect(
@@ -256,31 +257,35 @@ class _AlbumCardState extends State<_AlbumCard> {
                           ),
                         ),
                     ],
+                  );
+                },
+              ),
+            ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 20,
+            child: AutoScrollText(
+              text: widget.album.title,
+              style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.w700,
                   ),
-                );
-              },
+              active: _hovering,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            widget.album.title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppTheme.textPrimary,
-                  fontWeight: FontWeight.w700,
-                ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
           const SizedBox(height: 2),
-          Text(
-            widget.album.producerName,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppTheme.textMuted,
-                ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          SizedBox(
+            height: 16,
+            child: AutoScrollText(
+              text: widget.album.producerName,
+              style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                    color: AppTheme.textMuted,
+                  ),
+              active: _hovering,
+            ),
           ),
         ],
+      ),
       ),
     );
   }
