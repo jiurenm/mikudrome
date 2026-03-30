@@ -186,6 +186,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _showPlayer = true;
       _isPlaying = true;
       _restoredNotStarted = false;
+      _resumeProgress = null;
     });
     _savePlaybackState();
   }
@@ -282,6 +283,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   void _openCurrentPlayer() {
     if (_currentTrack == null) return;
     setState(() {
+      _restoredNotStarted = false;
       _showPlayer = true;
     });
   }
