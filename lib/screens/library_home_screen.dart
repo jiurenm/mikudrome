@@ -348,6 +348,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           contextLabel: _albumContextLabel(_selectedAlbum!),
         ),
         currentPlayingTrackId: _currentTrack?.id,
+        isPlaying: _isPlaying,
       );
     } else if (_selectedProducer != null) {
       mainContent = ProducerDetailScreen(

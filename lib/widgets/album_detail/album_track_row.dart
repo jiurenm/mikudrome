@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/track.dart';
 import '../../theme/app_theme.dart';
+import '../animated_equalizer.dart';
 import 'download_mv_dialog.dart';
 
 typedef AlbumTopMessage = void Function(String message,
@@ -17,6 +18,7 @@ class AlbumTrackRow extends StatefulWidget {
     required this.onPlay,
     required this.showTopMessage,
     this.isCurrentlyPlaying = false,
+    this.isPlaying = false,
   });
 
   final int index;
@@ -26,6 +28,7 @@ class AlbumTrackRow extends StatefulWidget {
   final VoidCallback onPlay;
   final AlbumTopMessage showTopMessage;
   final bool isCurrentlyPlaying;
+  final bool isPlaying;
 
   @override
   State<AlbumTrackRow> createState() => _AlbumTrackRowState();
@@ -85,8 +88,11 @@ class _AlbumTrackRowState extends State<AlbumTrackRow> {
                 SizedBox(
                   width: 32,
                   child: isActive
-                      ? const Icon(Icons.graphic_eq,
-                          size: 18, color: AppTheme.mikuGreen)
+                      ? (widget.isPlaying
+                          ? AnimatedEqualizer(
+                              size: 18, color: AppTheme.mikuGreen)
+                          : const Icon(Icons.graphic_eq,
+                              size: 18, color: AppTheme.mikuGreen))
                       : Text(
                           track.displayNumber(index),
                           style:

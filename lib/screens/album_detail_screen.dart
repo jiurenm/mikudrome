@@ -72,6 +72,7 @@ class AlbumDetailScreen extends StatefulWidget {
     this.onProducerTap,
     this.onPlayTrack,
     this.currentPlayingTrackId,
+    this.isPlaying = false,
   });
 
   final Album album;
@@ -81,6 +82,7 @@ class AlbumDetailScreen extends StatefulWidget {
   final ValueChanged<Producer>? onProducerTap;
   final void Function(Track track, List<Track> queue, int index)? onPlayTrack;
   final int? currentPlayingTrackId;
+  final bool isPlaying;
 
   @override
   State<AlbumDetailScreen> createState() => _AlbumDetailScreenState();
@@ -197,6 +199,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                     showTopMessage: (message, {required isError}) =>
                         _showTopMessage(context, message, isError: isError),
                     currentPlayingTrackId: widget.currentPlayingTrackId,
+                    isPlaying: widget.isPlaying,
                   ),
                 ],
               ],

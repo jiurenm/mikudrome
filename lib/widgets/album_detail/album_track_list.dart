@@ -15,6 +15,7 @@ class AlbumTrackList extends StatelessWidget {
     required this.onPlayTrack,
     required this.showTopMessage,
     this.currentPlayingTrackId,
+    this.isPlaying = false,
   });
 
   final List<Track> tracks;
@@ -25,6 +26,7 @@ class AlbumTrackList extends StatelessWidget {
   final void Function(Track track, int index, {List<Track>? queue}) onPlayTrack;
   final AlbumTopMessage showTopMessage;
   final int? currentPlayingTrackId;
+  final bool isPlaying;
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +61,7 @@ class AlbumTrackList extends StatelessWidget {
                         showTopMessage: showTopMessage,
                         isCurrentlyPlaying:
                             e.value.id == currentPlayingTrackId,
+                        isPlaying: e.value.id == currentPlayingTrackId && isPlaying,
                       ),
                     ),
               ];
@@ -74,6 +77,7 @@ class AlbumTrackList extends StatelessWidget {
                     onPlay: () => onPlayTrack(e.value, e.key),
                     showTopMessage: showTopMessage,
                     isCurrentlyPlaying: e.value.id == currentPlayingTrackId,
+                    isPlaying: e.value.id == currentPlayingTrackId && isPlaying,
                   ),
                 ),
           ],
