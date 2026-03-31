@@ -58,6 +58,32 @@ type Track struct {
 	FileSize          int64  `json:"-"` // File size in bytes
 }
 
+// Video represents a standalone or track-linked video (MV).
+type Video struct {
+	ID              int64  `json:"id"`
+	Title           string `json:"title"`
+	Artist          string `json:"artist"`
+	Path            string `json:"path"`
+	ThumbPath       string `json:"thumb_path"`
+	DurationSeconds int    `json:"duration_seconds"`
+	TrackID         *int64 `json:"track_id,omitempty"`
+	ProducerID      *int64 `json:"producer_id,omitempty"`
+	Source          string `json:"source"`
+	// Joined fields from track/album (populated by ListVideos/GetVideoByID)
+	TrackTitle string `json:"track_title,omitempty"`
+	AlbumTitle string `json:"album_title,omitempty"`
+	CoverPath  string `json:"cover_path,omitempty"`
+	FileMtime  int64  `json:"-"`
+	FileSize   int64  `json:"-"`
+}
+
+// VideoMeta holds minimal video metadata for incremental scan comparison.
+type VideoMeta struct {
+	Path    string
+	ModTime int64
+	Size    int64
+}
+
 // Store provides SQLite persistence for tracks.
 type Store struct {
 	db *sql.DB
@@ -128,6 +154,22 @@ func migrate(db *sql.DB) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_tracks_audio ON tracks(audio_path);
 		CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album_id);
+
+		CREATE TABLE IF NOT EXISTS videos (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			title TEXT NOT NULL,
+			artist TEXT NOT NULL DEFAULT '',
+			path TEXT NOT NULL UNIQUE,
+			thumb_path TEXT NOT NULL DEFAULT '',
+			duration_seconds INTEGER NOT NULL DEFAULT 0,
+			track_id INTEGER DEFAULT NULL REFERENCES tracks(id),
+			producer_id INTEGER DEFAULT NULL REFERENCES producers(id),
+			source TEXT NOT NULL DEFAULT 'scan',
+			file_mtime INTEGER NOT NULL DEFAULT 0,
+			file_size INTEGER NOT NULL DEFAULT 0
+		);
+		CREATE INDEX IF NOT EXISTS idx_videos_path ON videos(path);
+		CREATE INDEX IF NOT EXISTS idx_videos_track ON videos(track_id);
 	`)
 	if err != nil {
 		return err
@@ -533,6 +575,137 @@ func (s *Store) CleanOrphanedAlbums() error {
 // CleanOrphanedProducers deletes producers that have no associated albums.
 func (s *Store) CleanOrphanedProducers() error {
 	_, err := s.db.Exec(`DELETE FROM producers WHERE id NOT IN (SELECT DISTINCT producer_id FROM albums WHERE producer_id > 0)`)
+	return err
+}
+
+// UpsertVideo inserts or updates a video by path. Returns video ID.
+func (s *Store) UpsertVideo(v Video) (int64, error) {
+	_, err := s.db.Exec(
+		`INSERT INTO videos (title, artist, path, thumb_path, duration_seconds, track_id, producer_id, source, file_mtime, file_size)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(path) DO UPDATE SET title=excluded.title, artist=excluded.artist, thumb_path=excluded.thumb_path,
+		 duration_seconds=excluded.duration_seconds, track_id=excluded.track_id, producer_id=excluded.producer_id,
+		 source=excluded.source, file_mtime=excluded.file_mtime, file_size=excluded.file_size`,
+		v.Title, v.Artist, v.Path, v.ThumbPath, v.DurationSeconds, v.TrackID, v.ProducerID, v.Source, v.FileMtime, v.FileSize,
+	)
+	if err != nil {
+		return 0, err
+	}
+	var id int64
+	err = s.db.QueryRow(`SELECT id FROM videos WHERE path = ?`, v.Path).Scan(&id)
+	return id, err
+}
+
+// ListVideos returns all videos with joined track/album info.
+func (s *Store) ListVideos() ([]Video, error) {
+	rows, err := s.db.Query(`
+		SELECT v.id, v.title, v.artist, v.path, v.thumb_path, v.duration_seconds,
+		       v.track_id, v.producer_id, v.source, v.file_mtime, v.file_size,
+		       COALESCE(t.title, ''), COALESCE(al.title, ''), COALESCE(al.cover_path, '')
+		FROM videos v
+		LEFT JOIN tracks t ON v.track_id = t.id
+		LEFT JOIN albums al ON t.album_id = al.id
+		ORDER BY v.title
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Video
+	for rows.Next() {
+		var v Video
+		if err := rows.Scan(&v.ID, &v.Title, &v.Artist, &v.Path, &v.ThumbPath, &v.DurationSeconds,
+			&v.TrackID, &v.ProducerID, &v.Source, &v.FileMtime, &v.FileSize,
+			&v.TrackTitle, &v.AlbumTitle, &v.CoverPath); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// GetVideoByID returns a video by id with joined track/album info.
+func (s *Store) GetVideoByID(id int64) (Video, bool, error) {
+	var v Video
+	err := s.db.QueryRow(`
+		SELECT v.id, v.title, v.artist, v.path, v.thumb_path, v.duration_seconds,
+		       v.track_id, v.producer_id, v.source, v.file_mtime, v.file_size,
+		       COALESCE(t.title, ''), COALESCE(al.title, ''), COALESCE(al.cover_path, '')
+		FROM videos v
+		LEFT JOIN tracks t ON v.track_id = t.id
+		LEFT JOIN albums al ON t.album_id = al.id
+		WHERE v.id = ?
+	`, id).Scan(&v.ID, &v.Title, &v.Artist, &v.Path, &v.ThumbPath, &v.DurationSeconds,
+		&v.TrackID, &v.ProducerID, &v.Source, &v.FileMtime, &v.FileSize,
+		&v.TrackTitle, &v.AlbumTitle, &v.CoverPath)
+	if err == sql.ErrNoRows {
+		return Video{}, false, nil
+	}
+	if err != nil {
+		return Video{}, false, err
+	}
+	return v, true, nil
+}
+
+// GetAllVideosMeta returns a map of path -> VideoMeta for all videos.
+func (s *Store) GetAllVideosMeta() (map[string]VideoMeta, error) {
+	rows, err := s.db.Query(`SELECT path, file_mtime, file_size FROM videos`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make(map[string]VideoMeta)
+	for rows.Next() {
+		var vm VideoMeta
+		if err := rows.Scan(&vm.Path, &vm.ModTime, &vm.Size); err != nil {
+			return nil, err
+		}
+		result[vm.Path] = vm
+	}
+	return result, rows.Err()
+}
+
+// DeleteVideosByPaths deletes videos with the given paths.
+func (s *Store) DeleteVideosByPaths(paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(paths))
+	args := make([]any, len(paths))
+	for i, p := range paths {
+		placeholders[i] = "?"
+		args[i] = p
+	}
+	query := `DELETE FROM videos WHERE path IN (` + strings.Join(placeholders, ",") + `)`
+	_, err := s.db.Exec(query, args...)
+	return err
+}
+
+// SyncTrackVideos syncs the videos table from tracks that have video_path set.
+// For each track with a non-empty video_path, upserts a video with track_id and source='scan'.
+// Removes videos where track_id is set but the track no longer has a video_path.
+func (s *Store) SyncTrackVideos() error {
+	// Upsert videos from tracks with video_path
+	_, err := s.db.Exec(`
+		INSERT INTO videos (title, artist, path, thumb_path, track_id, producer_id, source)
+		SELECT t.title, COALESCE(t.artists, ''), t.video_path, COALESCE(t.video_thumb_path, ''),
+		       t.id, a.producer_id, 'scan'
+		FROM tracks t
+		LEFT JOIN albums a ON t.album_id = a.id
+		WHERE t.video_path != ''
+		ON CONFLICT(path) DO UPDATE SET
+			title=excluded.title, artist=excluded.artist, thumb_path=excluded.thumb_path,
+			track_id=excluded.track_id, producer_id=excluded.producer_id, source=excluded.source
+	`)
+	if err != nil {
+		return err
+	}
+	// Delete videos whose track no longer has a video_path
+	_, err = s.db.Exec(`
+		DELETE FROM videos
+		WHERE track_id IS NOT NULL
+		  AND track_id NOT IN (SELECT id FROM tracks WHERE video_path != '')
+	`)
 	return err
 }
 
