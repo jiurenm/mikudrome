@@ -11,6 +11,8 @@ class Video {
   final String trackTitle;
   final String albumTitle;
   final String coverPath;
+  final String composer;
+  final String vocal;
 
   const Video({
     required this.id,
@@ -24,6 +26,8 @@ class Video {
     this.trackTitle = '',
     this.albumTitle = '',
     this.coverPath = '',
+    this.composer = '',
+    this.vocal = '',
   });
 
   factory Video.fromJson(Map<String, dynamic> json) {
@@ -39,10 +43,41 @@ class Video {
       trackTitle: json['track_title'] as String? ?? '',
       albumTitle: json['album_title'] as String? ?? '',
       coverPath: json['cover_path'] as String? ?? '',
+      composer: json['composer'] as String? ?? '',
+      vocal: json['vocal'] as String? ?? '',
     );
   }
 
   bool get hasTrack => trackId != null;
+
+  /// "P主 feat. vocal" format, matching Track.vocalLine logic.
+  String get vocalLine {
+    final people = _dedup([
+      ..._split(composer),
+      if (composer.isEmpty && artist.isNotEmpty) ..._split(artist),
+    ]);
+    final vocals = _dedup(_split(vocal));
+
+    final parts = <String>[];
+    if (people.isNotEmpty) parts.add(people.join(', '));
+    if (vocals.isNotEmpty) {
+      final v = vocals.join(', ');
+      parts.add(parts.isNotEmpty ? 'feat. $v' : v);
+    }
+    if (parts.isEmpty && artist.isNotEmpty) return artist;
+    return parts.join(' ');
+  }
+
+  static List<String> _split(String value) => value
+      .split(RegExp(r'\s*[;,，；/／]+\s*'))
+      .map((p) => p.trim())
+      .where((p) => p.isNotEmpty)
+      .toList();
+
+  static List<String> _dedup(Iterable<String> items) {
+    final seen = <String>{};
+    return [for (final s in items) if (seen.add(s)) s];
+  }
 
   /// Duration formatted as "mm:ss" or "hh:mm:ss".
   String get durationFormatted {

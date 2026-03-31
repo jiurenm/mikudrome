@@ -73,6 +73,8 @@ type Video struct {
 	TrackTitle string `json:"track_title,omitempty"`
 	AlbumTitle string `json:"album_title,omitempty"`
 	CoverPath  string `json:"cover_path,omitempty"`
+	Composer   string `json:"composer,omitempty"`
+	Vocal      string `json:"vocal,omitempty"`
 	FileMtime  int64  `json:"-"`
 	FileSize   int64  `json:"-"`
 }
@@ -601,7 +603,8 @@ func (s *Store) ListVideos() ([]Video, error) {
 	rows, err := s.db.Query(`
 		SELECT v.id, v.title, v.artist, v.path, v.thumb_path, v.duration_seconds,
 		       v.track_id, v.producer_id, v.source, v.file_mtime, v.file_size,
-		       COALESCE(t.title, ''), COALESCE(al.title, ''), COALESCE(al.cover_path, '')
+		       COALESCE(t.title, ''), COALESCE(al.title, ''), COALESCE(al.cover_path, ''),
+		       COALESCE(t.composer, ''), COALESCE(t.vocal, '')
 		FROM videos v
 		LEFT JOIN tracks t ON v.track_id = t.id
 		LEFT JOIN albums al ON t.album_id = al.id
@@ -616,7 +619,7 @@ func (s *Store) ListVideos() ([]Video, error) {
 		var v Video
 		if err := rows.Scan(&v.ID, &v.Title, &v.Artist, &v.Path, &v.ThumbPath, &v.DurationSeconds,
 			&v.TrackID, &v.ProducerID, &v.Source, &v.FileMtime, &v.FileSize,
-			&v.TrackTitle, &v.AlbumTitle, &v.CoverPath); err != nil {
+			&v.TrackTitle, &v.AlbumTitle, &v.CoverPath, &v.Composer, &v.Vocal); err != nil {
 			return nil, err
 		}
 		out = append(out, v)
@@ -630,14 +633,15 @@ func (s *Store) GetVideoByID(id int64) (Video, bool, error) {
 	err := s.db.QueryRow(`
 		SELECT v.id, v.title, v.artist, v.path, v.thumb_path, v.duration_seconds,
 		       v.track_id, v.producer_id, v.source, v.file_mtime, v.file_size,
-		       COALESCE(t.title, ''), COALESCE(al.title, ''), COALESCE(al.cover_path, '')
+		       COALESCE(t.title, ''), COALESCE(al.title, ''), COALESCE(al.cover_path, ''),
+		       COALESCE(t.composer, ''), COALESCE(t.vocal, '')
 		FROM videos v
 		LEFT JOIN tracks t ON v.track_id = t.id
 		LEFT JOIN albums al ON t.album_id = al.id
 		WHERE v.id = ?
 	`, id).Scan(&v.ID, &v.Title, &v.Artist, &v.Path, &v.ThumbPath, &v.DurationSeconds,
 		&v.TrackID, &v.ProducerID, &v.Source, &v.FileMtime, &v.FileSize,
-		&v.TrackTitle, &v.AlbumTitle, &v.CoverPath)
+		&v.TrackTitle, &v.AlbumTitle, &v.CoverPath, &v.Composer, &v.Vocal)
 	if err == sql.ErrNoRows {
 		return Video{}, false, nil
 	}

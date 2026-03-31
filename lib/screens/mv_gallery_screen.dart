@@ -59,7 +59,9 @@ class _MvGalleryScreenState extends State<MvGalleryScreen> {
     return _videos
         .where((v) =>
             v.title.toLowerCase().contains(q) ||
-            v.artist.toLowerCase().contains(q))
+            v.artist.toLowerCase().contains(q) ||
+            v.vocal.toLowerCase().contains(q) ||
+            v.composer.toLowerCase().contains(q))
         .toList();
   }
 
@@ -279,7 +281,7 @@ class _MvCardState extends State<_MvCard> {
             SizedBox(
               height: 16,
               child: AutoScrollText(
-                text: widget.video.artist,
+                text: widget.video.vocalLine,
                 style: Theme.of(context).textTheme.bodySmall!.copyWith(
                       color: AppTheme.textMuted,
                     ),
