@@ -139,10 +139,13 @@ class Track {
   }
 
   String get vocalLine {
-    final peopleCredits = _dedupeCredits([
+    var peopleCredits = _dedupeCredits([
       ..._splitCredits(composer),
       ..._splitCredits(lyricist),
     ]);
+    if (peopleCredits.isEmpty && artists.isNotEmpty) {
+      peopleCredits = _dedupeCredits(_splitCredits(artists));
+    }
     final vocalCredits = _dedupeCredits(_splitCredits(vocal));
 
     final parts = <String>[];

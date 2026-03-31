@@ -51,6 +51,7 @@ class Video {
   bool get hasTrack => trackId != null;
 
   /// "P主 feat. vocal" format, matching Track.vocalLine logic.
+  /// Falls back to parsing "Title - Artist feat. Vocal" from title.
   String get vocalLine {
     final people = _dedup([
       ..._split(composer),
@@ -65,7 +66,25 @@ class Video {
       parts.add(parts.isNotEmpty ? 'feat. $v' : v);
     }
     if (parts.isEmpty && artist.isNotEmpty) return artist;
-    return parts.join(' ');
+    if (parts.isNotEmpty) return parts.join(' ');
+
+    // Fallback: parse "Title - Artist feat. Vocal" from title
+    final parsed = parseCreditsFromTitle(title);
+    return parsed ?? '';
+  }
+
+  /// Parse "Title - Artist feat. Vocal" → "Artist feat. Vocal".
+  /// Returns null if the title doesn't match the pattern.
+  static String? parseCreditsFromTitle(String title) {
+    final dashMatch = RegExp(r'^.+?\s*[-–—]\s*(.+)$').firstMatch(title);
+    if (dashMatch == null) return null;
+    return dashMatch.group(1)!.trim();
+  }
+
+  /// Parsed display title (before the dash), or full title if no dash.
+  String get displayTitle {
+    final dashMatch = RegExp(r'^(.+?)\s*[-–—]\s*.+$').firstMatch(title);
+    return dashMatch != null ? dashMatch.group(1)!.trim() : title;
   }
 
   static List<String> _split(String value) => value

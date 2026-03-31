@@ -348,7 +348,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (value.position >= value.duration &&
           !value.isPlaying &&
           value.duration > Duration.zero) {
-        if (widget.playbackOrderMode == PlaybackOrderMode.singleLoop) {
+        if (widget.playbackOrderMode == PlaybackOrderMode.singleLoop ||
+            (widget.playbackOrderMode == PlaybackOrderMode.listLoop &&
+                !_hasNext)) {
           await controller.seekTo(Duration.zero);
           if (!mounted || _controller != controller) return;
           await controller.play();
@@ -511,27 +513,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   String get _queueSubtitle {
-    final baseCredits = <String>[
-      ..._track.composers,
-      ..._track.lyricists,
-    ];
-    final uniqueCredits = <String>[];
-    final seenCredits = <String>{};
-    for (final credit in baseCredits) {
-      if (seenCredits.add(credit)) {
-        uniqueCredits.add(credit);
-      }
-    }
-
-    final parts = <String>[];
-    if (uniqueCredits.isNotEmpty) {
-      parts.add(uniqueCredits.join(', '));
-    }
-    if (_track.vocalists.isNotEmpty) {
-      parts.add('feat. ${_track.vocalists.join(', ')}');
-    }
-
-    return parts.isNotEmpty ? parts.join(' ') : 'Unknown credits';
+    final line = _track.vocalLine;
+    return line.isNotEmpty ? line : 'Unknown credits';
   }
 
   String _formatDuration(Duration value) {

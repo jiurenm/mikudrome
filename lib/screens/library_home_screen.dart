@@ -353,15 +353,44 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         contextLabel: 'MV Gallery / ${video.artist}',
       );
     } else {
-      // Standalone MV: create a synthetic Track with video stream override
+      // Standalone MV: create a synthetic Track with video stream override.
+      // Parse "Title - Artist feat. Vocal" from filename-based title.
+      var title = video.title;
+      var composer = video.composer;
+      var vocal = video.vocal;
+      var artist = video.artist;
+
+      if (composer.isEmpty && vocal.isEmpty) {
+        final dashMatch = RegExp(r'^(.+?)\s*[-–—]\s*(.+)$').firstMatch(title);
+        if (dashMatch != null) {
+          title = dashMatch.group(1)!.trim();
+          final creditsPart = dashMatch.group(2)!.trim();
+          final featMatch =
+              RegExp(r'^(.+?)\s+feat\.?\s+(.+)$', caseSensitive: false)
+                  .firstMatch(creditsPart);
+          if (featMatch != null) {
+            composer = featMatch.group(1)!.trim();
+            vocal = featMatch.group(2)!.trim();
+          } else {
+            composer = creditsPart;
+          }
+          if (artist.isEmpty) {
+            artist = composer;
+            if (vocal.isNotEmpty) artist += '; $vocal';
+          }
+        }
+      }
+
       final syntheticTrack = Track(
         id: -video.id, // negative to avoid collision with real tracks
-        title: video.title,
+        title: title,
         audioPath: '',
         videoPath: 'standalone', // non-empty so hasVideo == true
         videoThumbPath: video.thumbPath,
         durationSeconds: video.durationSeconds,
-        artists: video.artist,
+        artists: artist,
+        composer: composer,
+        vocal: vocal,
         videoStreamOverrideUrl: api.videoStreamUrl(video.id),
         coverOverrideUrl: api.videoThumbUrl(video.id),
       );
@@ -369,7 +398,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         track: syntheticTrack,
         queue: [syntheticTrack],
         index: 0,
-        contextLabel: 'MV Gallery / ${video.artist}',
+        contextLabel: 'MV Gallery / ${composer.isNotEmpty ? composer : video.title}',
       );
     }
   }

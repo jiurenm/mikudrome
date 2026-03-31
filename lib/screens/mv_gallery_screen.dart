@@ -269,7 +269,7 @@ class _MvCardState extends State<_MvCard> {
             SizedBox(
               height: 20,
               child: AutoScrollText(
-                text: widget.video.title,
+                text: widget.video.displayTitle,
                 style: Theme.of(context).textTheme.titleMedium!.copyWith(
                       color: AppTheme.textPrimary,
                       fontWeight: FontWeight.w700,
