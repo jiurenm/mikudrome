@@ -98,6 +98,31 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.serveDBBackup(w, r)
 		return
 	}
+	if r.URL.Path == "/api/videos" && r.Method == http.MethodGet {
+		h.listVideos(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/videos/") && r.Method == http.MethodGet {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/api/videos/")
+		parts := strings.SplitN(trimmed, "/", 2)
+		if parts[0] != "" {
+			id, err := strconv.ParseInt(parts[0], 10, 64)
+			if err != nil {
+				http.Error(w, "invalid video id", http.StatusBadRequest)
+				return
+			}
+			if len(parts) == 2 && parts[1] == "stream" {
+				h.serveVideoStream(w, r, id)
+			} else if len(parts) == 2 && parts[1] == "thumb" {
+				h.serveVideoThumb(w, r, id)
+			} else if len(parts) == 1 {
+				h.getVideo(w, r, strconv.FormatInt(id, 10))
+			} else {
+				http.NotFound(w, r)
+			}
+			return
+		}
+	}
 	if strings.HasPrefix(r.URL.Path, "/api/stream/") {
 		h.serveStream(w, r)
 		return
@@ -297,6 +322,53 @@ func (h *Handler) serveAlbumCover(w http.ResponseWriter, r *http.Request, idStr 
 		return
 	}
 	http.ServeFile(w, r, album.CoverPath)
+}
+
+func (h *Handler) listVideos(w http.ResponseWriter, _ *http.Request) {
+	videos, err := h.store.ListVideos()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"videos": videos})
+}
+
+func (h *Handler) getVideo(w http.ResponseWriter, _ *http.Request, idStr string) {
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	video, ok, err := h.store.GetVideoByID(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		http.NotFound(w, nil)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(video)
+}
+
+func (h *Handler) serveVideoStream(w http.ResponseWriter, r *http.Request, id int64) {
+	video, ok, err := h.store.GetVideoByID(id)
+	if err != nil || !ok || video.Path == "" {
+		http.NotFound(w, r)
+		return
+	}
+	http.ServeFile(w, r, video.Path)
+}
+
+func (h *Handler) serveVideoThumb(w http.ResponseWriter, r *http.Request, id int64) {
+	video, ok, err := h.store.GetVideoByID(id)
+	if err != nil || !ok || video.ThumbPath == "" {
+		http.NotFound(w, r)
+		return
+	}
+	http.ServeFile(w, r, video.ThumbPath)
 }
 
 // serveStream serves audio or video file by track ID and type (audio|video).
