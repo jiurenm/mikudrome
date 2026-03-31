@@ -122,8 +122,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
   String get _albumCoverUrl => _coverUrlForTrack(_track);
 
-  String _coverUrlForTrack(Track track) =>
-      track.albumId > 0 ? _api.albumCoverUrl(track.albumId.toString()) : '';
+  String _coverUrlForTrack(Track track) {
+    if (track.coverOverrideUrl != null) return track.coverOverrideUrl!;
+    return track.albumId > 0 ? _api.albumCoverUrl(track.albumId.toString()) : '';
+  }
   Duration get _position => _controller?.value.position ?? Duration.zero;
   Duration get _duration => _controller?.value.duration ?? Duration.zero;
   bool get _isPlaying => _controller?.value.isPlaying ?? false;

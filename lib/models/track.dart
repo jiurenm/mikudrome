@@ -30,6 +30,9 @@ class Track {
   /// computing it from the track ID. Used for standalone MV playback.
   final String? videoStreamOverrideUrl;
 
+  /// When set, the player uses this URL as cover art instead of the album cover.
+  final String? coverOverrideUrl;
+
   const Track({
     required this.id,
     required this.title,
@@ -55,6 +58,7 @@ class Track {
     this.comment = '',
     this.albumArtist = '',
     this.videoStreamOverrideUrl,
+    this.coverOverrideUrl,
   });
 
   factory Track.fromJson(Map<String, dynamic> json) {

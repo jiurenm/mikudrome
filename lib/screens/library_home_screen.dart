@@ -355,6 +355,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         durationSeconds: video.durationSeconds,
         artists: video.artist,
         videoStreamOverrideUrl: api.videoStreamUrl(video.id),
+        coverOverrideUrl: api.videoThumbUrl(video.id),
       );
       _openPlayerForQueue(
         track: syntheticTrack,
