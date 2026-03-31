@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/album.dart';
 import '../models/producer.dart';
 import '../models/track.dart';
+import '../models/video.dart';
 import 'config.dart';
 import 'endpoints.dart';
 
@@ -122,6 +123,31 @@ class ApiClient {
         .toList();
     return (album: album, tracks: tracks);
   }
+
+  // --- Videos ---
+
+  Future<List<Video>> getVideos() async {
+    final res = await http.get(Uri.parse(_url(ApiEndpoints.videos)));
+    if (res.statusCode != 200) {
+      throw ApiException('Failed to load videos', res.statusCode);
+    }
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    final list = data['videos'] as List<dynamic>? ?? [];
+    return list.map((e) => Video.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<Video?> getVideo(int id) async {
+    final res = await http.get(Uri.parse(_url(ApiEndpoints.video(id))));
+    if (res.statusCode == 404) return null;
+    if (res.statusCode != 200) {
+      throw ApiException('Failed to load video', res.statusCode);
+    }
+    return Video.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  String videoStreamUrl(int videoId) => _url(ApiEndpoints.videoStream(videoId));
+
+  String videoThumbUrl(int videoId) => _url(ApiEndpoints.videoThumb(videoId));
 
   // --- Stream URLs (no HTTP call, just URL builder) ---
 
