@@ -46,6 +46,8 @@ class PlayerScreen extends StatefulWidget {
     this.mediaSessionCanSeek,
     this.initializeControllerOnStart = true,
     this.initialProgress,
+    this.onVideoControllerChanged,
+    this.renderVideo = true,
   });
 
   final Track track;
@@ -72,6 +74,8 @@ class PlayerScreen extends StatefulWidget {
   final bool Function()? mediaSessionCanSeek;
   final bool initializeControllerOnStart;
   final double? initialProgress;
+  final ValueChanged<VideoPlayerController?>? onVideoControllerChanged;
+  final bool renderVideo;
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
@@ -230,6 +234,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
 
     _detachControllerListener(previous);
+    if (previous != null) {
+      widget.onVideoControllerChanged?.call(null);
+    }
 
     final controller = VideoPlayerController.networkUrl(Uri.parse(_mediaUrl));
     _controller = controller;
@@ -252,6 +259,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       }
       _bindMediaSessionHandlers();
       _syncMediaSessionMetadata();
+      widget.onVideoControllerChanged?.call(controller);
       setState(() {
         _isInitializing = false;
       });
@@ -376,6 +384,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void dispose() {
     _fullscreenChromeTimer?.cancel();
     _detachControllerListener(_controller);
+    widget.onVideoControllerChanged?.call(null);
     _mediaSessionBinding.invalidate();
     _mediaSession.clear();
     widget.onControlsReady?.call(
@@ -860,7 +869,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(borderRadius),
-            child: VideoPlayer(controller),
+            child: widget.renderVideo
+                ? VideoPlayer(controller)
+                : const ColoredBox(color: Colors.black),
           ),
         ),
       ),
