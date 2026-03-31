@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
 
+import '../api/api.dart';
 import '../models/track.dart';
+import '../models/video.dart';
 import '../services/playback_storage.dart';
 import '../theme/app_theme.dart';
 import '../theme/vocal_theme.dart';
 import '../widgets/now_playing_bar.dart';
+import '../widgets/player/pip_mini_player.dart';
 import '../widgets/app_shell.dart';
 import 'album_detail_screen.dart';
 import 'albums_screen.dart';
 import 'player_screen.dart';
 import 'producer_detail_screen.dart';
+import 'mv_gallery_screen.dart';
 import 'producers_screen.dart';
 import '../models/album.dart';
 import '../models/producer.dart';
@@ -48,6 +53,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
 
   bool _restoredNotStarted = false;
   double? _resumeProgress;
+  VideoPlayerController? _videoController;
 
   @override
   void initState() {
@@ -153,9 +159,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           subtitle: 'Your liked tracks',
         );
       case ShellRoute.localMv:
-        return const _PlaceholderScreen(
-          title: 'Local MV Gallery',
-          subtitle: 'All tracks with local MV',
+        return MvGalleryScreen(
+          onVideoTap: _playVideo,
         );
     }
   }
@@ -324,11 +329,50 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     _playerSeekToFraction = seekToFraction;
   }
 
+  void _onVideoControllerChanged(VideoPlayerController? c) {
+    if (!mounted) return;
+    setState(() => _videoController = c);
+  }
+
   String _albumContextLabel(Album album) => 'Album / ${album.title}';
   String _producerContextLabel(Producer producer) =>
       'Producer / ${producer.name}';
   String _mvContextLabel(Producer producer) =>
       'Featured MVs / ${producer.name}';
+
+  Future<void> _playVideo(Video video) async {
+    final api = ApiClient();
+    if (video.hasTrack) {
+      // Track-associated MV: fetch the real Track and play it
+      final track = await api.getTrack(video.trackId!);
+      if (track == null) return;
+      _openPlayerForQueue(
+        track: track,
+        queue: [track],
+        index: 0,
+        contextLabel: 'MV Gallery / ${video.artist}',
+      );
+    } else {
+      // Standalone MV: create a synthetic Track with video stream override
+      final syntheticTrack = Track(
+        id: -video.id, // negative to avoid collision with real tracks
+        title: video.title,
+        audioPath: '',
+        videoPath: 'standalone', // non-empty so hasVideo == true
+        videoThumbPath: video.thumbPath,
+        durationSeconds: video.durationSeconds,
+        artists: video.artist,
+        videoStreamOverrideUrl: api.videoStreamUrl(video.id),
+        coverOverrideUrl: api.videoThumbUrl(video.id),
+      );
+      _openPlayerForQueue(
+        track: syntheticTrack,
+        queue: [syntheticTrack],
+        index: 0,
+        contextLabel: 'MV Gallery / ${video.artist}',
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -403,7 +447,22 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
                 _resumeProgress = null;
               },
               initialProgress: _resumeProgress,
+              onVideoControllerChanged: _onVideoControllerChanged,
+              renderVideo: _showPlayer,
             ),
+          ),
+        if (!_showPlayer &&
+            _playbackMode == PlaybackMode.video &&
+            _videoController != null &&
+            !_restoredNotStarted &&
+            currentTrack != null)
+          PipMiniPlayer(
+            controller: _videoController!,
+            track: currentTrack,
+            isPlaying: _isPlaying,
+            onTap: _openCurrentPlayer,
+            onTogglePlay: _togglePlayback,
+            onClose: () => _switchPlaybackMode(PlaybackMode.audio),
           ),
       ],
     );

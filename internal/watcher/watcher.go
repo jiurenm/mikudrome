@@ -95,9 +95,9 @@ func (w *Watcher) eventLoop() {
 
 // handleEvent processes a single file system event.
 func (w *Watcher) handleEvent(event fsnotify.Event) {
-	// Check if it's an audio file
+	// Check if it's an audio or video file
 	ext := strings.ToLower(filepath.Ext(event.Name))
-	if !scanner.AudioExts[ext] {
+	if !scanner.AudioExts[ext] && !scanner.VideoExts[ext] {
 		// If it's a directory creation, add it to watch list
 		if event.Op&fsnotify.Create == fsnotify.Create {
 			if info, err := os.Stat(event.Name); err == nil && info.IsDir() {

@@ -24,6 +24,12 @@ abstract final class ApiEndpoints {
   static String streamVideo(int trackId) => '$_prefix/stream/$trackId/video';
   static String streamThumb(int trackId) => '$_prefix/stream/$trackId/thumb';
 
+  // Videos
+  static const String videos = '$_prefix/videos';
+  static String video(int id) => '$_prefix/videos/$id';
+  static String videoStream(int id) => '$_prefix/videos/$id/stream';
+  static String videoThumb(int id) => '$_prefix/videos/$id/thumb';
+
   // DB
   static const String dbBackup = '$_prefix/db/backup';
 }

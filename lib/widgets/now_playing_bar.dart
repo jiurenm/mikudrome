@@ -71,8 +71,11 @@ class NowPlayingBar extends StatelessWidget {
     final subtitle = currentTrack == null
         ? 'Select a track from albums or producers'
         : currentTrack.vocalLine;
-    final coverUrl = currentTrack != null && currentTrack.albumId > 0
-        ? ApiClient().albumCoverUrl(currentTrack.albumId.toString())
+    final coverUrl = currentTrack != null
+        ? (currentTrack.coverOverrideUrl ??
+            (currentTrack.albumId > 0
+                ? ApiClient().albumCoverUrl(currentTrack.albumId.toString())
+                : ''))
         : '';
 
     return SizedBox(

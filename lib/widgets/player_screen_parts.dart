@@ -38,11 +38,10 @@ class ModeSwitcher extends StatelessWidget {
         ),
       ],
       selected: {playbackMode},
-      onSelectionChanged: (selection) {
+      onSelectionChanged: canUseVideoMode ? (selection) {
         final nextMode = selection.first;
-        if (nextMode == PlaybackMode.video && !canUseVideoMode) return;
         onChanged(nextMode);
-      },
+      } : null,
       showSelectedIcon: false,
     );
   }

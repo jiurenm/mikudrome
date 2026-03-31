@@ -46,6 +46,8 @@ class PlayerScreen extends StatefulWidget {
     this.mediaSessionCanSeek,
     this.initializeControllerOnStart = true,
     this.initialProgress,
+    this.onVideoControllerChanged,
+    this.renderVideo = true,
   });
 
   final Track track;
@@ -72,6 +74,8 @@ class PlayerScreen extends StatefulWidget {
   final bool Function()? mediaSessionCanSeek;
   final bool initializeControllerOnStart;
   final double? initialProgress;
+  final ValueChanged<VideoPlayerController?>? onVideoControllerChanged;
+  final bool renderVideo;
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
@@ -111,13 +115,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   bool get _isVideoMode => widget.playbackMode == PlaybackMode.video;
   bool get _canUseVideoMode => _track.hasVideo;
-  String get _mediaUrl => _isVideoMode
-      ? _api.streamVideoUrl(_track.id)
-      : _api.streamAudioUrl(_track.id);
+  bool get _canSwitchMode => _track.hasVideo && _track.hasAudio;
+  String get _mediaUrl {
+    if (_isVideoMode && _track.videoStreamOverrideUrl != null) {
+      return _track.videoStreamOverrideUrl!;
+    }
+    return _isVideoMode
+        ? _api.streamVideoUrl(_track.id)
+        : _api.streamAudioUrl(_track.id);
+  }
   String get _albumCoverUrl => _coverUrlForTrack(_track);
 
-  String _coverUrlForTrack(Track track) =>
-      track.albumId > 0 ? _api.albumCoverUrl(track.albumId.toString()) : '';
+  String _coverUrlForTrack(Track track) {
+    if (track.coverOverrideUrl != null) return track.coverOverrideUrl!;
+    return track.albumId > 0 ? _api.albumCoverUrl(track.albumId.toString()) : '';
+  }
   Duration get _position => _controller?.value.position ?? Duration.zero;
   Duration get _duration => _controller?.value.duration ?? Duration.zero;
   bool get _isPlaying => _controller?.value.isPlaying ?? false;
@@ -222,6 +234,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
 
     _detachControllerListener(previous);
+    if (previous != null) {
+      widget.onVideoControllerChanged?.call(null);
+    }
 
     final controller = VideoPlayerController.networkUrl(Uri.parse(_mediaUrl));
     _controller = controller;
@@ -244,6 +259,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       }
       _bindMediaSessionHandlers();
       _syncMediaSessionMetadata();
+      widget.onVideoControllerChanged?.call(controller);
       setState(() {
         _isInitializing = false;
       });
@@ -368,6 +384,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void dispose() {
     _fullscreenChromeTimer?.cancel();
     _detachControllerListener(_controller);
+    widget.onVideoControllerChanged?.call(null);
     _mediaSessionBinding.invalidate();
     _mediaSession.clear();
     widget.onControlsReady?.call(
@@ -578,7 +595,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           PlayerHeader(
             contextLabel: widget.contextLabel,
             playbackMode: widget.playbackMode,
-            canUseVideoMode: _canUseVideoMode,
+            canUseVideoMode: _canSwitchMode,
             onClose: widget.onClose,
             onChangedMode: widget.onSwitchPlaybackMode,
             onEnterFullscreen: _isVideoMode ? _enterFullscreen : null,
@@ -852,7 +869,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(borderRadius),
-            child: VideoPlayer(controller),
+            child: widget.renderVideo
+                ? VideoPlayer(controller)
+                : const ColoredBox(color: Colors.black),
           ),
         ),
       ),
@@ -951,7 +970,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               Expanded(
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: _canUseVideoMode
+                  child: _canSwitchMode
                       ? TextButton.icon(
                           onPressed: () => widget.onSwitchPlaybackMode(
                             _isVideoMode
