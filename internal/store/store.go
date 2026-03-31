@@ -709,6 +709,80 @@ func (s *Store) SyncTrackVideos() error {
 	return err
 }
 
+// GetStandaloneVideoPathsByPrefix returns paths of videos with source='scan' and no track_id
+// whose path starts with the given prefix.
+func (s *Store) GetStandaloneVideoPathsByPrefix(prefix string) ([]string, error) {
+	rows, err := s.db.Query(
+		`SELECT path FROM videos WHERE source='scan' AND track_id IS NULL AND path LIKE ?`,
+		prefix+"%",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// GetTracksWithVideo returns tracks that have a non-empty video_path.
+func (s *Store) GetTracksWithVideo() ([]Track, error) {
+	rows, err := s.db.Query(`SELECT id, video_path, video_thumb_path FROM tracks WHERE video_path != ''`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Track
+	for rows.Next() {
+		var t Track
+		if err := rows.Scan(&t.ID, &t.VideoPath, &t.VideoThumbPath); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// ClearTrackVideo clears video_path and video_thumb_path for a track.
+func (s *Store) ClearTrackVideo(trackID int64) error {
+	_, err := s.db.Exec(`UPDATE tracks SET video_path='', video_thumb_path='' WHERE id=?`, trackID)
+	return err
+}
+
+// GetTracksByAudioPaths returns tracks matching the given audio paths (id, audio_path, video_path).
+func (s *Store) GetTracksByAudioPaths(paths []string) ([]Track, error) {
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	placeholders := make([]string, len(paths))
+	args := make([]any, len(paths))
+	for i, p := range paths {
+		placeholders[i] = "?"
+		args[i] = p
+	}
+	query := `SELECT id, audio_path, video_path FROM tracks WHERE video_path = '' AND audio_path IN (` + strings.Join(placeholders, ",") + `)`
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Track
+	for rows.Next() {
+		var t Track
+		if err := rows.Scan(&t.ID, &t.AudioPath, &t.VideoPath); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
 // BatchInserter handles batch insertion of tracks with transaction support.
 type BatchInserter struct {
 	store         *Store

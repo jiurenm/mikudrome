@@ -192,6 +192,18 @@ func Scan(mediaRoot string, s *store.Store, workers, batchSize int) error {
 		}
 	}
 
+	// Phase 4: Video consistency check
+	log.Println("scan: phase 4 - video consistency check...")
+	videoConsistencyCheck(s, fileInfos)
+
+	// Phase 5: Scan standalone MVs from mediaRoot/MVs/
+	scanStandaloneMVs(mediaRoot, s)
+
+	// Phase 6: Sync track-associated MVs into videos table
+	if err := s.SyncTrackVideos(); err != nil {
+		log.Printf("scan: error syncing track videos: %v", err)
+	}
+
 	duration := time.Since(startTime)
 	log.Printf("scan: completed in %s (new=%d updated=%d skipped=%d deleted=%d failed=%d)",
 		duration.Round(time.Second), stats.new, stats.updated, stats.skipped, stats.deleted, stats.failed)
@@ -757,4 +769,153 @@ func findOrExtractVideoThumb(videoPath string) string {
 // FindOrExtractVideoThumb is the exported version for use after downloading MV (e.g. from api package).
 func FindOrExtractVideoThumb(videoPath string) string {
 	return findOrExtractVideoThumb(videoPath)
+}
+
+// videoConsistencyCheck fixes stale video references on tracks.
+// Step 1: Tracks with video_path that no longer exists on disk → clear.
+// Step 2: Tracks without video_path whose audio file was in the current scan → check for new MV.
+func videoConsistencyCheck(s *store.Store, fileInfos map[string]scanJob) {
+	// Step 1: Clear stale video references
+	tracksWithVideo, err := s.GetTracksWithVideo()
+	if err != nil {
+		log.Printf("scan: video check - error querying tracks with video: %v", err)
+		return
+	}
+	cleared := 0
+	for _, t := range tracksWithVideo {
+		if _, err := os.Stat(t.VideoPath); os.IsNotExist(err) {
+			if err := s.ClearTrackVideo(t.ID); err != nil {
+				log.Printf("scan: video check - error clearing video for track %d: %v", t.ID, err)
+			} else {
+				cleared++
+			}
+		}
+	}
+
+	// Step 2: Check tracks without video whose audio was in current scan
+	audioPaths := make([]string, 0, len(fileInfos))
+	for p := range fileInfos {
+		audioPaths = append(audioPaths, p)
+	}
+	tracksNoVideo, err := s.GetTracksByAudioPaths(audioPaths)
+	if err != nil {
+		log.Printf("scan: video check - error querying tracks without video: %v", err)
+		return
+	}
+	found := 0
+	for _, t := range tracksNoVideo {
+		dir := filepath.Dir(t.AudioPath)
+		base := strings.TrimSuffix(t.AudioPath, filepath.Ext(t.AudioPath))
+		videoPath := findVideoForBase(dir, base)
+		if videoPath != "" {
+			thumbPath := findOrExtractVideoThumb(videoPath)
+			if err := s.UpdateTrackVideo(t.ID, videoPath, thumbPath); err != nil {
+				log.Printf("scan: video check - error updating video for track %d: %v", t.ID, err)
+			} else {
+				found++
+			}
+		}
+	}
+
+	if cleared > 0 || found > 0 {
+		log.Printf("scan: video consistency - cleared %d stale, found %d new MVs", cleared, found)
+	}
+}
+
+// scanStandaloneMVs scans mediaRoot/MVs/ for standalone video files.
+func scanStandaloneMVs(mediaRoot string, s *store.Store) {
+	mvsDir := filepath.Join(mediaRoot, "MVs")
+	if _, err := os.Stat(mvsDir); os.IsNotExist(err) {
+		return
+	}
+
+	existingVideos, err := s.GetAllVideosMeta()
+	if err != nil {
+		log.Printf("scan: MVs phase - error getting video meta: %v", err)
+		return
+	}
+
+	var totalFound, newCount, skippedCount int
+	var seenPaths []string
+
+	err = filepath.Walk(mvsDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(path))
+		if !VideoExts[ext] {
+			return nil
+		}
+		totalFound++
+		seenPaths = append(seenPaths, path)
+
+		mtime := info.ModTime().Unix()
+		size := info.Size()
+
+		// Check if unchanged
+		if existing, ok := existingVideos[path]; ok {
+			if existing.ModTime == mtime && existing.Size == size {
+				skippedCount++
+				return nil
+			}
+		}
+
+		// Parse artist/title from directory structure: MVs/Artist/filename.ext
+		artist := filepath.Base(filepath.Dir(path))
+		if artist == "MVs" {
+			artist = "" // file directly in MVs/, no artist
+		}
+		title := strings.TrimSuffix(filepath.Base(path), ext)
+
+		duration, _, _ := runFFprobe(path)
+		thumbPath := findOrExtractVideoThumb(path)
+
+		_, upsertErr := s.UpsertVideo(store.Video{
+			Title:           title,
+			Artist:          artist,
+			Path:            path,
+			ThumbPath:       thumbPath,
+			DurationSeconds: duration,
+			Source:          "scan",
+			FileMtime:       mtime,
+			FileSize:        size,
+		})
+		if upsertErr != nil {
+			log.Printf("scan: MVs phase - error upserting video %s: %v", path, upsertErr)
+		} else {
+			newCount++
+		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("scan: MVs phase - error walking directory: %v", err)
+	}
+
+	// Delete detection: standalone scan videos in DB under mvsDir that no longer exist on disk
+	seenSet := make(map[string]bool, len(seenPaths))
+	for _, p := range seenPaths {
+		seenSet[p] = true
+	}
+	dbStandalone, err := s.GetStandaloneVideoPathsByPrefix(mvsDir + string(os.PathSeparator))
+	if err != nil {
+		log.Printf("scan: MVs phase - error querying standalone videos: %v", err)
+	} else {
+		var toDelete []string
+		for _, path := range dbStandalone {
+			if !seenSet[path] {
+				toDelete = append(toDelete, path)
+			}
+		}
+		if len(toDelete) > 0 {
+			if err := s.DeleteVideosByPaths(toDelete); err != nil {
+				log.Printf("scan: MVs phase - error deleting removed videos: %v", err)
+			}
+		}
+	}
+
+	log.Printf("scan: MVs phase - found %d standalone MVs (%d new, %d skipped)",
+		totalFound, newCount, skippedCount)
 }
