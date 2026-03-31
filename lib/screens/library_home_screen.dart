@@ -10,6 +10,7 @@ import 'album_detail_screen.dart';
 import 'albums_screen.dart';
 import 'player_screen.dart';
 import 'producer_detail_screen.dart';
+import 'mv_gallery_screen.dart';
 import 'producers_screen.dart';
 import '../models/album.dart';
 import '../models/producer.dart';
@@ -153,9 +154,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           subtitle: 'Your liked tracks',
         );
       case ShellRoute.localMv:
-        return const _PlaceholderScreen(
-          title: 'Local MV Gallery',
-          subtitle: 'All tracks with local MV',
+        return MvGalleryScreen(
+          onVideoTap: (video) {
+            // TODO: wire up video playback
+          },
         );
     }
   }
