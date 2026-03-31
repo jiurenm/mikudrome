@@ -26,6 +26,10 @@ class Track {
   final String comment; // 备注
   final String albumArtist;
 
+  /// When set, the player uses this URL for video streaming instead of
+  /// computing it from the track ID. Used for standalone MV playback.
+  final String? videoStreamOverrideUrl;
+
   const Track({
     required this.id,
     required this.title,
@@ -50,6 +54,7 @@ class Track {
     this.lyrics = '',
     this.comment = '',
     this.albumArtist = '',
+    this.videoStreamOverrideUrl,
   });
 
   factory Track.fromJson(Map<String, dynamic> json) {
@@ -87,6 +92,7 @@ class Track {
   }
 
   bool get hasVideo => videoPath.isNotEmpty;
+  bool get hasAudio => audioPath.isNotEmpty;
 
   List<String> _splitCredits(String value) {
     return value

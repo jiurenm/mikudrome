@@ -111,9 +111,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   bool get _isVideoMode => widget.playbackMode == PlaybackMode.video;
   bool get _canUseVideoMode => _track.hasVideo;
-  String get _mediaUrl => _isVideoMode
-      ? _api.streamVideoUrl(_track.id)
-      : _api.streamAudioUrl(_track.id);
+  bool get _canSwitchMode => _track.hasVideo && _track.hasAudio;
+  String get _mediaUrl {
+    if (_isVideoMode && _track.videoStreamOverrideUrl != null) {
+      return _track.videoStreamOverrideUrl!;
+    }
+    return _isVideoMode
+        ? _api.streamVideoUrl(_track.id)
+        : _api.streamAudioUrl(_track.id);
+  }
   String get _albumCoverUrl => _coverUrlForTrack(_track);
 
   String _coverUrlForTrack(Track track) =>
@@ -578,7 +584,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           PlayerHeader(
             contextLabel: widget.contextLabel,
             playbackMode: widget.playbackMode,
-            canUseVideoMode: _canUseVideoMode,
+            canUseVideoMode: _canSwitchMode,
             onClose: widget.onClose,
             onChangedMode: widget.onSwitchPlaybackMode,
             onEnterFullscreen: _isVideoMode ? _enterFullscreen : null,
@@ -951,7 +957,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               Expanded(
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: _canUseVideoMode
+                  child: _canSwitchMode
                       ? TextButton.icon(
                           onPressed: () => widget.onSwitchPlaybackMode(
                             _isVideoMode

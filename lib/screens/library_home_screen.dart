@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../api/api.dart';
 import '../models/track.dart';
+import '../models/video.dart';
 import '../services/playback_storage.dart';
 import '../theme/app_theme.dart';
 import '../theme/vocal_theme.dart';
@@ -155,9 +157,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         );
       case ShellRoute.localMv:
         return MvGalleryScreen(
-          onVideoTap: (video) {
-            // TODO: wire up video playback
-          },
+          onVideoTap: _playVideo,
         );
     }
   }
@@ -331,6 +331,39 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       'Producer / ${producer.name}';
   String _mvContextLabel(Producer producer) =>
       'Featured MVs / ${producer.name}';
+
+  Future<void> _playVideo(Video video) async {
+    final api = ApiClient();
+    if (video.hasTrack) {
+      // Track-associated MV: fetch the real Track and play it
+      final track = await api.getTrack(video.trackId!);
+      if (track == null) return;
+      _openPlayerForQueue(
+        track: track,
+        queue: [track],
+        index: 0,
+        contextLabel: 'MV Gallery / ${video.artist}',
+      );
+    } else {
+      // Standalone MV: create a synthetic Track with video stream override
+      final syntheticTrack = Track(
+        id: -video.id, // negative to avoid collision with real tracks
+        title: video.title,
+        audioPath: '',
+        videoPath: 'standalone', // non-empty so hasVideo == true
+        videoThumbPath: video.thumbPath,
+        durationSeconds: video.durationSeconds,
+        artists: video.artist,
+        videoStreamOverrideUrl: api.videoStreamUrl(video.id),
+      );
+      _openPlayerForQueue(
+        track: syntheticTrack,
+        queue: [syntheticTrack],
+        index: 0,
+        contextLabel: 'MV Gallery / ${video.artist}',
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
