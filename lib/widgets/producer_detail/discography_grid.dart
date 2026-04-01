@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/album.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 
 class DiscographyGrid extends StatelessWidget {
   const DiscographyGrid({
@@ -23,21 +24,25 @@ class DiscographyGrid extends StatelessWidget {
             ),
       );
     }
-    return GridView.count(
+    return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 5,
-      mainAxisSpacing: 32,
-      crossAxisSpacing: 32,
-      childAspectRatio: 0.85,
-      children: albums
-          .map((a) => _AlbumTile(
-                coverUrl: a.coverUrl,
-                title: a.title,
-                subtitle: '${a.trackCount} Tracks',
-                onTap: () => onAlbumTap(a),
-              ))
-          .toList(),
+      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 160,
+        mainAxisSpacing: isMobile(context) ? 16 : 32,
+        crossAxisSpacing: isMobile(context) ? 16 : 32,
+        childAspectRatio: 0.85,
+      ),
+      itemCount: albums.length,
+      itemBuilder: (context, index) {
+        final a = albums[index];
+        return _AlbumTile(
+          coverUrl: a.coverUrl,
+          title: a.title,
+          subtitle: '${a.trackCount} Tracks',
+          onTap: () => onAlbumTap(a),
+        );
+      },
     );
   }
 }

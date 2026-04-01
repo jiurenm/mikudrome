@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../api/api.dart';
 import '../../models/track.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 
 class FeaturedMvsGrid extends StatelessWidget {
   const FeaturedMvsGrid({
@@ -39,28 +40,27 @@ class FeaturedMvsGrid extends StatelessWidget {
                 ),
           )
         else
-          GridView.count(
+          GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 3,
-            mainAxisSpacing: 24,
-            crossAxisSpacing: 24,
-            childAspectRatio: 16 / 9,
-            children: tracks
-                .asMap()
-                .entries
-                .map(
-                  (entry) => _MvCard(
-                    imageUrl: entry.value.videoThumbPath.isNotEmpty
-                        ? ApiClient(baseUrl: baseUrl)
-                            .streamThumbUrl(entry.value.id)
-                        : '',
-                    title: entry.value.title,
-                    subtitle: 'Local MV',
-                    onTap: () => onPlay(entry.value, entry.key),
-                  ),
-                )
-                .toList(),
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 300,
+              mainAxisSpacing: isMobile(context) ? 12 : 24,
+              crossAxisSpacing: isMobile(context) ? 12 : 24,
+              childAspectRatio: 16 / 9,
+            ),
+            itemCount: tracks.length,
+            itemBuilder: (context, index) {
+              final track = tracks[index];
+              return _MvCard(
+                imageUrl: track.videoThumbPath.isNotEmpty
+                    ? ApiClient(baseUrl: baseUrl).streamThumbUrl(track.id)
+                    : '',
+                title: track.title,
+                subtitle: 'Local MV',
+                onTap: () => onPlay(track, index),
+              );
+            },
           ),
       ],
     );

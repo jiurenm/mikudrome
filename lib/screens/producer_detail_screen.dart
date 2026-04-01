@@ -7,6 +7,7 @@ import '../models/album.dart';
 import '../models/producer.dart';
 import '../models/track.dart';
 import '../theme/app_theme.dart';
+import '../utils/responsive.dart';
 import '../widgets/producer_detail/discography_grid.dart';
 import '../widgets/producer_detail/featured_mvs_grid.dart';
 import '../widgets/producer_detail/producer_hero_section.dart';
@@ -19,12 +20,14 @@ class ProducerDetailScreen extends StatefulWidget {
     super.key,
     required this.producer,
     this.baseUrl = '',
+    this.onBack,
     this.onAlbumTap,
     this.onPlayTrack,
   });
 
   final Producer producer;
   final String baseUrl;
+  final VoidCallback? onBack;
   String get _effectiveBaseUrl =>
       baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
   final ValueChanged<Album>? onAlbumTap;
@@ -97,6 +100,18 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
           Expanded(
             child: CustomScrollView(
               slivers: [
+                if (isMobile(context) && widget.onBack != null)
+                  SliverAppBar(
+                    backgroundColor: Colors.transparent,
+                    pinned: false,
+                    floating: true,
+                    leading: IconButton(
+                      icon: const Icon(Icons.arrow_back),
+                      onPressed: widget.onBack,
+                    ),
+                    title: Text(_displayProducer.name,
+                        style: const TextStyle(fontSize: 16)),
+                  ),
                 SliverToBoxAdapter(
                   child: ProducerHeroSection(
                     producer: _displayProducer,
@@ -136,7 +151,7 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                   )
                 else
                   SliverPadding(
-                    padding: const EdgeInsets.all(48),
+                    padding: EdgeInsets.all(isMobile(context) ? 16 : 48),
                     sliver: _tabIndex == 0
                         ? SliverList(
                             delegate: SliverChildListDelegate([
