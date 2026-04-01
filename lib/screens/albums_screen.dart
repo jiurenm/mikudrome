@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/album.dart';
 import '../api/api.dart';
 import '../theme/app_theme.dart';
+import '../utils/responsive.dart';
 import '../widgets/auto_scroll_text.dart';
 import 'album_detail_screen.dart';
 
@@ -60,6 +61,58 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
     super.dispose();
   }
 
+  Widget _buildHeader(BuildContext context, int albumCount) {
+    final titleWidget = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Albums',
+          style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                color: AppTheme.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Total $albumCount albums',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppTheme.textMuted,
+              ),
+        ),
+      ],
+    );
+
+    final searchWidget = TextField(
+      controller: _searchController,
+      decoration: const InputDecoration(
+        hintText: 'Search producers, songs...',
+        prefixIcon: Icon(Icons.search, color: AppTheme.textMuted, size: 18),
+      ),
+      style: const TextStyle(fontSize: 14),
+      onChanged: (_) => setState(() {}),
+    );
+
+    if (isMobile(context)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          titleWidget,
+          const SizedBox(height: 12),
+          SizedBox(width: double.infinity, child: searchWidget),
+        ],
+      );
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        titleWidget,
+        SizedBox(width: 264, child: searchWidget),
+      ],
+    );
+  }
+
   List<Album> get _filteredAlbums {
     final q = _searchController.text.trim().toLowerCase();
     if (q.isEmpty) return _albums;
@@ -95,47 +148,11 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.all(32),
+            padding: EdgeInsets.all(isMobile(context) ? 12.0 : 32.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Albums',
-                          style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                                color: AppTheme.textPrimary,
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Total ${list.length} albums',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppTheme.textMuted,
-                              ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(
-                      width: 264,
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: const InputDecoration(
-                          hintText: 'Search producers, songs...',
-                          prefixIcon: Icon(Icons.search, color: AppTheme.textMuted, size: 18),
-                        ),
-                        style: const TextStyle(fontSize: 14),
-                        onChanged: (_) => setState(() {}),
-                      ),
-                    ),
-                  ],
-                ),
+                _buildHeader(context, list.length),
               ],
             ),
           ),
