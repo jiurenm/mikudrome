@@ -7,6 +7,7 @@ import '../models/album.dart';
 import '../models/producer.dart';
 import '../models/track.dart';
 import '../theme/app_theme.dart';
+import '../utils/responsive.dart';
 import '../widgets/album_detail/album_action_bar.dart';
 import '../widgets/album_detail/album_hero_section.dart';
 import '../widgets/album_detail/album_track_list.dart';
@@ -69,6 +70,7 @@ class AlbumDetailScreen extends StatefulWidget {
     super.key,
     required this.album,
     this.baseUrl = '',
+    this.onBack,
     this.onProducerTap,
     this.onPlayTrack,
     this.currentPlayingTrackId,
@@ -77,6 +79,7 @@ class AlbumDetailScreen extends StatefulWidget {
 
   final Album album;
   final String baseUrl;
+  final VoidCallback? onBack;
   String get _effectiveBaseUrl =>
       baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
   final ValueChanged<Producer>? onProducerTap;
@@ -151,6 +154,18 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
           Expanded(
             child: CustomScrollView(
               slivers: [
+                if (isMobile(context) && widget.onBack != null)
+                  SliverAppBar(
+                    backgroundColor: Colors.transparent,
+                    pinned: false,
+                    floating: true,
+                    leading: IconButton(
+                      icon: const Icon(Icons.arrow_back),
+                      onPressed: widget.onBack,
+                    ),
+                    title: Text(widget.album.title,
+                        style: const TextStyle(fontSize: 16)),
+                  ),
                 SliverToBoxAdapter(
                   child: AlbumHeroSection(
                     album: widget.album,
