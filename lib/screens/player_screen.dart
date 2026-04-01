@@ -13,6 +13,7 @@ import '../services/web_media_session.dart';
 import '../services/web_media_session_contract.dart';
 import '../theme/app_theme.dart';
 import '../theme/vocal_theme.dart';
+import '../utils/responsive.dart';
 import '../widgets/player/asset_slider_thumb_shape.dart';
 import '../widgets/player_screen_parts.dart';
 import 'library_home_screen.dart';
@@ -507,6 +508,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _toggleQueue() {
+    if (isMobile(context)) {
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: AppTheme.mikuDark,
+        builder: (_) => SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.6,
+          child: QueuePanel(
+            contextLabel: widget.contextLabel,
+            queue: widget.queue,
+            currentIndex: widget.currentIndex,
+            isVideoMode: _isVideoMode,
+            coverUrlForTrack: _coverUrlForTrack,
+            onSelectTrack: widget.onSelectTrack,
+          ),
+        ),
+      );
+      return;
+    }
     setState(() {
       _showQueue = !_showQueue;
     });
@@ -533,7 +552,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget build(BuildContext context) {
     final accentColor = VocalThemeProvider.of(context);
     final width = MediaQuery.sizeOf(context).width;
-    final queueVisible = _showQueue && width >= (_isVideoMode ? 1280 : 1440);
+    final queueVisible = !isMobile(context) && _showQueue && width >= (_isVideoMode ? 1280 : 1440);
     final queuePanelWidth = _isVideoMode ? 320.0 : 280.0;
 
     if (_isFullscreen && _isVideoMode) {
