@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import '../utils/responsive.dart';
+import 'mobile_bottom_nav.dart';
 import 'sidebar.dart';
 import 'now_playing_bar.dart';
 
@@ -56,6 +58,23 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    if (isMobile(context)) {
+      // Mobile layout: content + bottom tab bar only.
+      // NowPlayingBar is NOT rendered here (replaced by MobilePlayerSheet
+      // in LibraryHomeScreen). Sidebar is not rendered.
+      return Scaffold(
+        backgroundColor: AppTheme.mikuDark,
+        body: widget.child,
+        bottomNavigationBar: SafeArea(
+          child: MobileBottomNav(
+            currentRoute: widget.currentRoute,
+            onNavigate: widget.onNavigate ?? (_) {},
+          ),
+        ),
+      );
+    }
+
+    // --- existing desktop layout below (unchanged) ---
     final collapsed = _sidebarCollapsed(context);
     return Scaffold(
       backgroundColor: AppTheme.mikuDark,
