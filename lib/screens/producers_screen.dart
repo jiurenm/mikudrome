@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api/api.dart';
 import '../models/producer.dart';
 import '../theme/app_theme.dart';
+import '../utils/responsive.dart';
 import 'producer_detail_screen.dart';
 
 /// Producers index: grid of circular avatars + stats, alphabet scroller (miku_produce.html).
@@ -81,11 +82,13 @@ class _ProducersScreenState extends State<ProducersScreen> {
       );
     }
     final list = _producers;
+    final mobile = isMobile(context);
+    final edgePad = mobile ? 12.0 : 40.0;
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(40, 40, 40, 48),
+            padding: EdgeInsets.fromLTRB(edgePad, edgePad, edgePad, mobile ? 24 : 48),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -136,12 +139,12 @@ class _ProducersScreenState extends State<ProducersScreen> {
           ),
         ),
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(40, 0, 40, 40),
+          padding: EdgeInsets.fromLTRB(edgePad, 0, edgePad, edgePad),
           sliver: SliverGrid(
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 180,
-              mainAxisSpacing: 40,
-              crossAxisSpacing: 40,
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: mobile ? 140 : 180,
+              mainAxisSpacing: mobile ? 16 : 40,
+              crossAxisSpacing: mobile ? 12 : 40,
               childAspectRatio: 0.75,
             ),
             delegate: SliverChildBuilderDelegate(
