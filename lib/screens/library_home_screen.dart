@@ -18,6 +18,9 @@ import 'mv_gallery_screen.dart';
 import 'producers_screen.dart';
 import '../models/album.dart';
 import '../models/producer.dart';
+import '../utils/responsive.dart';
+import '../widgets/mobile_player_sheet.dart';
+import '../widgets/mobile_more_screen.dart';
 
 enum PlaybackMode { video, audio }
 
@@ -126,6 +129,14 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   }
 
   Widget _contentForRoute(ShellRoute route) {
+    // On mobile, nasFolders is the sentinel for "More" tab
+    if (isMobile(context) && route == ShellRoute.nasFolders) {
+      return MobileMoreScreen(
+        onNavigate: (r) => setState(() {
+          _route = r;
+        }),
+      );
+    }
     switch (route) {
       case ShellRoute.albums:
         return AlbumsScreen(
@@ -406,6 +417,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final currentTrack = _currentTrack;
+    final mobile = isMobile(context);
+
     Widget mainContent;
     if (_selectedAlbum != null) {
       mainContent = AlbumDetailScreen(
@@ -447,6 +460,68 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       mainContent = _contentForRoute(_route);
     }
 
+    // --- Branch: Mobile vs Desktop ---
+    if (mobile) {
+      // Mobile: AppShell(child: mainContent) + MobilePlayerSheet overlay
+      final bottomPadding = MediaQuery.of(context).padding.bottom + 56;
+
+      final appShell = AppShell(
+        currentRoute: _route,
+        forceSidebarCollapsed: false,
+        onNavigate: (r) => setState(() {
+          _route = r;
+          _selectedAlbum = null;
+          _selectedProducer = null;
+        }),
+        nowPlayingBar: const SizedBox.shrink(),
+        child: mainContent,
+      );
+
+      return VocalThemeProvider(
+        track: currentTrack,
+        child: Stack(
+          children: [
+            appShell,
+            if (currentTrack != null && !_restoredNotStarted)
+              MobilePlayerSheet(
+                track: currentTrack,
+                coverUrl: ApiClient(baseUrl: ApiConfig.defaultBaseUrl)
+                    .albumCoverUrl(currentTrack.albumId.toString()),
+                isPlaying: _isPlaying,
+                progress: _playbackProgress,
+                onPlayPause: _togglePlayback,
+                bottomPadding: bottomPadding,
+                playerBuilder: (onClose) => PlayerScreen(
+                  track: currentTrack,
+                  queue: _playerQueue,
+                  currentIndex: _playerIndex,
+                  contextLabel: _playerContextLabel,
+                  playbackMode: _playbackMode,
+                  onSelectTrack: (index) => _selectPlayerTrack(index),
+                  onPrevious: _playPrevious,
+                  onNext: _playNext,
+                  onClose: onClose,
+                  onSwitchPlaybackMode: _switchPlaybackMode,
+                  playbackOrderMode: _playbackOrderMode,
+                  onCyclePlaybackOrderMode: _cyclePlaybackOrderMode,
+                  onPlaybackStateChanged: _updatePlaybackUi,
+                  onControlsReady: ({required togglePlayback, required seekToFraction}) {
+                    _registerPlayerControls(
+                        togglePlayback: togglePlayback,
+                        seekToFraction: seekToFraction);
+                    _resumeProgress = null;
+                  },
+                  initialProgress: _resumeProgress,
+                  onVideoControllerChanged: _onVideoControllerChanged,
+                  renderVideo: true,
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
+    // --- Desktop: EXISTING layout (unchanged) ---
     final content = Stack(
       fit: StackFit.expand,
       children: [
