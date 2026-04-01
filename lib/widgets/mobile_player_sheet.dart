@@ -109,9 +109,11 @@ class _MobilePlayerSheetState extends State<MobilePlayerSheet>
             color: AppTheme.mikuDark,
             child: Column(
               children: [
-                // Mini player bar — visible only when collapsed
-                if (!isExpanded)
-                  GestureDetector(
+                // Mini player bar — always in the tree, hidden via Offstage
+                // when expanded to keep Column children stable.
+                Offstage(
+                  offstage: isExpanded,
+                  child: GestureDetector(
                     onVerticalDragUpdate: _handleDragUpdate,
                     onVerticalDragEnd: _handleDragEnd,
                     child: MobileMiniPlayer(
@@ -123,24 +125,29 @@ class _MobilePlayerSheetState extends State<MobilePlayerSheet>
                       onPlayPause: widget.onPlayPause,
                     ),
                   ),
-                // Player — always mounted, hidden when collapsed via Offstage
+                ),
+                // Player — always mounted with consistent widget types.
+                // GestureDetector stays in tree; IgnorePointer disables
+                // drag when collapsed so offstage player can't intercept.
                 Expanded(
-                  child: isExpanded
-                      ? GestureDetector(
-                          onVerticalDragUpdate: _handleDragUpdate,
-                          onVerticalDragEnd: _handleDragEnd,
-                          child: widget.playerBuilder(_collapse),
-                        )
-                      : Offstage(
-                          offstage: true,
-                          child: widget.playerBuilder(_collapse),
-                        ),
+                  child: GestureDetector(
+                    onVerticalDragUpdate:
+                        isExpanded ? _handleDragUpdate : null,
+                    onVerticalDragEnd: isExpanded ? _handleDragEnd : null,
+                    child: Offstage(
+                      offstage: !isExpanded,
+                      child: child!,
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
         );
       },
+      // Build playerBuilder once as `child` — AnimatedBuilder preserves
+      // the child across rebuilds, preventing PlayerScreen recreation.
+      child: widget.playerBuilder(_collapse),
     );
   }
 }

@@ -227,16 +227,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Future<void> _initializeController() async {
     final previous = _controller;
+    _controller = null;
+
+    _detachControllerListener(previous);
+    if (previous != null) {
+      widget.onVideoControllerChanged?.call(null);
+      await previous.dispose();
+    }
+
     if (mounted) {
       setState(() {
         _isInitializing = true;
         _error = null;
       });
-    }
-
-    _detachControllerListener(previous);
-    if (previous != null) {
-      widget.onVideoControllerChanged?.call(null);
     }
 
     final controller = VideoPlayerController.networkUrl(Uri.parse(_mediaUrl));
@@ -274,8 +277,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
         _isInitializing = false;
         _error = e.toString();
       });
-    } finally {
-      await previous?.dispose();
     }
   }
 
