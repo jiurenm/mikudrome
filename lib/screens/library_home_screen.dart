@@ -491,6 +491,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
                 progress: _playbackProgress,
                 onPlayPause: _togglePlayback,
                 bottomPadding: bottomPadding,
+                expanded: _showPlayer,
+                onExpandedChanged: (expanded) => setState(() {
+                  _showPlayer = expanded;
+                }),
                 playerBuilder: (onClose) => PlayerScreen(
                   track: currentTrack,
                   queue: _playerQueue,

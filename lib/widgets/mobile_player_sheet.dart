@@ -14,6 +14,8 @@ class MobilePlayerSheet extends StatefulWidget {
     required this.onPlayPause,
     required this.bottomPadding,
     required this.playerBuilder,
+    this.expanded = false,
+    this.onExpandedChanged,
   });
 
   final Track track;
@@ -23,6 +25,8 @@ class MobilePlayerSheet extends StatefulWidget {
   final VoidCallback onPlayPause;
   final double bottomPadding; // Tab bar height + safe area
   final Widget Function(VoidCallback onClose) playerBuilder;
+  final bool expanded;
+  final ValueChanged<bool>? onExpandedChanged;
 
   @override
   State<MobilePlayerSheet> createState() => _MobilePlayerSheetState();
@@ -38,7 +42,21 @@ class _MobilePlayerSheetState extends State<MobilePlayerSheet>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
+      value: widget.expanded ? 1.0 : 0.0,
     );
+  }
+
+  @override
+  void didUpdateWidget(MobilePlayerSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // React to external expanded state changes (e.g. user taps play on a track)
+    if (widget.expanded != oldWidget.expanded) {
+      if (widget.expanded) {
+        _controller.forward();
+      } else {
+        _controller.reverse();
+      }
+    }
   }
 
   @override
@@ -49,10 +67,12 @@ class _MobilePlayerSheetState extends State<MobilePlayerSheet>
 
   void _expand() {
     _controller.forward();
+    widget.onExpandedChanged?.call(true);
   }
 
   void _collapse() {
     _controller.reverse();
+    widget.onExpandedChanged?.call(false);
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
@@ -79,26 +99,44 @@ class _MobilePlayerSheetState extends State<MobilePlayerSheet>
       animation: _controller,
       builder: (context, child) {
         final top = collapsedTop * (1 - _controller.value);
+        final isExpanded = _controller.value > 0.1;
         return Positioned(
           top: top,
           left: 0,
           right: 0,
           bottom: 0,
-          child: GestureDetector(
-            onVerticalDragUpdate: _handleDragUpdate,
-            onVerticalDragEnd: _handleDragEnd,
-            child: Material(
-              color: AppTheme.mikuDark,
-              child: _controller.value < 0.1
-                  ? MobileMiniPlayer(
+          child: Material(
+            color: AppTheme.mikuDark,
+            child: Column(
+              children: [
+                // Mini player bar — visible only when collapsed
+                if (!isExpanded)
+                  GestureDetector(
+                    onVerticalDragUpdate: _handleDragUpdate,
+                    onVerticalDragEnd: _handleDragEnd,
+                    child: MobileMiniPlayer(
                       track: widget.track,
                       coverUrl: widget.coverUrl,
                       isPlaying: widget.isPlaying,
                       progress: widget.progress,
                       onTap: _expand,
                       onPlayPause: widget.onPlayPause,
-                    )
-                  : widget.playerBuilder(_collapse),
+                    ),
+                  ),
+                // Player — always mounted, hidden when collapsed via Offstage
+                Expanded(
+                  child: isExpanded
+                      ? GestureDetector(
+                          onVerticalDragUpdate: _handleDragUpdate,
+                          onVerticalDragEnd: _handleDragEnd,
+                          child: widget.playerBuilder(_collapse),
+                        )
+                      : Offstage(
+                          offstage: true,
+                          child: widget.playerBuilder(_collapse),
+                        ),
+                ),
+              ],
             ),
           ),
         );
