@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/track.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 
 class AlbumActionBar extends StatelessWidget {
   const AlbumActionBar({
@@ -17,8 +18,10 @@ class AlbumActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mobile = isMobile(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+      padding: EdgeInsets.symmetric(
+          horizontal: mobile ? 16 : 40, vertical: mobile ? 16 : 24),
       child: Row(
         children: [
           FilledButton.icon(

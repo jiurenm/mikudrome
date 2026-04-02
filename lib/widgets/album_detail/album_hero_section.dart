@@ -208,28 +208,17 @@ class AlbumHeroSection extends StatelessWidget {
                 ),
           ),
           const SizedBox(height: 12),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              if (album.producerName.isNotEmpty) _buildProducerRow(context),
-              if (year > 0)
-                Text(
-                  '• $year',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppTheme.textMuted,
-                      ),
+          if (album.producerName.isNotEmpty) _buildProducerRow(context),
+          const SizedBox(height: 6),
+          Text(
+            [
+              if (year > 0) '$year',
+              '${album.trackCount} Songs',
+              if (durationStr.isNotEmpty) durationStr,
+            ].join(' · '),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppTheme.textMuted,
                 ),
-              Text(
-                durationStr.isNotEmpty
-                    ? '• ${album.trackCount} Songs, $durationStr'
-                    : '• ${album.trackCount} Songs',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppTheme.textMuted,
-                    ),
-              ),
-            ],
           ),
         ],
       ),

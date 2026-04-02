@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/track.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import 'album_track_row.dart';
 
 class AlbumTrackList extends StatelessWidget {
@@ -30,8 +31,9 @@ class AlbumTrackList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mobile = isMobile(context);
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(40, 0, 40, 80),
+      padding: EdgeInsets.fromLTRB(mobile ? 8 : 40, 0, mobile ? 8 : 40, 80),
       sliver: SliverList(
         delegate: SliverChildListDelegate([
           if (isMultiDisc)
@@ -49,7 +51,7 @@ class AlbumTrackList extends StatelessWidget {
                         ),
                   ),
                 ),
-                const _TrackListHeader(),
+                if (!mobile) const _TrackListHeader(),
                 ...discTracks.asMap().entries.map(
                       (e) => AlbumTrackRow(
                         index: e.key + 1,
@@ -67,7 +69,7 @@ class AlbumTrackList extends StatelessWidget {
               ];
             })
           else ...[
-            const _TrackListHeader(),
+            if (!mobile) const _TrackListHeader(),
             ...tracks.asMap().entries.map(
                   (e) => AlbumTrackRow(
                     index: e.key + 1,

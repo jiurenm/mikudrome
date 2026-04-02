@@ -92,6 +92,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool _isFullscreen = false;
   bool _showFullscreenChrome = true;
   bool _showLyrics = true;
+  bool _mobileDefaultApplied = false;
   List<TimedLyricLine> _timedLyrics = const [];
   int _activeLyricIndex = -1;
   Timer? _fullscreenChromeTimer;
@@ -180,6 +181,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _syncMediaSessionMetadata();
       _syncMediaSessionPlaybackState();
       _isInitializing = false;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_mobileDefaultApplied) {
+      _mobileDefaultApplied = true;
+      if (isMobile(context)) {
+        _showLyrics = false;
+      }
     }
   }
 
@@ -556,6 +568,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final queueVisible = !isMobile(context) && _showQueue && width >= (_isVideoMode ? 1280 : 1440);
     final queuePanelWidth = _isVideoMode ? 320.0 : 280.0;
 
+    if (isMobile(context) && !_isFullscreen) {
+      return _buildMobileLayout(context, accentColor);
+    }
+
     if (_isFullscreen && _isVideoMode) {
       return Scaffold(
         backgroundColor: Colors.black,
@@ -803,6 +819,266 @@ class _PlayerScreenState extends State<PlayerScreen> {
           ),
           _buildFooter(context),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMobileLayout(BuildContext context, Color accentColor) {
+    final duration = _duration;
+    final position = _position > duration ? duration : _position;
+    final progress = duration.inMilliseconds == 0
+        ? 0.0
+        : position.inMilliseconds / duration.inMilliseconds;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF1A1A1A),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              accentColor.withValues(alpha: 0.15),
+              const Color(0xFF1A1A1A),
+            ],
+          ),
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              // Header: back + title + mode switcher
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: widget.onClose,
+                      icon: const Icon(Icons.keyboard_arrow_down,
+                          color: AppTheme.textPrimary, size: 28),
+                    ),
+                    Expanded(
+                      child: Text(
+                        widget.contextLabel,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppTheme.textMuted,
+                            ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (_canSwitchMode)
+                      IconButton(
+                        onPressed: () => widget.onSwitchPlaybackMode(
+                          _isVideoMode
+                              ? PlaybackMode.audio
+                              : PlaybackMode.video,
+                        ),
+                        icon: Icon(
+                          _isVideoMode ? Icons.music_note : Icons.movie,
+                          color: accentColor,
+                          size: 22,
+                        ),
+                      )
+                    else
+                      const SizedBox(width: 48),
+                  ],
+                ),
+              ),
+              // Media area (cover / video)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
+                child: _isVideoMode
+                    ? _buildVideoArea(context)
+                    : SizedBox(
+                        width: screenWidth * 0.7,
+                        height: screenWidth * 0.7,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: _isInitializing
+                              ? Center(
+                                  child: CircularProgressIndicator(
+                                      color: accentColor))
+                              : _error != null
+                                  ? Container(
+                                      color: AppTheme.cardBg,
+                                      child: const Icon(Icons.error_outline,
+                                          color: Colors.redAccent, size: 48),
+                                    )
+                                  : _albumCoverUrl.isNotEmpty
+                                      ? Image.network(
+                                          _albumCoverUrl,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                              _audioPlaceholder(),
+                                        )
+                                      : _audioPlaceholder(),
+                        ),
+                      ),
+              ),
+              // Track title + vocal
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                child: Column(
+                  children: [
+                    Text(
+                      _track.title,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: AppTheme.textPrimary,
+                            fontWeight: FontWeight.w900,
+                          ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _queueSubtitle,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppTheme.textMuted,
+                          ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              // Progress bar
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  children: [
+                    SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        activeTrackColor: accentColor,
+                        inactiveTrackColor: Colors.grey.shade800,
+                        thumbColor: accentColor,
+                        overlayColor: accentColor.withValues(alpha: 0.15),
+                        trackHeight: 3,
+                        thumbShape: const AssetSliderThumbShape(
+                          image: AssetImage('lib/assets/thumb.png'),
+                          size: 14,
+                        ),
+                      ),
+                      child: Slider(
+                        value: progress.clamp(0.0, 1.0),
+                        onChanged: duration == Duration.zero ? null : _seekTo,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _formatDuration(position),
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(color: AppTheme.textMuted),
+                          ),
+                          Text(
+                            _formatDuration(duration),
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(color: AppTheme.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Controls
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildPlaybackOrderButton(
+                        baseColor: AppTheme.textMuted,
+                        accentColor: accentColor),
+                    IconButton(
+                      icon: const Icon(Icons.skip_previous, size: 32),
+                      onPressed: _hasPrevious ? widget.onPrevious : null,
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        _isPlaying
+                            ? Icons.pause_circle_filled
+                            : Icons.play_circle_fill,
+                        size: 56,
+                        color: accentColor,
+                      ),
+                      onPressed: _togglePlayback,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.skip_next, size: 32),
+                      onPressed: _hasNext ? widget.onNext : null,
+                    ),
+                    IconButton(
+                      onPressed: _toggleQueue,
+                      icon: const Icon(
+                        Icons.queue_music,
+                        size: 26,
+                        color: AppTheme.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Lyrics toggle + lyrics area
+              if (_hasTimedLyrics || _track.lyrics.trim().isNotEmpty) ...[
+                const SizedBox(height: 4),
+                GestureDetector(
+                  onTap: () => setState(() => _showLyrics = !_showLyrics),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          _showLyrics
+                              ? Icons.keyboard_arrow_down
+                              : Icons.keyboard_arrow_up,
+                          size: 16,
+                          color: AppTheme.textMuted,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _showLyrics ? '隐藏歌词' : '显示歌词',
+                          style:
+                              Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: AppTheme.textMuted,
+                                  ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_showLyrics)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: LyricsSection(
+                        lyrics: _track.lyrics,
+                        timedLyrics: _timedLyrics,
+                        activeIndex:
+                            _hasTimedLyrics ? _activeLyricIndex : -1,
+                      ),
+                    ),
+                  )
+                else
+                  const Spacer(),
+              ] else
+                const Spacer(),
+            ],
+          ),
+        ),
       ),
     );
   }
