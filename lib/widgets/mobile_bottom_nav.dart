@@ -17,12 +17,10 @@ class MobileBottomNav extends StatelessWidget {
     switch (route) {
       case ShellRoute.albums:
         return 0;
-      case ShellRoute.producers:
+      case ShellRoute.localMv:
         return 1;
-      case ShellRoute.vocalists:
-        return 2;
       default:
-        return 3;
+        return 0;
     }
   }
 
@@ -36,13 +34,7 @@ class MobileBottomNav extends StatelessWidget {
             onNavigate(ShellRoute.albums);
             break;
           case 1:
-            onNavigate(ShellRoute.producers);
-            break;
-          case 2:
-            onNavigate(ShellRoute.vocalists);
-            break;
-          case 3:
-            onNavigate(ShellRoute.nasFolders);
+            onNavigate(ShellRoute.localMv);
             break;
         }
       },
@@ -58,16 +50,8 @@ class MobileBottomNav extends StatelessWidget {
           label: 'Albums',
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.person),
-          label: 'Producers',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.mic),
-          label: 'Vocalists',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.more_horiz),
-          label: 'More',
+          icon: Icon(Icons.movie_outlined),
+          label: 'MV Gallery',
         ),
       ],
     );
