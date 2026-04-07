@@ -17,11 +17,6 @@ class MobileMoreScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 16),
       children: [
         _MoreItem(
-          icon: Icons.folder_outlined,
-          label: 'NAS Folders',
-          onTap: () => onNavigate(ShellRoute.nasFolders),
-        ),
-        _MoreItem(
           icon: Icons.favorite_outline,
           label: 'Favorites',
           onTap: () => onNavigate(ShellRoute.favorites),

@@ -19,6 +19,11 @@ abstract final class ApiEndpoints {
   static String producer(int id) => '$_prefix/producers/$id';
   static String producerAvatar(int id) => '$_prefix/producers/$id/avatar';
 
+  // Vocalists
+  static const String vocalists = '$_prefix/vocalists';
+  static String vocalistTracks(String name) =>
+      '$_prefix/vocalists/${Uri.encodeComponent(name)}/tracks';
+
   // Stream (audio / video / thumb)
   static String streamAudio(int trackId) => '$_prefix/stream/$trackId/audio';
   static String streamVideo(int trackId) => '$_prefix/stream/$trackId/video';

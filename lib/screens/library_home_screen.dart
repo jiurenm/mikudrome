@@ -16,8 +16,11 @@ import 'player_screen.dart';
 import 'producer_detail_screen.dart';
 import 'mv_gallery_screen.dart';
 import 'producers_screen.dart';
+import 'vocalist_detail_screen.dart';
+import 'vocalists_screen.dart';
 import '../models/album.dart';
 import '../models/producer.dart';
+import '../models/vocalist.dart';
 import '../utils/responsive.dart';
 import '../widgets/mobile_player_sheet.dart';
 import '../widgets/mobile_more_screen.dart';
@@ -41,6 +44,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   ShellRoute _route = ShellRoute.albums;
   Album? _selectedAlbum;
   Producer? _selectedProducer;
+  Vocalist? _selectedVocalist;
   List<Track> _playerQueue = const [];
   int _playerIndex = 0;
   bool _showPlayer = false;
@@ -129,8 +133,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   }
 
   Widget _contentForRoute(ShellRoute route) {
-    // On mobile, nasFolders is the sentinel for "More" tab
-    if (isMobile(context) && route == ShellRoute.nasFolders) {
+    // On mobile, 'more' is the sentinel for the "More" tab
+    if (isMobile(context) && route == ShellRoute.more) {
       return MobileMoreScreen(
         onNavigate: (r) => setState(() {
           _route = r;
@@ -155,14 +159,13 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           }),
         );
       case ShellRoute.vocalists:
-        return const _PlaceholderScreen(
-          title: 'Vocalists',
-          subtitle: 'Browse by vocalist (e.g. 初音ミク)',
-        );
-      case ShellRoute.nasFolders:
-        return const _PlaceholderScreen(
-          title: 'NAS Folders',
-          subtitle: 'Browse by folder structure',
+        return VocalistsScreen(
+          onVocalistTap: (vocalist) => setState(() {
+            _selectedVocalist = vocalist;
+            _selectedAlbum = null;
+            _selectedProducer = null;
+            _showPlayer = false;
+          }),
         );
       case ShellRoute.favorites:
         return const _PlaceholderScreen(
@@ -172,6 +175,12 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       case ShellRoute.localMv:
         return MvGalleryScreen(
           onVideoTap: _playVideo,
+        );
+      case ShellRoute.more:
+        return MobileMoreScreen(
+          onNavigate: (r) => setState(() {
+            _route = r;
+          }),
         );
     }
   }
@@ -350,6 +359,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       'Producer / ${producer.name}';
   String _mvContextLabel(Producer producer) =>
       'Featured MVs / ${producer.name}';
+  String _vocalistContextLabel(Vocalist vocalist) =>
+      'Vocalist / ${vocalist.name}';
 
   Future<void> _playVideo(Video video) async {
     final api = ApiClient();
@@ -456,6 +467,22 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
               : _producerContextLabel(_selectedProducer!),
         ),
       );
+    } else if (_selectedVocalist != null) {
+      mainContent = VocalistDetailScreen(
+        vocalist: _selectedVocalist!,
+        onAlbumTap: (album) => setState(() {
+          _selectedAlbum = album;
+          _selectedVocalist = null;
+          _route = ShellRoute.albums;
+          _showPlayer = false;
+        }),
+        onPlayTrack: (track, queue, index) => _openPlayerForQueue(
+          track: track,
+          queue: queue,
+          index: index,
+          contextLabel: _vocalistContextLabel(_selectedVocalist!),
+        ),
+      );
     } else {
       mainContent = _contentForRoute(_route);
     }
@@ -472,6 +499,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           _route = r;
           _selectedAlbum = null;
           _selectedProducer = null;
+          _selectedVocalist = null;
         }),
         nowPlayingBar: const SizedBox.shrink(),
         child: mainContent,
@@ -584,6 +612,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           _route = r;
           _selectedAlbum = null;
           _selectedProducer = null;
+          _selectedVocalist = null;
           _showPlayer = false;
         }),
         nowPlayingBar: _showPlayer

@@ -6,6 +6,7 @@ import '../models/album.dart';
 import '../models/producer.dart';
 import '../models/track.dart';
 import '../models/video.dart';
+import '../models/vocalist.dart';
 import 'config.dart';
 import 'endpoints.dart';
 
@@ -122,6 +123,40 @@ class ApiClient {
         .map((e) => Track.fromJson(e as Map<String, dynamic>))
         .toList();
     return (album: album, tracks: tracks);
+  }
+
+  // --- Vocalists ---
+
+  Future<List<Vocalist>> getVocalists() async {
+    final res = await http.get(Uri.parse(_url(ApiEndpoints.vocalists)));
+    if (res.statusCode != 200) {
+      throw ApiException('Failed to load vocalists', res.statusCode);
+    }
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    final list = data['vocalists'] as List<dynamic>? ?? [];
+    return list
+        .map((e) => Vocalist.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<({String name, List<Track> tracks, List<Album> albums})?>
+      getVocalistTracks(String name) async {
+    final res =
+        await http.get(Uri.parse(_url(ApiEndpoints.vocalistTracks(name))));
+    if (res.statusCode == 404) return null;
+    if (res.statusCode != 200) {
+      throw ApiException('Failed to load vocalist tracks', res.statusCode);
+    }
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    final tracksList = data['tracks'] as List<dynamic>? ?? [];
+    final albumsList = data['albums'] as List<dynamic>? ?? [];
+    final tracks = tracksList
+        .map((e) => Track.fromJson(e as Map<String, dynamic>))
+        .toList();
+    final albums = albumsList
+        .map((e) => Album.fromJson(e as Map<String, dynamic>, baseUrl))
+        .toList();
+    return (name: data['name'] as String? ?? name, tracks: tracks, albums: albums);
   }
 
   // --- Videos ---

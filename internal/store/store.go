@@ -3,6 +3,8 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"regexp"
+	"sort"
 	"strings"
 
 	_ "modernc.org/sqlite"
@@ -15,6 +17,13 @@ type Producer struct {
 	TrackCount int    `json:"track_count"`
 	AlbumCount int    `json:"album_count"`
 	AvatarPath string `json:"avatar_path,omitempty"` // artist.jpg in P主 folder
+}
+
+// Vocalist aggregates a unique vocalist name with track and album counts.
+type Vocalist struct {
+	Name       string `json:"name"`
+	TrackCount int    `json:"track_count"`
+	AlbumCount int    `json:"album_count"`
 }
 
 // Album represents an album.
@@ -511,6 +520,135 @@ func (s *Store) GetAlbumsByProducer(id int64) ([]Album, error) {
 		out = append(out, a)
 	}
 	return out, rows.Err()
+}
+
+// ListVocalists returns unique vocalists aggregated from tracks.vocal with track and album counts.
+func (s *Store) ListVocalists() ([]Vocalist, error) {
+	rows, err := s.db.Query(`SELECT vocal, album_id FROM tracks WHERE vocal != ''`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	type counts struct {
+		tracks int
+		albums map[int64]bool
+	}
+	agg := make(map[string]*counts)
+
+	splitRe := regexp.MustCompile(`\s*[;,，；/／]+\s*`)
+	for rows.Next() {
+		var vocal string
+		var albumID int64
+		if err := rows.Scan(&vocal, &albumID); err != nil {
+			return nil, err
+		}
+		parts := splitRe.Split(vocal, -1)
+		for _, name := range parts {
+			name = strings.TrimSpace(name)
+			if name == "" {
+				continue
+			}
+			c, ok := agg[name]
+			if !ok {
+				c = &counts{albums: make(map[int64]bool)}
+				agg[name] = c
+			}
+			c.tracks++
+			if albumID > 0 {
+				c.albums[albumID] = true
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	out := make([]Vocalist, 0, len(agg))
+	for name, c := range agg {
+		out = append(out, Vocalist{Name: name, TrackCount: c.tracks, AlbumCount: len(c.albums)})
+	}
+	// Sort by track count descending, then name ascending
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].TrackCount != out[j].TrackCount {
+			return out[i].TrackCount > out[j].TrackCount
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out, nil
+}
+
+// GetTracksByVocalist returns all tracks featuring the named vocalist.
+func (s *Store) GetTracksByVocalist(name string) ([]Track, error) {
+	rows, err := s.db.Query(
+		`SELECT t.id, t.title, t.audio_path, t.video_path, COALESCE(t.video_thumb_path, ''), COALESCE(t.album_id, 0),
+		 COALESCE(t.disc_number, 1), COALESCE(t.track_number, 0), COALESCE(t.artists, ''), COALESCE(t.year, 0),
+		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''), COALESCE(t.composer, ''), COALESCE(t.lyricist, ''),
+		 COALESCE(t.arranger, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''), COALESCE(t.illustrator, ''),
+		 COALESCE(t.movie, ''), COALESCE(t.source, ''), COALESCE(t.lyrics, ''), COALESCE(t.comment, ''),
+		 COALESCE(a.album_artist, '')
+		 FROM tracks t
+		 LEFT JOIN albums a ON t.album_id = a.id
+		 WHERE t.vocal != ''
+		 ORDER BY t.album_id, t.disc_number, t.track_number, t.title`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	splitRe := regexp.MustCompile(`\s*[;,，；/／]+\s*`)
+	var out []Track
+	for rows.Next() {
+		var t Track
+		if err := rows.Scan(&t.ID, &t.Title, &t.AudioPath, &t.VideoPath, &t.VideoThumbPath, &t.AlbumID,
+			&t.DiscNumber, &t.TrackNumber, &t.Artists, &t.Year, &t.DurationSeconds, &t.Format,
+			&t.Composer, &t.Lyricist, &t.Arranger, &t.Vocal, &t.VoiceManipulator, &t.Illustrator,
+			&t.Movie, &t.Source, &t.Lyrics, &t.Comment, &t.AlbumArtist); err != nil {
+			return nil, err
+		}
+		// Check if this track features the named vocalist
+		parts := splitRe.Split(t.Vocal, -1)
+		for _, part := range parts {
+			if strings.TrimSpace(part) == name {
+				out = append(out, t)
+				break
+			}
+		}
+	}
+	return out, rows.Err()
+}
+
+// GetAlbumsByVocalist returns albums that have tracks featuring the named vocalist.
+func (s *Store) GetAlbumsByVocalist(name string) ([]Album, error) {
+	// First get the track list, then extract unique album IDs
+	tracks, err := s.GetTracksByVocalist(name)
+	if err != nil {
+		return nil, err
+	}
+	albumIDs := make(map[int64]bool)
+	for _, t := range tracks {
+		if t.AlbumID > 0 {
+			albumIDs[t.AlbumID] = true
+		}
+	}
+	if len(albumIDs) == 0 {
+		return nil, nil
+	}
+	var out []Album
+	for id := range albumIDs {
+		a, ok, err := s.GetAlbumByID(id)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			out = append(out, a)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Title < out[j].Title
+	})
+	return out, nil
 }
 
 // Close closes the database.

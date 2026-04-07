@@ -23,6 +23,10 @@ class VocalColors {
     'meiko': const Color(0xFFD80000),
   };
 
+  static Color colorForName(String name) {
+    return _vocalMap[name.toLowerCase()] ?? defaultColor;
+  }
+
   static Color resolveColor(Track track) {
     if (track.albumArtist.isNotEmpty) {
       final groupColor = _groupMap[track.albumArtist.toLowerCase()];

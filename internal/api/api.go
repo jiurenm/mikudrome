@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -90,6 +91,29 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				http.Error(w, "invalid producer id", http.StatusBadRequest)
+			}
+			return
+		}
+	}
+	if r.URL.Path == "/api/vocalists" && r.Method == http.MethodGet {
+		h.listVocalists(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/vocalists/") && r.Method == http.MethodGet {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/api/vocalists/")
+		if trimmed != "" {
+			parts := strings.SplitN(trimmed, "/", 2)
+			vocalistName, err := url.PathUnescape(parts[0])
+			if err != nil {
+				http.Error(w, "invalid vocalist name", http.StatusBadRequest)
+				return
+			}
+			if len(parts) == 2 && parts[1] == "tracks" {
+				h.getVocalistTracks(w, r, vocalistName)
+			} else if len(parts) == 1 {
+				h.getVocalistTracks(w, r, vocalistName)
+			} else {
+				http.NotFound(w, r)
 			}
 			return
 		}
@@ -308,6 +332,35 @@ func (h *Handler) serveProducerAvatar(w http.ResponseWriter, r *http.Request, id
 		return
 	}
 	http.ServeFile(w, r, producer.AvatarPath)
+}
+
+func (h *Handler) listVocalists(w http.ResponseWriter, _ *http.Request) {
+	vocalists, err := h.store.ListVocalists()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"vocalists": vocalists})
+}
+
+func (h *Handler) getVocalistTracks(w http.ResponseWriter, _ *http.Request, name string) {
+	tracks, err := h.store.GetTracksByVocalist(name)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	albums, err := h.store.GetAlbumsByVocalist(name)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"name":   name,
+		"tracks": tracks,
+		"albums": albums,
+	})
 }
 
 func (h *Handler) serveAlbumCover(w http.ResponseWriter, r *http.Request, idStr string) {

@@ -6,7 +6,7 @@ import 'mobile_bottom_nav.dart';
 import 'sidebar.dart';
 import 'now_playing_bar.dart';
 
-enum ShellRoute { albums, producers, vocalists, nasFolders, favorites, localMv }
+enum ShellRoute { albums, producers, vocalists, favorites, localMv, more }
 
 /// Breakpoint for responsive layout: below this width, sidebar starts collapsed
 /// (e.g. tablet/mobile). Can be overridden via [initialSidebarCollapsed].
