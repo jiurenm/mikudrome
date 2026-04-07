@@ -219,14 +219,13 @@ class _VocalistHero extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                width: mobile ? 56 : 80,
-                height: mobile ? 56 : 80,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: color.withValues(alpha: 0.15),
-                  border: Border.all(color: color.withValues(alpha: 0.3), width: 2),
+              CircleAvatar(
+                radius: mobile ? 28 : 40,
+                backgroundColor: color.withValues(alpha: 0.15),
+                foregroundImage: NetworkImage(
+                  ApiClient().vocalistAvatarUrl(vocalist.name),
                 ),
+                onForegroundImageError: (_, __) {},
                 child: Icon(
                   Icons.mic,
                   size: mobile ? 28 : 40,

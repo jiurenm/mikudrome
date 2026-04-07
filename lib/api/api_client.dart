@@ -204,6 +204,10 @@ class ApiClient {
   String producerAvatarUrl(int producerId) =>
       _url(ApiEndpoints.producerAvatar(producerId));
 
+  /// Full URL for vocalist avatar. 404 if not found.
+  String vocalistAvatarUrl(String name) =>
+      _url(ApiEndpoints.vocalistAvatar(name));
+
   // --- DB (optional, for future use) ---
 
   /// URL to download DB backup. Backend: GET /api/db/backup

@@ -160,6 +160,7 @@ class _VocalistCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _colorForName(vocalist.name);
+    final avatarUrl = ApiClient().vocalistAvatarUrl(vocalist.name);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -173,27 +174,49 @@ class _VocalistCard extends StatelessWidget {
               left: BorderSide(color: color, width: 3),
             ),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Row(
             children: [
-              Text(
-                vocalist.name,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: color,
-                      fontWeight: FontWeight.w700,
-                    ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: color.withValues(alpha: 0.2),
+                foregroundImage: NetworkImage(avatarUrl),
+                onForegroundImageError: (_, __) {},
+                child: Text(
+                  vocalist.name.characters.first,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                '${vocalist.trackCount} tracks',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppTheme.textMuted,
-                      fontSize: 11,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      vocalist.name,
+                      style:
+                          Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: color,
+                                fontWeight: FontWeight.w700,
+                              ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${vocalist.trackCount} tracks',
+                      style:
+                          Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: AppTheme.textMuted,
+                                fontSize: 11,
+                              ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

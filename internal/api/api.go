@@ -110,6 +110,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			if len(parts) == 2 && parts[1] == "tracks" {
 				h.getVocalistTracks(w, r, vocalistName)
+			} else if len(parts) == 2 && parts[1] == "avatar" {
+				h.serveVocalistAvatar(w, r, vocalistName)
 			} else if len(parts) == 1 {
 				h.getVocalistTracks(w, r, vocalistName)
 			} else {
@@ -361,6 +363,17 @@ func (h *Handler) getVocalistTracks(w http.ResponseWriter, _ *http.Request, name
 		"tracks": tracks,
 		"albums": albums,
 	})
+}
+
+func (h *Handler) serveVocalistAvatar(w http.ResponseWriter, r *http.Request, name string) {
+	for _, ext := range []string{".jpg", ".png", ".jpeg", ".webp"} {
+		p := filepath.Join(h.mediaRoot, "Vocalists", name, "avatar"+ext)
+		if _, err := os.Stat(p); err == nil {
+			http.ServeFile(w, r, p)
+			return
+		}
+	}
+	http.NotFound(w, r)
 }
 
 func (h *Handler) serveAlbumCover(w http.ResponseWriter, r *http.Request, idStr string) {
