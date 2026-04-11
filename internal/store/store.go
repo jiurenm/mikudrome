@@ -243,10 +243,15 @@ func (s *Store) UpsertProducer(name, avatarPath string) (int64, error) {
 
 // UpsertAlbum inserts or updates an album by title. Returns album ID.
 func (s *Store) UpsertAlbum(title, coverPath string, producerID int64, albumArtist string) (int64, error) {
+	// Use NULL for producer_id when 0, so foreign-key constraints are satisfied.
+	var pid any
+	if producerID != 0 {
+		pid = producerID
+	}
 	_, err := s.db.Exec(
 		`INSERT INTO albums (title, cover_path, producer_id, album_artist) VALUES (?, ?, ?, ?)
 		 ON CONFLICT(title) DO UPDATE SET cover_path=excluded.cover_path, producer_id=excluded.producer_id, album_artist=excluded.album_artist`,
-		title, coverPath, producerID, albumArtist,
+		title, coverPath, pid, albumArtist,
 	)
 	if err != nil {
 		return 0, err
@@ -1024,12 +1029,12 @@ func (b *BatchInserter) Flush() error {
 	// Batch upsert albums
 	for i, a := range b.albums {
 		if _, exists := b.albumCache[a.Title]; !exists {
-			producerID := int64(0)
+			var pid any // NULL when no producer, so FK constraint is satisfied
 			if b.producers[i].Name != "" {
-				producerID = b.producerCache[b.producers[i].Name]
+				pid = b.producerCache[b.producers[i].Name]
 			}
 			result, err := b.tx.Exec(`INSERT OR REPLACE INTO albums (title, cover_path, producer_id, dir_mtime, album_artist) VALUES (?, ?, ?, ?, ?)`,
-				a.Title, a.CoverPath, producerID, 0, a.AlbumArtist)
+				a.Title, a.CoverPath, pid, 0, a.AlbumArtist)
 			if err != nil {
 				return err
 			}

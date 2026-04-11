@@ -41,6 +41,7 @@ func Default() *Config {
 	if wd, err := os.Getwd(); err == nil {
 		c.MediaRoot = filepath.Join(wd, "media")
 		c.WebRoot = filepath.Join(wd, "build", "web")
+		c.PlaylistCoverDir = filepath.Join(wd, "data", "playlist_covers")
 	}
 	return c
 }
