@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/mikudrome/mikudrome/internal/api"
@@ -43,6 +44,15 @@ func main() {
 	if w := os.Getenv("ENABLE_WATCHER"); w != "" {
 		cfg.EnableWatcher = w == "true" || w == "1"
 	}
+	if p := os.Getenv("PLAYLIST_COVER_DIR"); p != "" {
+		cfg.PlaylistCoverDir = p
+	}
+	if cfg.PlaylistCoverDir == "" {
+		cfg.PlaylistCoverDir = filepath.Join(filepath.Dir(cfg.DBPath), "playlist_covers")
+	}
+	if err := os.MkdirAll(cfg.PlaylistCoverDir, 0o755); err != nil {
+		log.Fatalf("mkdir playlist_cover_dir: %v", err)
+	}
 
 	st, err := store.New(cfg.DBPath)
 	if err != nil {
@@ -80,7 +90,7 @@ func main() {
 		select {}
 	}()
 
-	handler := api.New(st, cfg.MediaRoot, cfg.WebRoot, cfg.YtDlpProxy)
+	handler := api.New(st, cfg.MediaRoot, cfg.WebRoot, cfg.YtDlpProxy, cfg.PlaylistCoverDir)
 	log.Printf("listening on %s", cfg.HTTPAddr)
 	if err := http.ListenAndServe(cfg.HTTPAddr, handler); err != nil {
 		log.Fatal(err)

@@ -23,6 +23,9 @@ type Config struct {
 	ScanBatchSize int
 	// EnableWatcher enables automatic file system monitoring for changes.
 	EnableWatcher bool
+	// PlaylistCoverDir is the directory where user-uploaded playlist covers are stored.
+	// Default: filepath.Join(filepath.Dir(DBPath), "playlist_covers").
+	PlaylistCoverDir string
 }
 
 // Default returns a config with sensible defaults.

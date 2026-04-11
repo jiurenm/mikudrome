@@ -111,6 +111,10 @@ func New(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("enable WAL: %w", err)
 	}
+	if _, err := db.Exec(`PRAGMA foreign_keys = ON`); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("enable foreign_keys: %w", err)
+	}
 	if err := migrate(db); err != nil {
 		db.Close()
 		return nil, err
@@ -181,6 +185,34 @@ func migrate(db *sql.DB) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_videos_path ON videos(path);
 		CREATE INDEX IF NOT EXISTS idx_videos_track ON videos(track_id);
+
+		CREATE TABLE IF NOT EXISTS favorites (
+			track_id    INTEGER PRIMARY KEY
+			            REFERENCES tracks(id) ON DELETE CASCADE,
+			created_at  INTEGER NOT NULL
+		);
+
+		CREATE TABLE IF NOT EXISTS playlists (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			name        TEXT NOT NULL,
+			cover_path  TEXT NOT NULL DEFAULT '',
+			created_at  INTEGER NOT NULL,
+			updated_at  INTEGER NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_playlists_updated
+			ON playlists(updated_at DESC);
+
+		CREATE TABLE IF NOT EXISTS playlist_tracks (
+			playlist_id INTEGER NOT NULL
+			            REFERENCES playlists(id) ON DELETE CASCADE,
+			track_id    INTEGER NOT NULL
+			            REFERENCES tracks(id) ON DELETE CASCADE,
+			position    INTEGER NOT NULL,
+			added_at    INTEGER NOT NULL,
+			PRIMARY KEY (playlist_id, track_id)
+		);
+		CREATE INDEX IF NOT EXISTS idx_playlist_tracks_order
+			ON playlist_tracks(playlist_id, position);
 	`)
 	if err != nil {
 		return err

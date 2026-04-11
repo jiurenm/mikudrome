@@ -17,15 +17,22 @@ import (
 
 // Handler serves the REST API, static file streaming, and Flutter web static files.
 type Handler struct {
-	store      *store.Store
-	mediaRoot  string
-	webRoot    string
-	ytdlpProxy string
+	store            *store.Store
+	mediaRoot        string
+	webRoot          string
+	ytdlpProxy       string
+	playlistCoverDir string
 }
 
 // New returns an HTTP handler for the API.
-func New(s *store.Store, mediaRoot, webRoot, ytdlpProxy string) *Handler {
-	return &Handler{store: s, mediaRoot: mediaRoot, webRoot: webRoot, ytdlpProxy: ytdlpProxy}
+func New(s *store.Store, mediaRoot, webRoot, ytdlpProxy, playlistCoverDir string) *Handler {
+	return &Handler{
+		store:            s,
+		mediaRoot:        mediaRoot,
+		webRoot:          webRoot,
+		ytdlpProxy:       ytdlpProxy,
+		playlistCoverDir: playlistCoverDir,
+	}
 }
 
 // ServeHTTP routes /api/tracks, /api/albums, /api/stream/...
