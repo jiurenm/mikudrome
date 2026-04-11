@@ -26,6 +26,10 @@ class Track {
   final String comment; // 备注
   final String albumArtist;
 
+  /// Whether this track is in the user's favorites. Populated by the backend
+  /// on track responses; not persisted in localStorage.
+  final bool isFavorite;
+
   /// When set, the player uses this URL for video streaming instead of
   /// computing it from the track ID. Used for standalone MV playback.
   final String? videoStreamOverrideUrl;
@@ -57,6 +61,7 @@ class Track {
     this.lyrics = '',
     this.comment = '',
     this.albumArtist = '',
+    this.isFavorite = false,
     this.videoStreamOverrideUrl,
     this.coverOverrideUrl,
   });
@@ -86,6 +91,7 @@ class Track {
       lyrics: json['lyrics'] as String? ?? '',
       comment: json['comment'] as String? ?? '',
       albumArtist: json['album_artist'] as String? ?? '',
+      isFavorite: json['is_favorite'] as bool? ?? false,
     );
   }
 

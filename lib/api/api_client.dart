@@ -1,9 +1,11 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import '../models/album.dart';
 import '../models/producer.dart';
+import '../models/playlist.dart';
 import '../models/track.dart';
 import '../models/video.dart';
 import '../models/vocalist.dart';
@@ -212,6 +214,181 @@ class ApiClient {
 
   /// URL to download DB backup. Backend: GET /api/db/backup
   String get dbBackupUrl => _url(ApiEndpoints.dbBackup);
+
+  // --- Favorites ---
+
+  Future<List<Track>> listFavorites() async {
+    final res = await http.get(Uri.parse(_url(ApiEndpoints.favorites)));
+    if (res.statusCode != 200) {
+      throw ApiException('Failed to load favorites', res.statusCode);
+    }
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    final list = data['tracks'] as List<dynamic>? ?? [];
+    return list
+        .map((e) => Track.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> addFavorite(int trackId) async {
+    final res = await http.post(
+      Uri.parse(_url(ApiEndpoints.favorite(trackId))),
+    );
+    if (res.statusCode != 204) {
+      throw ApiException('Failed to add favorite', res.statusCode);
+    }
+  }
+
+  Future<void> removeFavorite(int trackId) async {
+    final res = await http.delete(
+      Uri.parse(_url(ApiEndpoints.favorite(trackId))),
+    );
+    if (res.statusCode != 204) {
+      throw ApiException('Failed to remove favorite', res.statusCode);
+    }
+  }
+
+  // --- Playlists ---
+
+  Future<List<Playlist>> listPlaylists() async {
+    final res = await http.get(Uri.parse(_url(ApiEndpoints.playlists)));
+    if (res.statusCode != 200) {
+      throw ApiException('Failed to load playlists', res.statusCode);
+    }
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    final list = data['playlists'] as List<dynamic>? ?? [];
+    return list
+        .map((e) => Playlist.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<Playlist> createPlaylist(String name) async {
+    final res = await http.post(
+      Uri.parse(_url(ApiEndpoints.playlists)),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'name': name}),
+    );
+    if (res.statusCode != 201) {
+      throw ApiException('Failed to create playlist', res.statusCode);
+    }
+    return Playlist.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  Future<Playlist?> getPlaylist(int id) async {
+    final res = await http.get(Uri.parse(_url(ApiEndpoints.playlist(id))));
+    if (res.statusCode == 404) return null;
+    if (res.statusCode != 200) {
+      throw ApiException('Failed to load playlist', res.statusCode);
+    }
+    return Playlist.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  Future<void> renamePlaylist(int id, String name) async {
+    final res = await http.patch(
+      Uri.parse(_url(ApiEndpoints.playlist(id))),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'name': name}),
+    );
+    if (res.statusCode != 200 && res.statusCode != 204) {
+      throw ApiException('Failed to rename playlist', res.statusCode);
+    }
+  }
+
+  Future<void> deletePlaylist(int id) async {
+    final res = await http.delete(
+      Uri.parse(_url(ApiEndpoints.playlist(id))),
+    );
+    if (res.statusCode != 204) {
+      throw ApiException('Failed to delete playlist', res.statusCode);
+    }
+  }
+
+  Future<List<Track>> getPlaylistTracks(int id) async {
+    final res =
+        await http.get(Uri.parse(_url(ApiEndpoints.playlistTracks(id))));
+    if (res.statusCode != 200) {
+      throw ApiException('Failed to load playlist tracks', res.statusCode);
+    }
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    final list = data['tracks'] as List<dynamic>? ?? [];
+    return list
+        .map((e) => Track.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Add tracks to a playlist. Returns the number of tracks actually added.
+  Future<int> addTracksToPlaylist(int id, List<int> trackIds) async {
+    final res = await http.post(
+      Uri.parse(_url(ApiEndpoints.playlistTracks(id))),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'track_ids': trackIds}),
+    );
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw ApiException('Failed to add tracks to playlist', res.statusCode);
+    }
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    return data['added'] as int? ?? 0;
+  }
+
+  Future<void> removeTracksFromPlaylist(int id, List<int> trackIds) async {
+    final req = http.Request(
+      'DELETE',
+      Uri.parse(_url(ApiEndpoints.playlistTracks(id))),
+    );
+    req.headers['Content-Type'] = 'application/json';
+    req.body = jsonEncode({'track_ids': trackIds});
+    final streamedRes = await req.send();
+    final res = await http.Response.fromStream(streamedRes);
+    if (res.statusCode != 204) {
+      throw ApiException(
+          'Failed to remove tracks from playlist', res.statusCode);
+    }
+  }
+
+  Future<void> reorderPlaylist(int id, List<int> orderedTrackIds) async {
+    final res = await http.put(
+      Uri.parse(_url(ApiEndpoints.playlistTracksOrder(id))),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'track_ids': orderedTrackIds}),
+    );
+    if (res.statusCode != 204) {
+      throw ApiException('Failed to reorder playlist', res.statusCode);
+    }
+  }
+
+  Future<void> uploadPlaylistCover(
+    int id,
+    List<int> bytes,
+    String filename,
+    String contentType,
+  ) async {
+    final request = http.MultipartRequest(
+      'PUT',
+      Uri.parse(_url(ApiEndpoints.playlistCover(id))),
+    );
+    request.files.add(http.MultipartFile.fromBytes(
+      'file',
+      bytes,
+      filename: filename,
+      contentType: MediaType.parse(contentType),
+    ));
+    final streamedRes = await request.send();
+    final res = await http.Response.fromStream(streamedRes);
+    if (res.statusCode != 200 && res.statusCode != 204) {
+      throw ApiException('Failed to upload playlist cover', res.statusCode);
+    }
+  }
+
+  Future<void> clearPlaylistCover(int id) async {
+    final res = await http.delete(
+      Uri.parse(_url(ApiEndpoints.playlistCover(id))),
+    );
+    if (res.statusCode != 204) {
+      throw ApiException('Failed to clear playlist cover', res.statusCode);
+    }
+  }
+
+  /// Full URL for playlist cover image.
+  String playlistCoverUrl(int id) => _url(ApiEndpoints.playlistCover(id));
 }
 
 /// Thrown when an API request fails (non-2xx status).

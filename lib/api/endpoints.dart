@@ -37,6 +37,18 @@ abstract final class ApiEndpoints {
   static String videoStream(int id) => '$_prefix/videos/$id/stream';
   static String videoThumb(int id) => '$_prefix/videos/$id/thumb';
 
+  // Favorites
+  static const String favorites = '$_prefix/favorites';
+  static String favorite(int trackId) => '$_prefix/favorites/$trackId';
+
+  // Playlists
+  static const String playlists = '$_prefix/playlists';
+  static String playlist(int id) => '$_prefix/playlists/$id';
+  static String playlistTracks(int id) => '$_prefix/playlists/$id/tracks';
+  static String playlistTracksOrder(int id) =>
+      '$_prefix/playlists/$id/tracks/order';
+  static String playlistCover(int id) => '$_prefix/playlists/$id/cover';
+
   // DB
   static const String dbBackup = '$_prefix/db/backup';
 }
