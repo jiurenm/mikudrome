@@ -60,6 +60,17 @@ func main() {
 	}
 	defer st.Close()
 
+	// Setup playlist cover directory.
+	if p := os.Getenv("PLAYLIST_COVER_DIR"); p != "" {
+		cfg.PlaylistCoverDir = p
+	}
+	if cfg.PlaylistCoverDir == "" {
+		cfg.PlaylistCoverDir = filepath.Join(filepath.Dir(cfg.DBPath), "playlist_covers")
+	}
+	if err := os.MkdirAll(cfg.PlaylistCoverDir, 0o755); err != nil {
+		log.Fatalf("mkdir playlist_cover_dir: %v", err)
+	}
+
 	// Start media scanning in background
 	go func() {
 		log.Println("starting background media scan...")

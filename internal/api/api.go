@@ -156,6 +156,88 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// --- Favorites ---
+	if r.URL.Path == "/api/favorites" && r.Method == http.MethodGet {
+		h.listFavorites(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/favorites/") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/api/favorites/")
+		parts := strings.SplitN(trimmed, "/", 2)
+		if parts[0] != "" && len(parts) == 1 {
+			switch r.Method {
+			case http.MethodPost:
+				h.addFavorite(w, r, parts[0])
+			case http.MethodDelete:
+				h.removeFavorite(w, r, parts[0])
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+	}
+	// --- Playlists ---
+	if r.URL.Path == "/api/playlists" {
+		switch r.Method {
+		case http.MethodGet:
+			h.listPlaylists(w, r)
+		case http.MethodPost:
+			h.createPlaylist(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/playlists/") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/api/playlists/")
+		parts := strings.SplitN(trimmed, "/", 3)
+		if parts[0] != "" {
+			idStr := parts[0]
+			if len(parts) == 1 {
+				switch r.Method {
+				case http.MethodGet:
+					h.getPlaylist(w, r, idStr)
+				case http.MethodPatch:
+					h.renamePlaylist(w, r, idStr)
+				case http.MethodDelete:
+					h.deletePlaylist(w, r, idStr)
+				default:
+					http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+			}
+			if len(parts) == 2 && parts[1] == "tracks" {
+				switch r.Method {
+				case http.MethodGet:
+					h.getPlaylistTracks(w, r, idStr)
+				case http.MethodPost:
+					h.addPlaylistTracks(w, r, idStr)
+				case http.MethodDelete:
+					h.removePlaylistTracks(w, r, idStr)
+				default:
+					http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+			}
+			if len(parts) == 2 && parts[1] == "cover" {
+				switch r.Method {
+				case http.MethodGet:
+					h.servePlaylistCover(w, r, idStr)
+				case http.MethodPost:
+					h.uploadPlaylistCover(w, r, idStr)
+				case http.MethodDelete:
+					h.deletePlaylistCover(w, r, idStr)
+				default:
+					http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+			}
+			if len(parts) == 3 && parts[1] == "tracks" && parts[2] == "order" && r.Method == http.MethodPut {
+				h.reorderPlaylistTracks(w, r, idStr)
+				return
+			}
+		}
+	}
 	if strings.HasPrefix(r.URL.Path, "/api/stream/") {
 		h.serveStream(w, r)
 		return
@@ -171,7 +253,7 @@ func (h *Handler) listTracks(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"tracks": tracks})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"tracks": tagFavorites(tracks, h.loadFavSet())})
 }
 
 func (h *Handler) getTrack(w http.ResponseWriter, _ *http.Request, idStr string) {
@@ -190,7 +272,7 @@ func (h *Handler) getTrack(w http.ResponseWriter, _ *http.Request, idStr string)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(track)
+	_ = json.NewEncoder(w).Encode(TrackDTO{Track: track, IsFavorite: h.loadFavSet()[track.ID]})
 }
 
 func (h *Handler) downloadTrackMV(w http.ResponseWriter, r *http.Request, idStr string) {
@@ -292,7 +374,7 @@ func (h *Handler) getAlbum(w http.ResponseWriter, _ *http.Request, idStr string)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"album":  album,
-		"tracks": tracks,
+		"tracks": tagFavorites(tracks, h.loadFavSet()),
 	})
 }
 
@@ -329,7 +411,7 @@ func (h *Handler) getProducer(w http.ResponseWriter, _ *http.Request, id int64) 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"producer": &producer,
-		"tracks":   tracks,
+		"tracks":   tagFavorites(tracks, h.loadFavSet()),
 		"albums":   albums,
 	})
 }
@@ -367,7 +449,7 @@ func (h *Handler) getVocalistTracks(w http.ResponseWriter, _ *http.Request, name
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"name":   name,
-		"tracks": tracks,
+		"tracks": tagFavorites(tracks, h.loadFavSet()),
 		"albums": albums,
 	})
 }
@@ -540,6 +622,6 @@ func addCORSHeaders(w http.ResponseWriter, r *http.Request) {
 		origin = "*"
 	}
 	w.Header().Set("Access-Control-Allow-Origin", origin)
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 }
