@@ -20,25 +20,25 @@ class PlaylistHero extends StatelessWidget {
   final VoidCallback onPlay;
   final VoidCallback onEdit;
 
+  static final _gradient = BoxDecoration(
+    gradient: LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        AppTheme.mikuGreen.withValues(alpha: 0.2),
+        AppTheme.mikuDark,
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final mobile = isMobile(context);
 
-    final gradient = BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          AppTheme.mikuGreen.withValues(alpha: 0.2),
-          AppTheme.mikuDark,
-        ],
-      ),
-    );
-
     if (mobile) {
-      return _buildMobileLayout(context, gradient);
+      return _buildMobileLayout(context, _gradient);
     }
-    return _buildDesktopLayout(context, gradient);
+    return _buildDesktopLayout(context, _gradient);
   }
 
   Widget _buildMobileLayout(BuildContext context, BoxDecoration gradient) {
@@ -85,33 +85,41 @@ class PlaylistHero extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              FilledButton.icon(
-                onPressed: playlist.trackCount > 0 ? onPlay : null,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.mikuGreen,
-                  foregroundColor: Colors.black,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
+              Semantics(
+                label: 'Play playlist',
+                button: true,
+                child: FilledButton.icon(
+                  onPressed: playlist.trackCount > 0 ? onPlay : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppTheme.mikuGreen,
+                    foregroundColor: Colors.black,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
                   ),
+                  icon: const Icon(Icons.play_arrow, size: 20),
+                  label: const Text('PLAY'),
                 ),
-                icon: const Icon(Icons.play_arrow, size: 20),
-                label: const Text('PLAY'),
               ),
               const SizedBox(width: 12),
-              OutlinedButton(
-                onPressed: onEdit,
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppTheme.textMuted),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
+              Semantics(
+                label: 'Edit playlist',
+                button: true,
+                child: OutlinedButton(
+                  onPressed: onEdit,
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppTheme.textMuted),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    foregroundColor: AppTheme.textPrimary,
                   ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  foregroundColor: AppTheme.textPrimary,
+                  child: const Text('EDIT'),
                 ),
-                child: const Text('EDIT'),
               ),
             ],
           ),
@@ -168,33 +176,41 @@ class PlaylistHero extends StatelessWidget {
                             ),
                       ),
                       const SizedBox(width: 24),
-                      FilledButton.icon(
-                        onPressed: playlist.trackCount > 0 ? onPlay : null,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppTheme.mikuGreen,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 32, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
+                      Semantics(
+                        label: 'Play playlist',
+                        button: true,
+                        child: FilledButton.icon(
+                          onPressed: playlist.trackCount > 0 ? onPlay : null,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppTheme.mikuGreen,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 32, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
                           ),
+                          icon: const Icon(Icons.play_arrow, size: 20),
+                          label: const Text('PLAY'),
                         ),
-                        icon: const Icon(Icons.play_arrow, size: 20),
-                        label: const Text('PLAY'),
                       ),
                       const SizedBox(width: 12),
-                      OutlinedButton(
-                        onPressed: onEdit,
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: AppTheme.textMuted),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
+                      Semantics(
+                        label: 'Edit playlist',
+                        button: true,
+                        child: OutlinedButton(
+                          onPressed: onEdit,
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppTheme.textMuted),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 32, vertical: 12),
+                            foregroundColor: AppTheme.textPrimary,
                           ),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 32, vertical: 12),
-                          foregroundColor: AppTheme.textPrimary,
+                          child: const Text('EDIT'),
                         ),
-                        child: const Text('EDIT'),
                       ),
                     ],
                   ),

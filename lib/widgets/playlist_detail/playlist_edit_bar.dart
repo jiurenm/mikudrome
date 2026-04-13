@@ -31,10 +31,13 @@ class PlaylistEditBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.drag_handle,
-            size: 20,
-            color: AppTheme.textMuted,
+          Semantics(
+            label: 'Drag to reorder',
+            child: const Icon(
+              Icons.drag_handle,
+              size: 20,
+              color: AppTheme.textMuted,
+            ),
           ),
           const SizedBox(width: 12),
           Text(
