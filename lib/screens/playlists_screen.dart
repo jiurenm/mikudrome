@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:http_parser/http_parser.dart';
 
 import '../api/api_client.dart';
 import '../models/playlist.dart';
@@ -24,11 +23,39 @@ class PlaylistsScreen extends StatefulWidget {
 class _PlaylistsScreenState extends State<PlaylistsScreen> {
   final _client = ApiClient();
   bool _loading = false;
+  bool _operationInProgress = false;
+
+  // UI constants
+  static const double _gridSpacing = 12.0;
+  static const double _menuIconSize = 18.0;
+  static const double _menuButtonSize = 32.0;
 
   @override
   void initState() {
     super.initState();
+    PlaylistRepository.instance.initialize(_client);
     _loadPlaylists();
+  }
+
+  @override
+  void dispose() {
+    // ApiClient uses static http methods, no resources to dispose
+    super.dispose();
+  }
+
+  String _getMimeType(String filename) {
+    final ext = filename.toLowerCase().split('.').last;
+    switch (ext) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      default:
+        return 'image/jpeg';
+    }
   }
 
   Future<void> _loadPlaylists() async {
@@ -54,6 +81,7 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
     );
     if (name == null || !mounted) return;
 
+    setState(() => _operationInProgress = true);
     try {
       final playlist = await _client.createPlaylist(name);
       PlaylistRepository.instance.upsertPlaylist(playlist);
@@ -66,6 +94,10 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to create playlist: $e')),
       );
+    } finally {
+      if (mounted) {
+        setState(() => _operationInProgress = false);
+      }
     }
   }
 
@@ -76,6 +108,7 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
     );
     if (newName == null || !mounted) return;
 
+    setState(() => _operationInProgress = true);
     try {
       await _client.renamePlaylist(playlist.id, newName);
       final updated = await _client.getPlaylist(playlist.id);
@@ -91,6 +124,10 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to rename playlist: $e')),
       );
+    } finally {
+      if (mounted) {
+        setState(() => _operationInProgress = false);
+      }
     }
   }
 
@@ -115,6 +152,7 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
     );
     if (confirmed != true || !mounted) return;
 
+    setState(() => _operationInProgress = true);
     try {
       await _client.deletePlaylist(playlist.id);
       PlaylistRepository.instance.removePlaylist(playlist.id);
@@ -127,6 +165,10 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to delete playlist: $e')),
       );
+    } finally {
+      if (mounted) {
+        setState(() => _operationInProgress = false);
+      }
     }
   }
 
@@ -148,11 +190,12 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
         return;
       }
 
+      setState(() => _operationInProgress = true);
       await _client.uploadPlaylistCover(
         playlist.id,
         bytes,
         file.name,
-        MediaType('image', 'jpeg').toString(),
+        _getMimeType(file.name),
       );
       final updated = await _client.getPlaylist(playlist.id);
       if (updated != null) {
@@ -167,10 +210,15 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to upload cover: $e')),
       );
+    } finally {
+      if (mounted) {
+        setState(() => _operationInProgress = false);
+      }
     }
   }
 
   Future<void> _clearCover(Playlist playlist) async {
+    setState(() => _operationInProgress = true);
     try {
       await _client.clearPlaylistCover(playlist.id);
       final updated = await _client.getPlaylist(playlist.id);
@@ -186,6 +234,10 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to clear cover: $e')),
       );
+    } finally {
+      if (mounted) {
+        setState(() => _operationInProgress = false);
+      }
     }
   }
 
@@ -292,92 +344,107 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
               backgroundColor: AppTheme.mikuDark,
             )
           : null,
-      body: ListenableBuilder(
-        listenable: PlaylistRepository.instance,
-        builder: (context, _) {
-          if (_loading && PlaylistRepository.instance.playlists.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: Stack(
+        children: [
+          ListenableBuilder(
+            listenable: PlaylistRepository.instance,
+            builder: (context, _) {
+              if (_loading && PlaylistRepository.instance.playlists.isEmpty) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-          final playlists = PlaylistRepository.instance.playlists;
+              final playlists = PlaylistRepository.instance.playlists;
 
-          return CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.all(isMobile(context) ? 12.0 : 32.0),
-                  child: _buildHeader(context, playlists.length),
-                ),
-              ),
-              if (playlists.isEmpty)
-                const SliverFillRemaining(
-                  child: Center(
-                    child: Text(
-                      'No playlists yet. Tap + to create one.',
-                      style: TextStyle(color: AppTheme.textMuted),
+              return RefreshIndicator(
+                onRefresh: _loadPlaylists,
+                child: CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.all(isMobile(context) ? 12.0 : 32.0),
+                        child: _buildHeader(context, playlists.length),
+                      ),
                     ),
-                  ),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                  sliver: SliverGrid(
-                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 200,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 0.85,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final playlist = playlists[index];
-                        return GestureDetector(
-                          onLongPress: () => _showPlaylistMenu(playlist),
-                          child: Stack(
-                            children: [
-                              PlaylistGridCard(
-                                playlist: playlist,
-                                client: _client,
-                                onTap: () {
-                                  Navigator.pushNamed(
-                                    context,
-                                    '/playlist-detail',
-                                    arguments: playlist.id,
-                                  );
-                                },
-                              ),
-                              Positioned(
-                                top: 4,
-                                right: 4,
-                                child: Material(
-                                  color: Colors.black.withValues(alpha: 0.5),
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: IconButton(
-                                    icon: const Icon(
-                                      Icons.more_vert,
-                                      color: Colors.white,
-                                      size: 18,
-                                    ),
-                                    padding: const EdgeInsets.all(4),
-                                    constraints: const BoxConstraints(
-                                      minWidth: 32,
-                                      minHeight: 32,
-                                    ),
-                                    onPressed: () => _showPlaylistMenu(playlist),
-                                  ),
-                                ),
-                              ),
-                            ],
+                    if (playlists.isEmpty)
+                      const SliverFillRemaining(
+                        child: Center(
+                          child: Text(
+                            'No playlists yet. Tap + to create one.',
+                            style: TextStyle(color: AppTheme.textMuted),
                           ),
-                        );
-                      },
-                      childCount: playlists.length,
-                    ),
-                  ),
+                        ),
+                      )
+                    else
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                        sliver: SliverGrid(
+                          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 200,
+                            mainAxisSpacing: _gridSpacing,
+                            crossAxisSpacing: _gridSpacing,
+                            childAspectRatio: 0.85,
+                          ),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final playlist = playlists[index];
+                              return GestureDetector(
+                                onLongPress: () => _showPlaylistMenu(playlist),
+                                child: Stack(
+                                  children: [
+                                    PlaylistGridCard(
+                                      playlist: playlist,
+                                      client: _client,
+                                      onTap: () {
+                                        Navigator.pushNamed(
+                                          context,
+                                          '/playlist-detail',
+                                          arguments: playlist.id,
+                                        );
+                                      },
+                                    ),
+                                    Positioned(
+                                      top: 4,
+                                      right: 4,
+                                      child: Material(
+                                        color: Colors.black.withValues(alpha: 0.5),
+                                        borderRadius: BorderRadius.circular(16),
+                                        child: IconButton(
+                                          icon: const Icon(
+                                            Icons.more_vert,
+                                            color: Colors.white,
+                                            size: _menuIconSize,
+                                          ),
+                                          padding: const EdgeInsets.all(4),
+                                          constraints: const BoxConstraints(
+                                            minWidth: _menuButtonSize,
+                                            minHeight: _menuButtonSize,
+                                          ),
+                                          onPressed: () => _showPlaylistMenu(playlist),
+                                          tooltip: 'Playlist options',
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                            childCount: playlists.length,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-            ],
-          );
-        },
+              );
+            },
+          ),
+          if (_operationInProgress)
+            Container(
+              color: Colors.black.withValues(alpha: 0.3),
+              child: const Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+        ],
       ),
     );
   }
