@@ -17,6 +17,11 @@ class MobileMoreScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 16),
       children: [
         _MoreItem(
+          icon: Icons.queue_music,
+          label: 'Playlists',
+          onTap: () => onNavigate(ShellRoute.playlists),
+        ),
+        _MoreItem(
           icon: Icons.favorite_outline,
           label: 'Favorites',
           onTap: () => onNavigate(ShellRoute.favorites),

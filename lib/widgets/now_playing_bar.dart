@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../theme/vocal_theme.dart';
 import '../widgets/player/asset_slider_thumb_shape.dart';
 import '../screens/library_home_screen.dart';
+import 'favorite_button.dart';
 
 /// Persistent bottom bar: now playing + controls + progress + MV indicator.
 class NowPlayingBar extends StatelessWidget {
@@ -80,45 +81,55 @@ class NowPlayingBar extends StatelessWidget {
 
     return SizedBox(
       width: MediaQuery.sizeOf(context).width * 0.25,
-      child: InkWell(
-        onTap: _hasTrack ? onOpenPlayer : null,
-        borderRadius: BorderRadius.circular(8),
-        child: Row(
-          children: [
-            _buildCoverAvatar(coverUrl, accentColor),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: AppTheme.textPrimary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: currentTrack != null
-                              ? accentColor
-                              : AppTheme.textMuted,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: 0,
-                        ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
+      child: Row(
+        children: [
+          InkWell(
+            onTap: _hasTrack ? onOpenPlayer : null,
+            borderRadius: BorderRadius.circular(8),
+            child: Row(
+              children: [
+                _buildCoverAvatar(coverUrl, accentColor),
+                const SizedBox(width: 16),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: AppTheme.textPrimary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: currentTrack != null
+                                ? accentColor
+                                : AppTheme.textMuted,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0,
+                          ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (currentTrack != null) ...[
+            const SizedBox(width: 8),
+            FavoriteButton(
+              trackId: currentTrack.id,
+              client: ApiClient(),
+              size: 20,
             ),
           ],
-        ),
+        ],
       ),
     );
   }

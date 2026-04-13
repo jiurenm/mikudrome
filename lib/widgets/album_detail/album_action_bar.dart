@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../api/api.dart';
 import '../../models/track.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/responsive.dart';
+import '../add_to_playlist_sheet.dart';
 
 class AlbumActionBar extends StatelessWidget {
   const AlbumActionBar({
@@ -61,6 +63,37 @@ class AlbumActionBar extends StatelessWidget {
             child: const Icon(Icons.shuffle, size: 22),
           ),
           const SizedBox(width: 24),
+          IconButton(
+            onPressed: tracks.isEmpty
+                ? null
+                : () {
+                    AddToPlaylistSheet.show(
+                      context: context,
+                      trackIds: tracks.map((t) => t.id).toList(),
+                      client: ApiClient(),
+                    );
+                  },
+            style: IconButton.styleFrom(
+              iconSize: 28,
+            ).copyWith(
+              overlayColor: MaterialStateProperty.resolveWith<Color?>((states) {
+                if (states.contains(MaterialState.hovered)) {
+                  return AppTheme.mikuGreen.withValues(alpha: 0.12);
+                }
+                return null;
+              }),
+              foregroundColor:
+                  MaterialStateProperty.resolveWith<Color>((states) {
+                if (states.contains(MaterialState.hovered)) {
+                  return AppTheme.mikuGreen;
+                }
+                return AppTheme.textMuted;
+              }),
+            ),
+            icon: const Icon(Icons.playlist_add),
+            tooltip: 'Add album to playlist',
+          ),
+          const SizedBox(width: 12),
           IconButton(
             onPressed: () {},
             style: IconButton.styleFrom(

@@ -24,6 +24,10 @@ import '../models/vocalist.dart';
 import '../utils/responsive.dart';
 import '../widgets/mobile_player_sheet.dart';
 import '../widgets/mobile_more_screen.dart';
+import '../services/playlist_repository.dart';
+import 'playlists_screen.dart';
+import 'playlist_detail_screen.dart';
+import 'favorites_screen.dart';
 
 enum PlaybackMode { video, audio }
 
@@ -45,6 +49,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   Album? _selectedAlbum;
   Producer? _selectedProducer;
   Vocalist? _selectedVocalist;
+  int? _selectedPlaylistId;
   List<Track> _playerQueue = const [];
   int _playerIndex = 0;
   bool _showPlayer = false;
@@ -66,6 +71,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   void initState() {
     super.initState();
     _restorePlaybackState();
+    PlaylistRepository.instance.initialize(ApiClient());
   }
 
   String _formatDuration(int totalSeconds) {
@@ -167,10 +173,23 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
             _showPlayer = false;
           }),
         );
+      case ShellRoute.playlists:
+        return PlaylistsScreen(
+          onPlaylistTap: (playlistId) => setState(() {
+            _selectedPlaylistId = playlistId;
+            _showPlayer = false;
+          }),
+        );
       case ShellRoute.favorites:
-        return const _PlaceholderScreen(
-          title: 'Favorite Tracks',
-          subtitle: 'Your liked tracks',
+        return FavoritesScreen(
+          onPlayTrack: (track, queue, index) => _openPlayerForQueue(
+            track: track,
+            queue: queue,
+            index: index,
+            contextLabel: 'Favorites',
+          ),
+          currentPlayingTrackId: _currentTrack?.id,
+          isPlaying: _isPlaying,
         );
       case ShellRoute.localMv:
         return MvGalleryScreen(
@@ -483,6 +502,18 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           contextLabel: _vocalistContextLabel(_selectedVocalist!),
         ),
       );
+    } else if (_selectedPlaylistId != null) {
+      mainContent = PlaylistDetailScreen(
+        playlistId: _selectedPlaylistId!,
+        onPlayTrack: (track, queue, index) => _openPlayerForQueue(
+          track: track,
+          queue: queue,
+          index: index,
+          contextLabel: 'Playlist',
+        ),
+        currentPlayingTrackId: _currentTrack?.id,
+        isPlaying: _isPlaying,
+      );
     } else {
       mainContent = _contentForRoute(_route);
     }
@@ -500,6 +531,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           _selectedAlbum = null;
           _selectedProducer = null;
           _selectedVocalist = null;
+          _selectedPlaylistId = null;
         }),
         nowPlayingBar: const SizedBox.shrink(),
         child: mainContent,
@@ -613,6 +645,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           _selectedAlbum = null;
           _selectedProducer = null;
           _selectedVocalist = null;
+          _selectedPlaylistId = null;
           _showPlayer = false;
         }),
         nowPlayingBar: _showPlayer
@@ -635,37 +668,6 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
                     _selectPlayerTrack(index, showPlayer: false),
               ),
         child: content,
-      ),
-    );
-  }
-}
-
-class _PlaceholderScreen extends StatelessWidget {
-  const _PlaceholderScreen({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  color: AppTheme.textPrimary,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            subtitle,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppTheme.textMuted,
-                ),
-          ),
-        ],
       ),
     );
   }

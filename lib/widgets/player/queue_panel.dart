@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../api/api.dart';
 import '../../models/track.dart';
+import '../../services/playlist_repository.dart';
 import '../../theme/app_theme.dart';
+import '../add_to_playlist_sheet.dart';
 import '../player_screen_parts.dart';
 
 class QueuePanel extends StatelessWidget {
@@ -21,6 +24,50 @@ class QueuePanel extends StatelessWidget {
   final bool isVideoMode;
   final String Function(Track track) coverUrlForTrack;
   final ValueChanged<int> onSelectTrack;
+
+  void _showTrackMenu(BuildContext context, Track track) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.playlist_add),
+              title: const Text('Add to playlist'),
+              onTap: () {
+                Navigator.pop(context);
+                AddToPlaylistSheet.show(
+                  context: context,
+                  trackIds: [track.id],
+                  client: ApiClient(),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.favorite),
+              title: const Text('Add to favorites'),
+              onTap: () async {
+                Navigator.pop(context);
+                try {
+                  await PlaylistRepository.instance.toggleFavorite(
+                    track.id,
+                    ApiClient(),
+                  );
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Failed to update favorite')),
+                    );
+                  }
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,12 +106,28 @@ class QueuePanel extends StatelessWidget {
                 final subtitle = track.vocalLine.isNotEmpty
                     ? track.vocalLine
                     : 'Unknown credits';
-                return TrackListItem(
-                  track: track,
-                  subtitle: subtitle,
-                  coverUrl: coverUrlForTrack(track),
-                  isActive: index == currentIndex,
-                  onTap: () => onSelectTrack(index),
+                return Row(
+                  children: [
+                    Expanded(
+                      child: TrackListItem(
+                        track: track,
+                        subtitle: subtitle,
+                        coverUrl: coverUrlForTrack(track),
+                        isActive: index == currentIndex,
+                        onTap: () => onSelectTrack(index),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.more_vert, size: 20),
+                      color: AppTheme.textMuted,
+                      onPressed: () => _showTrackMenu(context, track),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
+                    ),
+                  ],
                 );
               },
             ),

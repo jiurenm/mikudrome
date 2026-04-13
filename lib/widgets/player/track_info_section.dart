@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../api/api.dart';
 import '../../models/track.dart';
+import '../favorite_button.dart';
 import '../player_screen_parts.dart';
 
 class TrackInfoSection extends StatelessWidget {
@@ -18,6 +20,17 @@ class TrackInfoSection extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
       child: Column(
         children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              FavoriteButton(
+                trackId: track.id,
+                client: ApiClient(),
+                size: 28,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           Wrap(
             alignment: WrapAlignment.center,
             crossAxisAlignment: WrapCrossAlignment.center,

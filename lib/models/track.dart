@@ -25,6 +25,7 @@ class Track {
   final String lyrics; // 歌词
   final String comment; // 备注
   final String albumArtist;
+  final bool isFavorite; // Whether this track is in user's favorites
 
   /// Whether this track is in the user's favorites. Populated by the backend
   /// on track responses; not persisted in localStorage.

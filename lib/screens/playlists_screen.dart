@@ -14,7 +14,12 @@ import '../widgets/playlists/playlist_grid_card.dart';
 import '../widgets/playlists/rename_playlist_dialog.dart';
 
 class PlaylistsScreen extends StatefulWidget {
-  const PlaylistsScreen({super.key});
+  const PlaylistsScreen({
+    super.key,
+    this.onPlaylistTap,
+  });
+
+  final ValueChanged<int>? onPlaylistTap;
 
   @override
   State<PlaylistsScreen> createState() => _PlaylistsScreenState();
@@ -395,11 +400,7 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
                                       playlist: playlist,
                                       client: _client,
                                       onTap: () {
-                                        Navigator.pushNamed(
-                                          context,
-                                          '/playlist-detail',
-                                          arguments: playlist.id,
-                                        );
+                                        widget.onPlaylistTap?.call(playlist.id);
                                       },
                                     ),
                                     Positioned(
