@@ -4,6 +4,13 @@ import '../api/api_client.dart';
 import '../services/playlist_repository.dart';
 import '../theme/app_theme.dart';
 
+// Animation constants
+const _kAnimationScale = 1.2;
+const _kAnimationDuration = Duration(milliseconds: 200);
+
+// Layout constants
+const _kButtonPadding = 24.0;
+
 /// A reusable heart button for favoriting tracks.
 ///
 /// Subscribes to [PlaylistRepository] and shows filled/outlined heart based on
@@ -12,10 +19,12 @@ class FavoriteButton extends StatefulWidget {
   const FavoriteButton({
     super.key,
     required this.trackId,
+    required this.client,
     this.size = 24.0,
   });
 
   final int trackId;
+  final ApiClient client;
   final double size;
 
   @override
@@ -23,7 +32,6 @@ class FavoriteButton extends StatefulWidget {
 }
 
 class _FavoriteButtonState extends State<FavoriteButton> {
-  final _client = ApiClient();
   bool _isAnimating = false;
 
   Future<void> _handleToggle() async {
@@ -32,18 +40,17 @@ class _FavoriteButtonState extends State<FavoriteButton> {
     setState(() => _isAnimating = true);
 
     try {
-      await PlaylistRepository.instance.toggleFavorite(widget.trackId, _client);
+      await PlaylistRepository.instance.toggleFavorite(widget.trackId, widget.client);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update favorite: $e'),
-          backgroundColor: Colors.red.shade900,
+        const SnackBar(
+          content: Text('Failed to update favorite'),
+          backgroundColor: Colors.red,
         ),
       );
+      debugPrint('FavoriteButton: toggleFavorite failed: $e');
     } finally {
-      // Keep animation active for a brief moment
-      await Future.delayed(const Duration(milliseconds: 200));
       if (mounted) {
         setState(() => _isAnimating = false);
       }
@@ -59,8 +66,8 @@ class _FavoriteButtonState extends State<FavoriteButton> {
             PlaylistRepository.instance.isFavorite(widget.trackId);
 
         return AnimatedScale(
-          scale: _isAnimating ? 1.2 : 1.0,
-          duration: const Duration(milliseconds: 200),
+          scale: _isAnimating ? _kAnimationScale : 1.0,
+          duration: _kAnimationDuration,
           curve: Curves.easeInOut,
           child: IconButton(
             icon: Icon(
@@ -72,8 +79,8 @@ class _FavoriteButtonState extends State<FavoriteButton> {
             tooltip: isFavorite ? 'Remove from favorites' : 'Add to favorites',
             padding: EdgeInsets.zero,
             constraints: BoxConstraints(
-              minWidth: widget.size + 24,
-              minHeight: widget.size + 24,
+              minWidth: widget.size + _kButtonPadding,
+              minHeight: widget.size + _kButtonPadding,
             ),
           ),
         );
