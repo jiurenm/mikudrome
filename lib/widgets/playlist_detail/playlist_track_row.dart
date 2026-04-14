@@ -154,38 +154,6 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Semantics(
-                    label: 'Add to favorites',
-                    button: true,
-                    child: IconButton(
-                      onPressed: () {
-                        // TODO: Replace with FavoriteButton in Task 18
-                      },
-                      style: IconButton.styleFrom(
-                        iconSize: 20,
-                        minimumSize: Size.zero,
-                        padding: const EdgeInsets.all(8),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ).copyWith(
-                        overlayColor:
-                            WidgetStateProperty.resolveWith<Color?>((states) {
-                          if (states.contains(WidgetState.hovered)) {
-                            return AppTheme.mikuGreen.withValues(alpha: 0.12);
-                          }
-                          return null;
-                        }),
-                        foregroundColor:
-                            WidgetStateProperty.resolveWith<Color>((states) {
-                          if (states.contains(WidgetState.hovered)) {
-                            return AppTheme.mikuGreen;
-                          }
-                          return AppTheme.textMuted;
-                        }),
-                      ),
-                      icon: const Icon(Icons.favorite_border),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
                 ],
                 Semantics(
                   label: 'More options',

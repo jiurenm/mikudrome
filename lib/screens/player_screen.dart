@@ -14,6 +14,7 @@ import '../services/web_media_session_contract.dart';
 import '../theme/app_theme.dart';
 import '../theme/vocal_theme.dart';
 import '../utils/responsive.dart';
+import '../widgets/favorite_button.dart';
 import '../widgets/player/asset_slider_thumb_shape.dart';
 import '../widgets/player_screen_parts.dart';
 import 'library_home_screen.dart';
@@ -1335,6 +1336,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      FavoriteButton(
+                        trackId: _track.id,
+                        client: _api,
+                        size: 26,
+                      ),
+                      const SizedBox(width: 4),
                       _buildPlaybackOrderButton(baseColor: AppTheme.textMuted, accentColor: accentColor),
                       if (!_isVideoMode)
                         IconButton(

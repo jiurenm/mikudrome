@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../api/api.dart';
 import '../../models/track.dart';
-import '../favorite_button.dart';
 import '../player_screen_parts.dart';
 
 class TrackInfoSection extends StatelessWidget {
@@ -18,46 +16,31 @@ class TrackInfoSection extends StatelessWidget {
     final vocalists = track.vocalists;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
-      child: Column(
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 16,
+        runSpacing: 10,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              FavoriteButton(
-                trackId: track.id,
-                client: ApiClient(),
-                size: 28,
-              ),
-            ],
+          CreditColumn(
+            label: 'Composer',
+            value: track.composerDisplay,
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            alignment: WrapAlignment.center,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 16,
-            runSpacing: 10,
-            children: [
-              CreditColumn(
-                label: 'Composer',
-                value: track.composerDisplay,
-              ),
-              Container(
-                width: 1,
-                height: 28,
-                color: Colors.grey.shade700,
-              ),
-              CreditColumn(
-                label: 'Lyricist',
-                value: track.lyricistDisplay,
-              ),
-              Container(
-                width: 1,
-                height: 28,
-                color: Colors.grey.shade700,
-              ),
-              VocalBadgeColumn(vocalists: vocalists),
-            ],
+          Container(
+            width: 1,
+            height: 28,
+            color: Colors.grey.shade700,
           ),
+          CreditColumn(
+            label: 'Lyricist',
+            value: track.lyricistDisplay,
+          ),
+          Container(
+            width: 1,
+            height: 28,
+            color: Colors.grey.shade700,
+          ),
+          VocalBadgeColumn(vocalists: vocalists),
         ],
       ),
     );
