@@ -29,12 +29,13 @@ class PlaylistCover extends StatelessWidget {
     }
 
     // Mosaic or fallback
-    final ids = playlist.coverTrackIds;
-    if (ids.isEmpty) return _fallbackIcon();
-    if (ids.length == 1) return _singleCover(ids[0]);
-    if (ids.length == 2) return _twoCover(ids);
-    if (ids.length == 3) return _threeCover(ids);
-    return _fourCover(ids);
+    final trackIds = playlist.coverTrackIds;
+    final albumIds = playlist.coverAlbumIds;
+    if (trackIds.isEmpty) return _fallbackIcon();
+    if (trackIds.length == 1) return _singleCover(trackIds[0], albumIds.isNotEmpty ? albumIds[0] : 0);
+    if (trackIds.length == 2) return _twoCover(trackIds, albumIds);
+    if (trackIds.length == 3) return _threeCover(trackIds, albumIds);
+    return _fourCover(trackIds, albumIds);
   }
 
   Widget _fallbackIcon() {
@@ -46,41 +47,53 @@ class PlaylistCover extends StatelessWidget {
     );
   }
 
-  Widget _singleCover(int trackId) {
+  Widget _singleCover(int trackId, int albumId) {
     return Image.network(
       client.streamThumbUrl(trackId),
       width: size,
       height: size,
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => _fallbackIcon(),
+      errorBuilder: (_, __, ___) {
+        // Fallback to album cover if MV thumb not available
+        if (albumId > 0) {
+          return Image.network(
+            client.albumCoverUrl(albumId.toString()),
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _fallbackIcon(),
+          );
+        }
+        return _fallbackIcon();
+      },
     );
   }
 
-  Widget _twoCover(List<int> ids) {
+  Widget _twoCover(List<int> ids, List<int> albumIds) {
     return SizedBox(
       width: size,
       height: size,
       child: Row(
         children: [
-          Expanded(child: _coverTile(ids[0])),
-          Expanded(child: _coverTile(ids[1])),
+          Expanded(child: _coverTile(ids[0], albumIds.isNotEmpty ? albumIds[0] : 0)),
+          Expanded(child: _coverTile(ids[1], albumIds.length > 1 ? albumIds[1] : 0)),
         ],
       ),
     );
   }
 
-  Widget _threeCover(List<int> ids) {
+  Widget _threeCover(List<int> ids, List<int> albumIds) {
     return SizedBox(
       width: size,
       height: size,
       child: Row(
         children: [
-          Expanded(child: _coverTile(ids[0])),
+          Expanded(child: _coverTile(ids[0], albumIds.isNotEmpty ? albumIds[0] : 0)),
           Expanded(
             child: Column(
               children: [
-                Expanded(child: _coverTile(ids[1])),
-                Expanded(child: _coverTile(ids[2])),
+                Expanded(child: _coverTile(ids[1], albumIds.length > 1 ? albumIds[1] : 0)),
+                Expanded(child: _coverTile(ids[2], albumIds.length > 2 ? albumIds[2] : 0)),
               ],
             ),
           ),
@@ -89,7 +102,7 @@ class PlaylistCover extends StatelessWidget {
     );
   }
 
-  Widget _fourCover(List<int> ids) {
+  Widget _fourCover(List<int> ids, List<int> albumIds) {
     return SizedBox(
       width: size,
       height: size,
@@ -98,16 +111,16 @@ class PlaylistCover extends StatelessWidget {
           Expanded(
             child: Row(
               children: [
-                Expanded(child: _coverTile(ids[0])),
-                Expanded(child: _coverTile(ids[1])),
+                Expanded(child: _coverTile(ids[0], albumIds.isNotEmpty ? albumIds[0] : 0)),
+                Expanded(child: _coverTile(ids[1], albumIds.length > 1 ? albumIds[1] : 0)),
               ],
             ),
           ),
           Expanded(
             child: Row(
               children: [
-                Expanded(child: _coverTile(ids[2])),
-                Expanded(child: _coverTile(ids[3])),
+                Expanded(child: _coverTile(ids[2], albumIds.length > 2 ? albumIds[2] : 0)),
+                Expanded(child: _coverTile(ids[3], albumIds.length > 3 ? albumIds[3] : 0)),
               ],
             ),
           ),
@@ -116,11 +129,21 @@ class PlaylistCover extends StatelessWidget {
     );
   }
 
-  Widget _coverTile(int trackId) {
+  Widget _coverTile(int trackId, int albumId) {
     return Image.network(
       client.streamThumbUrl(trackId),
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => Container(color: AppTheme.cardBg),
+      errorBuilder: (_, __, ___) {
+        // Fallback to album cover if MV thumb not available
+        if (albumId > 0) {
+          return Image.network(
+            client.albumCoverUrl(albumId.toString()),
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(color: AppTheme.cardBg),
+          );
+        }
+        return Container(color: AppTheme.cardBg);
+      },
     );
   }
 }

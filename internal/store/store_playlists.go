@@ -93,13 +93,14 @@ func (s *Store) ListFavorites() ([]Track, error) {
 
 // Playlist is the metadata envelope for a user-created playlist.
 type Playlist struct {
-	ID            int64   `json:"id"`
-	Name          string  `json:"name"`
-	CoverPath     string  `json:"cover_path,omitempty"`
-	TrackCount    int     `json:"track_count"`
-	CoverTrackIDs []int64 `json:"cover_track_ids,omitempty"`
-	CreatedAt     int64   `json:"created_at"`
-	UpdatedAt     int64   `json:"updated_at"`
+	ID             int64   `json:"id"`
+	Name           string  `json:"name"`
+	CoverPath      string  `json:"cover_path,omitempty"`
+	TrackCount     int     `json:"track_count"`
+	CoverTrackIDs  []int64 `json:"cover_track_ids,omitempty"`
+	CoverAlbumIDs  []int64 `json:"cover_album_ids,omitempty"`
+	CreatedAt      int64   `json:"created_at"`
+	UpdatedAt      int64   `json:"updated_at"`
 }
 
 // ErrInvalidName is returned when a playlist name is empty or too long.
@@ -199,34 +200,40 @@ func (s *Store) ClearPlaylistCover(id int64) error {
 	return s.SetPlaylistCover(id, "")
 }
 
-// firstNTrackIDs returns the first N track IDs from a playlist ordered by position.
-func (s *Store) firstNTrackIDs(playlistID int64, n int) ([]int64, error) {
+// firstNTrackIDs returns the first N track IDs and their album IDs from a playlist ordered by position.
+func (s *Store) firstNTrackIDs(playlistID int64, n int) (trackIDs []int64, albumIDs []int64, err error) {
 	rows, err := s.db.Query(
-		`SELECT track_id FROM playlist_tracks WHERE playlist_id = ? ORDER BY position LIMIT ?`,
+		`SELECT pt.track_id, COALESCE(t.album_id, 0)
+		 FROM playlist_tracks pt
+		 LEFT JOIN tracks t ON t.id = pt.track_id
+		 WHERE pt.playlist_id = ?
+		 ORDER BY pt.position
+		 LIMIT ?`,
 		playlistID, n,
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer rows.Close()
-	var ids []int64
 	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
+		var trackID, albumID int64
+		if err := rows.Scan(&trackID, &albumID); err != nil {
+			return nil, nil, err
 		}
-		ids = append(ids, id)
+		trackIDs = append(trackIDs, trackID)
+		albumIDs = append(albumIDs, albumID)
 	}
-	return ids, rows.Err()
+	return trackIDs, albumIDs, rows.Err()
 }
 
-// scanPlaylist reads a playlist row and populates CoverTrackIDs.
+// scanPlaylist reads a playlist row and populates CoverTrackIDs and CoverAlbumIDs.
 func (s *Store) scanPlaylist(p *Playlist) error {
-	ids, err := s.firstNTrackIDs(p.ID, 4)
+	trackIDs, albumIDs, err := s.firstNTrackIDs(p.ID, 4)
 	if err != nil {
 		return err
 	}
-	p.CoverTrackIDs = ids
+	p.CoverTrackIDs = trackIDs
+	p.CoverAlbumIDs = albumIDs
 	return nil
 }
 

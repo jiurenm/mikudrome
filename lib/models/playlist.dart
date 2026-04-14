@@ -7,6 +7,7 @@ class Playlist {
   final String coverPath;
   final int trackCount;
   final List<int> coverTrackIds;
+  final List<int> coverAlbumIds;
   final int createdAt;
   final int updatedAt;
 
@@ -16,6 +17,7 @@ class Playlist {
     this.coverPath = '',
     this.trackCount = 0,
     this.coverTrackIds = const [],
+    this.coverAlbumIds = const [],
     this.createdAt = 0,
     this.updatedAt = 0,
   });
@@ -27,6 +29,10 @@ class Playlist {
       coverPath: json['cover_path'] as String? ?? '',
       trackCount: json['track_count'] as int? ?? 0,
       coverTrackIds: (json['cover_track_ids'] as List<dynamic>?)
+              ?.map((e) => e as int)
+              .toList() ??
+          const [],
+      coverAlbumIds: (json['cover_album_ids'] as List<dynamic>?)
               ?.map((e) => e as int)
               .toList() ??
           const [],

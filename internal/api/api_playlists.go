@@ -105,13 +105,14 @@ func playlistWire(p store.Playlist) map[string]interface{} {
 		coverURL = fmt.Sprintf("/api/playlists/%d/cover", p.ID)
 	}
 	return map[string]interface{}{
-		"id":              p.ID,
-		"name":            p.Name,
-		"cover_path":      coverURL,
-		"track_count":     p.TrackCount,
-		"cover_track_ids": p.CoverTrackIDs,
-		"created_at":      p.CreatedAt,
-		"updated_at":      p.UpdatedAt,
+		"id":               p.ID,
+		"name":             p.Name,
+		"cover_path":       coverURL,
+		"track_count":      p.TrackCount,
+		"cover_track_ids":  p.CoverTrackIDs,
+		"cover_album_ids":  p.CoverAlbumIDs,
+		"created_at":       p.CreatedAt,
+		"updated_at":       p.UpdatedAt,
 	}
 }
 

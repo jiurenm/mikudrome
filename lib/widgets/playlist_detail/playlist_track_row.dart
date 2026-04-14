@@ -74,16 +74,39 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
                     cacheWidth: mobile ? 80 : 96,
                     cacheHeight: mobile ? 80 : 96,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      width: mobile ? 40 : 48,
-                      height: mobile ? 40 : 48,
-                      color: AppTheme.cardBg,
-                      child: Icon(
-                        Icons.music_note,
-                        size: mobile ? 20 : 24,
-                        color: AppTheme.textMuted,
-                      ),
-                    ),
+                    errorBuilder: (_, __, ___) {
+                      // Fallback to album cover if MV thumb not available
+                      if (track.albumId > 0) {
+                        return Image.network(
+                          '${widget.baseUrl}/api/albums/${track.albumId}/cover',
+                          width: mobile ? 40 : 48,
+                          height: mobile ? 40 : 48,
+                          cacheWidth: mobile ? 80 : 96,
+                          cacheHeight: mobile ? 80 : 96,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            width: mobile ? 40 : 48,
+                            height: mobile ? 40 : 48,
+                            color: AppTheme.cardBg,
+                            child: Icon(
+                              Icons.music_note,
+                              size: mobile ? 20 : 24,
+                              color: AppTheme.textMuted,
+                            ),
+                          ),
+                        );
+                      }
+                      return Container(
+                        width: mobile ? 40 : 48,
+                        height: mobile ? 40 : 48,
+                        color: AppTheme.cardBg,
+                        child: Icon(
+                          Icons.music_note,
+                          size: mobile ? 20 : 24,
+                          color: AppTheme.textMuted,
+                        ),
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(width: 12),
