@@ -94,27 +94,6 @@ class AlbumActionBar extends StatelessWidget {
             tooltip: 'Add album to playlist',
           ),
           const SizedBox(width: 12),
-          IconButton(
-            onPressed: () {},
-            style: IconButton.styleFrom(
-              iconSize: 28,
-            ).copyWith(
-              overlayColor: MaterialStateProperty.resolveWith<Color?>((states) {
-                if (states.contains(MaterialState.hovered)) {
-                  return AppTheme.mikuGreen.withValues(alpha: 0.12);
-                }
-                return null;
-              }),
-              foregroundColor:
-                  MaterialStateProperty.resolveWith<Color>((states) {
-                if (states.contains(MaterialState.hovered)) {
-                  return AppTheme.mikuGreen;
-                }
-                return AppTheme.textMuted;
-              }),
-            ),
-            icon: const Icon(Icons.favorite_border),
-          ),
         ],
       ),
     );
