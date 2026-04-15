@@ -49,7 +49,10 @@ class AppTheme {
   }
 
   static TextTheme get _textTheme {
-    const base = TextStyle(color: textPrimary);
+    const base = TextStyle(
+      color: textPrimary,
+      fontFamilyFallback: ['NotoSansSC', 'NotoSansJP'],
+    );
     return TextTheme(
       displayLarge: base.copyWith(fontSize: 48, fontWeight: FontWeight.w700),
       displayMedium: base.copyWith(fontSize: 36, fontWeight: FontWeight.w700),
