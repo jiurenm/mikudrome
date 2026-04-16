@@ -233,7 +233,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				switch r.Method {
 				case http.MethodGet:
 					h.servePlaylistCover(w, r, idStr)
-				case http.MethodPost:
+				case http.MethodPost, http.MethodPut:
 					h.uploadPlaylistCover(w, r, idStr)
 				case http.MethodDelete:
 					h.deletePlaylistCover(w, r, idStr)

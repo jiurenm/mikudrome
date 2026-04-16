@@ -887,6 +887,40 @@ func TestPlaylistItemCoverHTTP_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestPlaylistCoverHTTP_PutUploadRoundTrip(t *testing.T) {
+	h := newTestHandler(t)
+	playlistID := createTestPlaylist(t, h, "PlaylistCoverPut")
+	playlistIDStr := mustJSON(t, playlistID)
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	partHeader := textproto.MIMEHeader{}
+	partHeader.Set("Content-Disposition", `form-data; name="file"; filename="cover.png"`)
+	partHeader.Set("Content-Type", "image/png")
+	part, err := writer.CreatePart(partHeader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write([]byte("fake-image")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPut,
+		"/api/playlists/"+playlistIDStr+"/cover",
+		&body,
+	)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("upload playlist cover via PUT: expected 204, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestPlaylistTracksHTTP_ReorderReturnsConflictOncePlaylistIsGrouped(t *testing.T) {
 	h := newTestHandler(t)
 	t1 := seedTrack(t, h, "FlatConflict1")
