@@ -8,8 +8,11 @@ import '../models/track.dart';
 import '../services/playlist_repository.dart';
 import '../theme/app_theme.dart';
 import '../utils/responsive.dart';
+import '../widgets/playlist_detail/group_title_dialog.dart';
+import '../widgets/playlist_detail/playlist_edit_bar.dart';
 import '../widgets/playlist_detail/playlist_group_section.dart';
 import '../widgets/playlist_detail/playlist_hero.dart';
+import '../widgets/playlist_detail/playlist_item_editor_sheet.dart';
 import '../widgets/playlist_detail/playlist_track_row.dart';
 
 class PlaylistDetailScreen extends StatefulWidget {
@@ -42,6 +45,7 @@ class PlaylistDetailScreen extends StatefulWidget {
 class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   bool _loading = true;
   String? _error;
+  bool _isEditMode = false;
   bool _isLoading = false; // Prevents concurrent _loadPlaylistAndTracks calls
 
   late final ApiClient _client;
@@ -146,6 +150,60 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     _playItem(_items.first);
   }
 
+  void _toggleEditMode() {
+    setState(() {
+      _isEditMode = !_isEditMode;
+    });
+  }
+
+  Future<void> _createGroup() async {
+    final title = await showDialog<String>(
+      context: context,
+      builder: (context) => const GroupTitleDialog(),
+    );
+    if (title == null || title.trim().isEmpty) return;
+    await _client.createPlaylistGroup(widget.playlistId, title.trim());
+    await _loadPlaylistAndTracks();
+  }
+
+  Future<void> _editItem(PlaylistItem item) async {
+    final detail = _detail;
+    if (detail == null) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => PlaylistItemEditorSheet(
+        item: item,
+        groups: detail.groups,
+        onSave: (request) =>
+            _client.updatePlaylistItem(widget.playlistId, item.id, request),
+      ),
+    );
+    await _loadPlaylistAndTracks();
+  }
+
+  Future<void> _persistGroupedOrder() async {
+    final detail = _detail;
+    if (detail == null) return;
+    final payload = detail.groups
+        .map(
+          (group) => PlaylistGroupReorderInput(
+            id: group.id,
+            itemIds: group.items.map((item) => item.id).toList(),
+          ),
+        )
+        .toList();
+    await _client.reorderPlaylistItems(widget.playlistId, payload);
+  }
+
+  Future<void> _finishEditMode() async {
+    await _persistGroupedOrder();
+    if (!mounted) return;
+    setState(() {
+      _isEditMode = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_playlist == null && !_loading && _error == null) {
@@ -173,6 +231,11 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
         children: [
           Column(
             children: [
+              if (_isEditMode)
+                PlaylistEditBar(
+                  onDone: _finishEditMode,
+                  onAddGroup: _createGroup,
+                ),
               Expanded(
                 child: CustomScrollView(
                   slivers: [
@@ -197,6 +260,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                           client: _client,
                           onPlay: _playAll,
                           canPlay: _items.isNotEmpty,
+                          onEdit: _toggleEditMode,
                         ),
                       ),
                     if (_loading)
@@ -271,6 +335,9 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                         item: item,
                                         baseUrl: widget._effectiveBaseUrl,
                                         onTap: () => _playItem(item),
+                                        onEdit: _isEditMode
+                                            ? () => _editItem(item)
+                                            : null,
                                         isCurrentlyPlaying:
                                             widget.currentPlayingTrackId ==
                                                     item.track.id &&

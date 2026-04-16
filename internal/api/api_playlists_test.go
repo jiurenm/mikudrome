@@ -695,6 +695,97 @@ func TestPlaylistItemsHTTP_GroupedReorderConflictReturnsJSON(t *testing.T) {
 	}
 }
 
+func TestPlaylistItemsHTTP_UpdatePersistsLocalMetadataAndPlacement(t *testing.T) {
+	h := newTestHandler(t)
+	t1 := seedTrack(t, h, "EditableItem1")
+	t2 := seedTrack(t, h, "EditableItem2")
+	playlistID := createTestPlaylist(t, h, "EditableItems")
+	playlistIDStr := mustJSON(t, playlistID)
+
+	addBody := mustJSON(t, map[string][]int64{"track_ids": []int64{t1, t2}})
+	rr := doReq(h, "POST", "/api/playlists/"+playlistIDStr+"/tracks", addBody)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("addPlaylistTracks: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	rr = doReq(h, "POST", "/api/playlists/"+playlistIDStr+"/groups", `{"title":"Highlights"}`)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create group: expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var createGroupResp struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &createGroupResp); err != nil {
+		t.Fatal(err)
+	}
+
+	detail := getPlaylistDetail(t, h, playlistID)
+	ungroupedID := detail.Groups[0].ID
+	item1 := detail.Groups[0].Items[0].ID
+	item2 := detail.Groups[0].Items[1].ID
+
+	updateBody := mustJSON(t, map[string]interface{}{
+		"group_id":         createGroupResp.ID,
+		"note":             "playlist-local note",
+		"cover_mode":       "library",
+		"library_cover_id": "album:42",
+		"cached_cover_url": "https://cdn.example.test/covers/42.webp",
+	})
+	rr = doReq(h, "PATCH", "/api/playlists/"+playlistIDStr+"/items/"+mustJSON(t, item1), updateBody)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("updatePlaylistItem: expected 204, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	rr = doReq(h, "GET", "/api/playlists/"+playlistIDStr+"/items", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("getPlaylistItems after update: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		Groups []struct {
+			ID    int64  `json:"id"`
+			Title string `json:"title"`
+			Items []struct {
+				ID             int64  `json:"id"`
+				Note           string `json:"note"`
+				CoverMode      string `json:"cover_mode"`
+				LibraryCoverID string `json:"library_cover_id"`
+				CachedCoverURL string `json:"cached_cover_url"`
+				Track          struct {
+					ID int64 `json:"id"`
+				} `json:"track"`
+			} `json:"items"`
+		} `json:"groups"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Groups) != 2 {
+		t.Fatalf("expected 2 groups after item update, got %d", len(resp.Groups))
+	}
+	if resp.Groups[0].ID != ungroupedID || len(resp.Groups[0].Items) != 1 || resp.Groups[0].Items[0].ID != item2 {
+		t.Fatalf("expected second item to remain in Ungrouped after update")
+	}
+	if resp.Groups[1].ID != createGroupResp.ID || len(resp.Groups[1].Items) != 1 {
+		t.Fatalf("expected moved item to appear in target group after update")
+	}
+	updatedItem := resp.Groups[1].Items[0]
+	if updatedItem.ID != item1 || updatedItem.Track.ID != t1 {
+		t.Fatalf("expected updated item %d with track %d in target group", item1, t1)
+	}
+	if updatedItem.Note != "playlist-local note" {
+		t.Fatalf("expected note to persist, got %q", updatedItem.Note)
+	}
+	if updatedItem.CoverMode != "library" {
+		t.Fatalf("expected cover_mode library, got %q", updatedItem.CoverMode)
+	}
+	if updatedItem.LibraryCoverID != "album:42" {
+		t.Fatalf("expected library_cover_id to persist, got %q", updatedItem.LibraryCoverID)
+	}
+	if updatedItem.CachedCoverURL != "https://cdn.example.test/covers/42.webp" {
+		t.Fatalf("expected cached_cover_url to persist, got %q", updatedItem.CachedCoverURL)
+	}
+}
+
 func TestPlaylistTracksHTTP_ReorderReturnsConflictOncePlaylistIsGrouped(t *testing.T) {
 	h := newTestHandler(t)
 	t1 := seedTrack(t, h, "FlatConflict1")

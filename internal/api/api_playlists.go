@@ -514,6 +514,82 @@ func (h *Handler) createPlaylistGroup(w http.ResponseWriter, r *http.Request, id
 	writeJSON(w, http.StatusCreated, playlistGroupToWire(group.PlaylistGroup))
 }
 
+func (h *Handler) updatePlaylistItem(w http.ResponseWriter, r *http.Request, playlistIDStr, itemIDStr string) {
+	playlistID, err := parsePlaylistID(playlistIDStr)
+	if err != nil {
+		jsonError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	itemID, err := strconv.ParseInt(itemIDStr, 10, 64)
+	if err != nil {
+		jsonError(w, "invalid item id", http.StatusBadRequest)
+		return
+	}
+
+	detail, ok, err := h.loadPlaylistDetail(playlistID)
+	if err != nil {
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		jsonError(w, "playlist not found", http.StatusNotFound)
+		return
+	}
+
+	itemFound := false
+	for _, group := range detail.Groups {
+		for _, item := range group.Items {
+			if item.ID == itemID {
+				itemFound = true
+				break
+			}
+		}
+		if itemFound {
+			break
+		}
+	}
+	if !itemFound {
+		jsonError(w, "item not found", http.StatusNotFound)
+		return
+	}
+
+	var body struct {
+		GroupID         *int64  `json:"group_id"`
+		Position        *int    `json:"position"`
+		Note            *string `json:"note"`
+		CoverMode       *string `json:"cover_mode"`
+		LibraryCoverID  *string `json:"library_cover_id"`
+		CachedCoverURL  *string `json:"cached_cover_url"`
+		CustomCoverPath *string `json:"custom_cover_path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonError(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.store.UpdatePlaylistItem(itemID, store.PlaylistItemUpdate{
+		GroupID:         body.GroupID,
+		Position:        body.Position,
+		Note:            body.Note,
+		CoverMode:       body.CoverMode,
+		LibraryCoverID:  body.LibraryCoverID,
+		CachedCoverURL:  body.CachedCoverURL,
+		CustomCoverPath: body.CustomCoverPath,
+	}); err != nil {
+		if msg, status, ok := playlistConflictStatus(err); ok {
+			jsonError(w, msg, status)
+			return
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			jsonError(w, "item not found", http.StatusNotFound)
+			return
+		}
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *Handler) renamePlaylistGroup(w http.ResponseWriter, r *http.Request, playlistIDStr, groupIDStr string) {
 	playlistID, err := parsePlaylistID(playlistIDStr)
 	if err != nil {

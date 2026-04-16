@@ -416,6 +416,21 @@ class ApiClient {
     }
   }
 
+  Future<void> updatePlaylistItem(
+    int playlistId,
+    int itemId,
+    PlaylistItemUpdateRequest request,
+  ) async {
+    final res = await http.patch(
+      Uri.parse(_url(ApiEndpoints.playlistItem(playlistId, itemId))),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(request.toJson()),
+    );
+    if (res.statusCode != 204) {
+      throw ApiException('Failed to update playlist item', res.statusCode);
+    }
+  }
+
   Future<void> uploadPlaylistCover(
     int id,
     List<int> bytes,
@@ -501,4 +516,36 @@ class PlaylistGroupTitleInput {
   Map<String, dynamic> toJson() => {
         'title': title,
       };
+}
+
+class PlaylistItemUpdateRequest {
+  const PlaylistItemUpdateRequest({
+    this.groupId,
+    this.position,
+    this.note,
+    this.coverMode,
+    this.libraryCoverId,
+    this.cachedCoverUrl,
+    this.customCoverPath,
+  });
+
+  final int? groupId;
+  final int? position;
+  final String? note;
+  final String? coverMode;
+  final String? libraryCoverId;
+  final String? cachedCoverUrl;
+  final String? customCoverPath;
+
+  Map<String, dynamic> toJson() {
+    final json = <String, dynamic>{};
+    if (groupId != null) json['group_id'] = groupId;
+    if (position != null) json['position'] = position;
+    if (note != null) json['note'] = note;
+    if (coverMode != null) json['cover_mode'] = coverMode;
+    if (libraryCoverId != null) json['library_cover_id'] = libraryCoverId;
+    if (cachedCoverUrl != null) json['cached_cover_url'] = cachedCoverUrl;
+    if (customCoverPath != null) json['custom_cover_path'] = customCoverPath;
+    return json;
+  }
 }

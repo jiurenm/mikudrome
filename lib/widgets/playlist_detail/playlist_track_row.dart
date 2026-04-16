@@ -11,6 +11,7 @@ class PlaylistTrackRow extends StatefulWidget {
     required this.item,
     required this.baseUrl,
     required this.onTap,
+    this.onEdit,
     this.onRemove,
     this.showDragHandle = false,
     this.isCurrentlyPlaying = false,
@@ -21,6 +22,7 @@ class PlaylistTrackRow extends StatefulWidget {
     required this.track,
     required this.baseUrl,
     required this.onTap,
+    this.onEdit,
     this.onRemove,
     this.showDragHandle = false,
     this.isCurrentlyPlaying = false,
@@ -30,6 +32,7 @@ class PlaylistTrackRow extends StatefulWidget {
   final Track? track;
   final String baseUrl;
   final VoidCallback onTap;
+  final VoidCallback? onEdit;
   final VoidCallback? onRemove;
   final bool showDragHandle;
   final bool isCurrentlyPlaying;
@@ -215,6 +218,15 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
                         ),
                       ],
                     ),
+                  ),
+                if (widget.onEdit != null)
+                  IconButton(
+                    onPressed: widget.onEdit,
+                    icon: const Icon(
+                      Icons.edit_outlined,
+                      color: AppTheme.textMuted,
+                    ),
+                    tooltip: 'Edit playlist item',
                   ),
               ],
             ),

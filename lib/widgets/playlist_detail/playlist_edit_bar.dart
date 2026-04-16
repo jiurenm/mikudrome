@@ -7,9 +7,11 @@ class PlaylistEditBar extends StatelessWidget {
   const PlaylistEditBar({
     super.key,
     required this.onDone,
+    required this.onAddGroup,
   });
 
   final VoidCallback onDone;
+  final VoidCallback onAddGroup;
 
   @override
   Widget build(BuildContext context) {
@@ -31,20 +33,34 @@ class PlaylistEditBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Semantics(
-            label: 'Drag to reorder',
-            child: const Icon(
-              Icons.drag_handle,
-              size: 20,
-              color: AppTheme.textMuted,
+          FilledButton.tonalIcon(
+            onPressed: onAddGroup,
+            icon: const Icon(Icons.create_new_folder_outlined),
+            label: const Text('ADD GROUP'),
+            style: FilledButton.styleFrom(
+              foregroundColor: AppTheme.textPrimary,
+              backgroundColor: Colors.white.withValues(alpha: 0.08),
             ),
           ),
-          const SizedBox(width: 12),
-          Text(
-            'Drag to reorder',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          const SizedBox(width: 16),
+          Row(
+            children: [
+              Semantics(
+                label: 'Drag to reorder',
+                child: const Icon(
+                  Icons.drag_handle,
+                  size: 20,
                   color: AppTheme.textMuted,
                 ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Drag to reorder',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppTheme.textMuted,
+                    ),
+              ),
+            ],
           ),
           const Spacer(),
           FilledButton(

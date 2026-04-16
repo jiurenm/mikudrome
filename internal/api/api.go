@@ -256,6 +256,15 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				h.createPlaylistGroup(w, r, idStr)
 				return
 			}
+			if len(parts) == 3 && parts[1] == "items" && parts[2] != "" && parts[2] != "order" {
+				switch r.Method {
+				case http.MethodPatch:
+					h.updatePlaylistItem(w, r, idStr, parts[2])
+				default:
+					jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+			}
 			if len(parts) == 3 && parts[1] == "items" && parts[2] == "order" && r.Method == http.MethodPut {
 				h.reorderGroupedPlaylistItems(w, r, idStr)
 				return
@@ -290,7 +299,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						jsonError(w, "not found", http.StatusNotFound)
 					}
 				case "items":
-					if len(parts) == 2 || (len(parts) == 3 && parts[2] == "order") {
+					if len(parts) == 2 || (len(parts) == 3 && parts[2] != "") {
 						jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
 					} else {
 						jsonError(w, "not found", http.StatusNotFound)
