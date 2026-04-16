@@ -1,10 +1,13 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -783,6 +786,104 @@ func TestPlaylistItemsHTTP_UpdatePersistsLocalMetadataAndPlacement(t *testing.T)
 	}
 	if updatedItem.CachedCoverURL != "https://cdn.example.test/covers/42.webp" {
 		t.Fatalf("expected cached_cover_url to persist, got %q", updatedItem.CachedCoverURL)
+	}
+}
+
+func TestPlaylistItemCoverHTTP_RoundTrip(t *testing.T) {
+	h := newTestHandler(t)
+	t1 := seedTrack(t, h, "CoverTrack1")
+	playlistID := createTestPlaylist(t, h, "Covers")
+	playlistIDStr := mustJSON(t, playlistID)
+
+	addBody := mustJSON(t, map[string][]int64{"track_ids": []int64{t1}})
+	rr := doReq(h, http.MethodPost, "/api/playlists/"+playlistIDStr+"/tracks", addBody)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("add tracks: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	detail := getPlaylistDetail(t, h, playlistID)
+	itemID := detail.Groups[0].Items[0].ID
+	itemIDStr := mustJSON(t, itemID)
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	partHeader := textproto.MIMEHeader{}
+	partHeader.Set("Content-Disposition", `form-data; name="file"; filename="cover.png"`)
+	partHeader.Set("Content-Type", "image/png")
+	part, err := writer.CreatePart(partHeader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write([]byte("fake-image")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPut,
+		"/api/playlists/"+playlistIDStr+"/items/"+itemIDStr+"/cover",
+		&body,
+	)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	uploadRR := httptest.NewRecorder()
+	h.ServeHTTP(uploadRR, req)
+	if uploadRR.Code != http.StatusNoContent {
+		t.Fatalf("upload item cover: expected 204, got %d: %s", uploadRR.Code, uploadRR.Body.String())
+	}
+
+	rr = doReq(h, http.MethodGet, "/api/playlists/"+playlistIDStr+"/items", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("getPlaylistItems after upload: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		Groups []struct {
+			Items []struct {
+				ID              int64  `json:"id"`
+				CoverMode       string `json:"cover_mode"`
+				CustomCoverPath string `json:"custom_cover_path"`
+			} `json:"items"`
+		} `json:"groups"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Groups) != 1 || len(resp.Groups[0].Items) != 1 {
+		t.Fatalf("expected exactly one uploaded item in response")
+	}
+	if resp.Groups[0].Items[0].ID != itemID {
+		t.Fatalf("expected item %d, got %d", itemID, resp.Groups[0].Items[0].ID)
+	}
+	if resp.Groups[0].Items[0].CoverMode != "custom" {
+		t.Fatalf("expected cover_mode custom, got %q", resp.Groups[0].Items[0].CoverMode)
+	}
+	if !strings.Contains(resp.Groups[0].Items[0].CustomCoverPath, "/api/playlists/") {
+		t.Fatalf("expected custom cover URL in response, got %q", resp.Groups[0].Items[0].CustomCoverPath)
+	}
+
+	coverRR := doReq(h, http.MethodGet, resp.Groups[0].Items[0].CustomCoverPath, "")
+	if coverRR.Code != http.StatusOK {
+		t.Fatalf("serve item cover: expected 200, got %d: %s", coverRR.Code, coverRR.Body.String())
+	}
+
+	rr = doReq(h, http.MethodDelete, "/api/playlists/"+playlistIDStr+"/items/"+itemIDStr+"/cover", "")
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("delete item cover: expected 204, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	rr = doReq(h, http.MethodGet, "/api/playlists/"+playlistIDStr+"/items", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("getPlaylistItems after delete: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Groups[0].Items[0].CoverMode != "default" {
+		t.Fatalf("expected cover_mode default after delete, got %q", resp.Groups[0].Items[0].CoverMode)
+	}
+	if resp.Groups[0].Items[0].CustomCoverPath != "" {
+		t.Fatalf("expected custom_cover_path cleared after delete, got %q", resp.Groups[0].Items[0].CustomCoverPath)
 	}
 }
 

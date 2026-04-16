@@ -124,6 +124,10 @@ func playlistWire(p store.Playlist) map[string]interface{} {
 	}
 }
 
+func playlistItemCoverURL(playlistID, itemID int64) string {
+	return fmt.Sprintf("/api/playlists/%d/items/%d/cover", playlistID, itemID)
+}
+
 type playlistItemWire struct {
 	ID              int64    `json:"id"`
 	PlaylistID      int64    `json:"playlist_id"`
@@ -175,6 +179,10 @@ func playlistDetailToWire(detail store.PlaylistDetail, favSet map[int64]bool) pl
 		groupWire := playlistGroupToWire(group.PlaylistGroup)
 		groupWire.Items = make([]playlistItemWire, len(group.Items))
 		for itemIdx, item := range group.Items {
+			customCoverPath := ""
+			if item.CustomCoverPath != "" {
+				customCoverPath = playlistItemCoverURL(item.PlaylistID, item.ID)
+			}
 			groupWire.Items[itemIdx] = playlistItemWire{
 				ID:              item.ID,
 				PlaylistID:      item.PlaylistID,
@@ -185,7 +193,7 @@ func playlistDetailToWire(detail store.PlaylistDetail, favSet map[int64]bool) pl
 				CoverMode:       item.CoverMode,
 				LibraryCoverID:  item.LibraryCoverID,
 				CachedCoverURL:  item.CachedCoverURL,
-				CustomCoverPath: item.CustomCoverPath,
+				CustomCoverPath: customCoverPath,
 				CreatedAt:       item.CreatedAt,
 				UpdatedAt:       item.UpdatedAt,
 				Track:           TrackDTO{Track: item.Track, IsFavorite: favSet[item.Track.ID]},
@@ -222,6 +230,43 @@ func (h *Handler) findPlaylistGroup(playlistID, groupID int64) (store.PlaylistGr
 		}
 	}
 	return store.PlaylistGroupDetail{}, true, false, nil
+}
+
+func (h *Handler) findPlaylistItem(playlistID, itemID int64) (store.PlaylistItem, bool, bool, error) {
+	detail, ok, err := h.loadPlaylistDetail(playlistID)
+	if err != nil || !ok {
+		return store.PlaylistItem{}, ok, false, err
+	}
+	for _, group := range detail.Groups {
+		for _, item := range group.Items {
+			if item.ID == itemID {
+				return item, true, true, nil
+			}
+		}
+	}
+	return store.PlaylistItem{}, true, false, nil
+}
+
+func playlistItemCoverDir(baseDir string, playlistID int64) string {
+	return filepath.Join(baseDir, "items", strconv.FormatInt(playlistID, 10))
+}
+
+func playlistItemCoverPath(baseDir string, playlistID, itemID int64, ext string) (string, string) {
+	relativePath := filepath.Join("items", strconv.FormatInt(playlistID, 10), fmt.Sprintf("%d%s", itemID, ext))
+	return relativePath, filepath.Join(baseDir, relativePath)
+}
+
+func playlistCoverExtension(contentType string) (string, bool) {
+	switch contentType {
+	case "image/jpeg":
+		return ".jpg", true
+	case "image/png":
+		return ".png", true
+	case "image/webp":
+		return ".webp", true
+	default:
+		return "", false
+	}
 }
 
 func playlistConflictStatus(err error) (string, int, bool) {
@@ -329,6 +374,15 @@ func (h *Handler) deletePlaylist(w http.ResponseWriter, _ *http.Request, idStr s
 		jsonError(w, "invalid id", http.StatusBadRequest)
 		return
 	}
+	playlist, ok, err := h.store.GetPlaylistByID(id)
+	if err != nil {
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		jsonError(w, "playlist not found", http.StatusNotFound)
+		return
+	}
 	err = h.store.DeletePlaylist(id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -338,6 +392,10 @@ func (h *Handler) deletePlaylist(w http.ResponseWriter, _ *http.Request, idStr s
 		jsonError(w, "internal", http.StatusInternalServerError)
 		return
 	}
+	if playlist.CoverPath != "" {
+		_ = os.Remove(filepath.Join(h.playlistCoverDir, playlist.CoverPath))
+	}
+	_ = os.RemoveAll(playlistItemCoverDir(h.playlistCoverDir, id))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -590,6 +648,172 @@ func (h *Handler) updatePlaylistItem(w http.ResponseWriter, r *http.Request, pla
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *Handler) uploadPlaylistItemCover(w http.ResponseWriter, r *http.Request, playlistIDStr, itemIDStr string) {
+	playlistID, err := parsePlaylistID(playlistIDStr)
+	if err != nil {
+		jsonError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	itemID, err := strconv.ParseInt(itemIDStr, 10, 64)
+	if err != nil {
+		jsonError(w, "invalid item id", http.StatusBadRequest)
+		return
+	}
+	item, playlistExists, itemExists, err := h.findPlaylistItem(playlistID, itemID)
+	if err != nil {
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	}
+	if !playlistExists {
+		jsonError(w, "playlist not found", http.StatusNotFound)
+		return
+	}
+	if !itemExists {
+		jsonError(w, "item not found", http.StatusNotFound)
+		return
+	}
+
+	if err := r.ParseMultipartForm(5 << 20); err != nil {
+		jsonError(w, "cover too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		jsonError(w, "missing file field", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	ext, ok := playlistCoverExtension(header.Header.Get("Content-Type"))
+	if !ok {
+		jsonError(w, "unsupported image type", http.StatusUnsupportedMediaType)
+		return
+	}
+	if header.Size > 5<<20 {
+		jsonError(w, "cover too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	itemDir := playlistItemCoverDir(h.playlistCoverDir, playlistID)
+	if err := os.MkdirAll(itemDir, 0o755); err != nil {
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	}
+	for _, oldExt := range []string{".jpg", ".png", ".webp"} {
+		_, oldPath := playlistItemCoverPath(h.playlistCoverDir, playlistID, itemID, oldExt)
+		_ = os.Remove(oldPath)
+	}
+
+	relativePath, absolutePath := playlistItemCoverPath(h.playlistCoverDir, playlistID, itemID, ext)
+	dst, err := os.Create(absolutePath)
+	if err != nil {
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		_ = os.Remove(absolutePath)
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	}
+
+	coverMode := "custom"
+	if err := h.store.UpdatePlaylistItem(itemID, store.PlaylistItemUpdate{
+		CoverMode:       &coverMode,
+		CustomCoverPath: &relativePath,
+	}); err != nil {
+		_ = os.Remove(absolutePath)
+		if errors.Is(err, sql.ErrNoRows) {
+			jsonError(w, "item not found", http.StatusNotFound)
+			return
+		}
+		if msg, status, ok := playlistConflictStatus(err); ok {
+			jsonError(w, msg, status)
+			return
+		}
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	}
+	// Remove old asset path if it differs from the replaced file.
+	if item.CustomCoverPath != "" && item.CustomCoverPath != relativePath {
+		_ = os.Remove(filepath.Join(h.playlistCoverDir, item.CustomCoverPath))
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) deletePlaylistItemCover(w http.ResponseWriter, _ *http.Request, playlistIDStr, itemIDStr string) {
+	playlistID, err := parsePlaylistID(playlistIDStr)
+	if err != nil {
+		jsonError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	itemID, err := strconv.ParseInt(itemIDStr, 10, 64)
+	if err != nil {
+		jsonError(w, "invalid item id", http.StatusBadRequest)
+		return
+	}
+	item, playlistExists, itemExists, err := h.findPlaylistItem(playlistID, itemID)
+	if err != nil {
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	}
+	if !playlistExists {
+		jsonError(w, "playlist not found", http.StatusNotFound)
+		return
+	}
+	if !itemExists {
+		jsonError(w, "item not found", http.StatusNotFound)
+		return
+	}
+	if item.CustomCoverPath != "" {
+		_ = os.Remove(filepath.Join(h.playlistCoverDir, item.CustomCoverPath))
+	}
+	coverMode := "default"
+	customCoverPath := ""
+	if err := h.store.UpdatePlaylistItem(itemID, store.PlaylistItemUpdate{
+		CoverMode:       &coverMode,
+		CustomCoverPath: &customCoverPath,
+	}); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			jsonError(w, "item not found", http.StatusNotFound)
+			return
+		}
+		if msg, status, ok := playlistConflictStatus(err); ok {
+			jsonError(w, msg, status)
+			return
+		}
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) servePlaylistItemCover(w http.ResponseWriter, r *http.Request, playlistIDStr, itemIDStr string) {
+	playlistID, err := parsePlaylistID(playlistIDStr)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	itemID, err := strconv.ParseInt(itemIDStr, 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	item, playlistExists, itemExists, err := h.findPlaylistItem(playlistID, itemID)
+	if err != nil || !playlistExists || !itemExists || item.CustomCoverPath == "" {
+		http.NotFound(w, r)
+		return
+	}
+	coverFile := filepath.Join(h.playlistCoverDir, item.CustomCoverPath)
+	if _, err := os.Stat(coverFile); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	http.ServeFile(w, r, coverFile)
+}
+
 func (h *Handler) renamePlaylistGroup(w http.ResponseWriter, r *http.Request, playlistIDStr, groupIDStr string) {
 	playlistID, err := parsePlaylistID(playlistIDStr)
 	if err != nil {
@@ -762,17 +986,8 @@ func (h *Handler) uploadPlaylistCover(w http.ResponseWriter, r *http.Request, id
 	}
 	defer file.Close()
 
-	// Validate content type
-	ct := header.Header.Get("Content-Type")
-	var ext string
-	switch ct {
-	case "image/jpeg":
-		ext = ".jpg"
-	case "image/png":
-		ext = ".png"
-	case "image/webp":
-		ext = ".webp"
-	default:
+	ext, ok := playlistCoverExtension(header.Header.Get("Content-Type"))
+	if !ok {
 		jsonError(w, "unsupported image type", http.StatusUnsupportedMediaType)
 		return
 	}

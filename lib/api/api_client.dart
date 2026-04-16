@@ -431,6 +431,40 @@ class ApiClient {
     }
   }
 
+  Future<void> uploadPlaylistItemCover(
+    int playlistId,
+    int itemId,
+    List<int> bytes,
+    String filename,
+    String contentType,
+  ) async {
+    final request = http.MultipartRequest(
+      'PUT',
+      Uri.parse(_url(ApiEndpoints.playlistItemCover(playlistId, itemId))),
+    );
+    request.files.add(http.MultipartFile.fromBytes(
+      'file',
+      bytes,
+      filename: filename,
+      contentType: MediaType.parse(contentType),
+    ));
+    final streamedRes = await request.send();
+    final res = await http.Response.fromStream(streamedRes);
+    if (res.statusCode != 204) {
+      throw ApiException(
+          'Failed to upload playlist item cover', res.statusCode);
+    }
+  }
+
+  Future<void> clearPlaylistItemCover(int playlistId, int itemId) async {
+    final res = await http.delete(
+      Uri.parse(_url(ApiEndpoints.playlistItemCover(playlistId, itemId))),
+    );
+    if (res.statusCode != 204) {
+      throw ApiException('Failed to clear playlist item cover', res.statusCode);
+    }
+  }
+
   Future<void> uploadPlaylistCover(
     int id,
     List<int> bytes,

@@ -42,9 +42,9 @@ class _AddToPlaylistSheetState extends State<AddToPlaylistSheet> {
 
   String _formatSuccessMessage(int added, int skipped) {
     if (skipped > 0) {
-      return 'Added $added tracks ($skipped already in playlist)';
+      return 'Added $added items ($skipped already in playlist)';
     } else {
-      return 'Added $added tracks';
+      return 'Added $added items';
     }
   }
 
@@ -69,7 +69,8 @@ class _AddToPlaylistSheetState extends State<AddToPlaylistSheet> {
       PlaylistRepository.instance.upsertPlaylist(playlist);
 
       // Add tracks to it
-      final added = await widget.client.addTracksToPlaylist(playlist.id, widget.trackIds);
+      final added =
+          await widget.client.addTracksToPlaylist(playlist.id, widget.trackIds);
       final skipped = widget.trackIds.length - added;
 
       if (!context.mounted) return;
@@ -83,7 +84,8 @@ class _AddToPlaylistSheetState extends State<AddToPlaylistSheet> {
       if (!context.mounted) return;
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to add tracks. Please try again.')),
+        const SnackBar(
+            content: Text('Failed to add tracks. Please try again.')),
       );
       // Don't close sheet on error
     }
@@ -94,7 +96,8 @@ class _AddToPlaylistSheetState extends State<AddToPlaylistSheet> {
 
     setState(() => _isLoading = true);
     try {
-      final added = await widget.client.addTracksToPlaylist(playlist.id, widget.trackIds);
+      final added =
+          await widget.client.addTracksToPlaylist(playlist.id, widget.trackIds);
       final skipped = widget.trackIds.length - added;
 
       if (!context.mounted) return;
@@ -108,7 +111,8 @@ class _AddToPlaylistSheetState extends State<AddToPlaylistSheet> {
       if (!context.mounted) return;
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to add tracks. Please try again.')),
+        const SnackBar(
+            content: Text('Failed to add tracks. Please try again.')),
       );
       // Don't close sheet on error
     }
@@ -134,7 +138,8 @@ class _AddToPlaylistSheetState extends State<AddToPlaylistSheet> {
               ListTile(
                 leading: const Icon(Icons.add),
                 title: const Text('New playlist'),
-                onTap: _isLoading ? null : () => _createNewPlaylistAndAdd(context),
+                onTap:
+                    _isLoading ? null : () => _createNewPlaylistAndAdd(context),
                 enabled: !_isLoading,
               ),
               const Divider(),
@@ -167,7 +172,9 @@ class _AddToPlaylistSheetState extends State<AddToPlaylistSheet> {
                             ),
                             title: Text(playlist.name),
                             subtitle: Text('${playlist.trackCount} tracks'),
-                            onTap: _isLoading ? null : () => _addToPlaylist(context, playlist),
+                            onTap: _isLoading
+                                ? null
+                                : () => _addToPlaylist(context, playlist),
                             enabled: !_isLoading,
                           );
                         },

@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../api/api.dart';
@@ -138,6 +139,21 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     return errorStr;
   }
 
+  String _getMimeType(String filename) {
+    final ext = filename.toLowerCase().split('.').last;
+    switch (ext) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      default:
+        return 'image/jpeg';
+    }
+  }
+
   void _playItem(PlaylistItem item) {
     final queue = _queue;
     final index = _items.indexWhere((candidate) => candidate.id == item.id);
@@ -177,9 +193,51 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
         groups: detail.groups,
         onSave: (request) =>
             _client.updatePlaylistItem(widget.playlistId, item.id, request),
+        onUploadCustomCover: () => _uploadItemCover(item),
+        onClearCustomCover: () => _clearItemCover(item),
       ),
     );
     await _loadPlaylistAndTracks();
+  }
+
+  Future<void> _uploadItemCover(PlaylistItem item) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    final file = result.files.first;
+    final bytes = file.bytes;
+    if (bytes == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to read file')),
+      );
+      return;
+    }
+
+    await _client.uploadPlaylistItemCover(
+      widget.playlistId,
+      item.id,
+      bytes,
+      file.name,
+      _getMimeType(file.name),
+    );
+    await _loadPlaylistAndTracks();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Custom cover uploaded')),
+    );
+  }
+
+  Future<void> _clearItemCover(PlaylistItem item) async {
+    await _client.clearPlaylistItemCover(widget.playlistId, item.id);
+    await _loadPlaylistAndTracks();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Custom cover removed')),
+    );
   }
 
   Future<void> _persistGroupedOrder() async {

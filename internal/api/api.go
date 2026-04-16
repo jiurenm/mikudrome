@@ -194,21 +194,15 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, "not found", http.StatusNotFound)
 			return
 		}
-		parts := strings.SplitN(trimmed, "/", 3)
+		parts := strings.Split(trimmed, "/")
+		for _, part := range parts {
+			if part == "" {
+				jsonError(w, "not found", http.StatusNotFound)
+				return
+			}
+		}
 		if parts[0] != "" {
 			idStr := parts[0]
-			if len(parts) == 3 && strings.Contains(parts[2], "/") {
-				jsonError(w, "not found", http.StatusNotFound)
-				return
-			}
-			if len(parts) == 2 && strings.HasSuffix(trimmed, "/") {
-				jsonError(w, "not found", http.StatusNotFound)
-				return
-			}
-			if len(parts) == 3 && parts[1] == "groups" && parts[2] == "" {
-				jsonError(w, "not found", http.StatusNotFound)
-				return
-			}
 			if len(parts) == 1 {
 				switch r.Method {
 				case http.MethodGet:
@@ -269,6 +263,19 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				h.reorderGroupedPlaylistItems(w, r, idStr)
 				return
 			}
+			if len(parts) == 4 && parts[1] == "items" && parts[3] == "cover" {
+				switch r.Method {
+				case http.MethodGet:
+					h.servePlaylistItemCover(w, r, idStr, parts[2])
+				case http.MethodPut:
+					h.uploadPlaylistItemCover(w, r, idStr, parts[2])
+				case http.MethodDelete:
+					h.deletePlaylistItemCover(w, r, idStr, parts[2])
+				default:
+					jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+			}
 			if len(parts) == 3 && parts[1] == "groups" {
 				switch r.Method {
 				case http.MethodPatch:
@@ -299,7 +306,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						jsonError(w, "not found", http.StatusNotFound)
 					}
 				case "items":
-					if len(parts) == 2 || (len(parts) == 3 && parts[2] != "") {
+					if len(parts) == 2 || (len(parts) == 3 && parts[2] != "") || (len(parts) == 4 && parts[3] == "cover") {
 						jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
 					} else {
 						jsonError(w, "not found", http.StatusNotFound)

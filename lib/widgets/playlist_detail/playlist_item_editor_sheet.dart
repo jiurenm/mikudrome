@@ -10,11 +10,15 @@ class PlaylistItemEditorSheet extends StatefulWidget {
     required this.item,
     required this.groups,
     required this.onSave,
+    this.onUploadCustomCover,
+    this.onClearCustomCover,
   });
 
   final PlaylistItem item;
   final List<PlaylistGroup> groups;
   final Future<void> Function(PlaylistItemUpdateRequest request) onSave;
+  final Future<void> Function()? onUploadCustomCover;
+  final Future<void> Function()? onClearCustomCover;
 
   @override
   State<PlaylistItemEditorSheet> createState() =>
@@ -25,7 +29,9 @@ class _PlaylistItemEditorSheetState extends State<PlaylistItemEditorSheet> {
   late final TextEditingController _noteController;
   late int _selectedGroupId;
   late String _selectedCoverMode;
+  late bool _hasCustomCover;
   bool _saving = false;
+  bool _coverActionInProgress = false;
 
   @override
   void initState() {
@@ -33,6 +39,7 @@ class _PlaylistItemEditorSheetState extends State<PlaylistItemEditorSheet> {
     _noteController = TextEditingController(text: widget.item.note);
     _selectedGroupId = widget.item.groupId;
     _selectedCoverMode = widget.item.coverMode;
+    _hasCustomCover = widget.item.customCoverPath.trim().isNotEmpty;
   }
 
   @override
@@ -52,9 +59,6 @@ class _PlaylistItemEditorSheetState extends State<PlaylistItemEditorSheet> {
           note: _noteController.text.trim(),
           groupId: _selectedGroupId,
           coverMode: _selectedCoverMode,
-          libraryCoverId: widget.item.libraryCoverId,
-          cachedCoverUrl: widget.item.cachedCoverUrl,
-          customCoverPath: widget.item.customCoverPath,
         ),
       );
       if (mounted) {
@@ -64,6 +68,54 @@ class _PlaylistItemEditorSheetState extends State<PlaylistItemEditorSheet> {
       if (mounted) {
         setState(() {
           _saving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _uploadCustomCover() async {
+    final onUploadCustomCover = widget.onUploadCustomCover;
+    if (onUploadCustomCover == null || _coverActionInProgress) return;
+    setState(() {
+      _coverActionInProgress = true;
+    });
+    try {
+      await onUploadCustomCover();
+      if (mounted) {
+        setState(() {
+          _hasCustomCover = true;
+          _selectedCoverMode = 'custom';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _coverActionInProgress = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _clearCustomCover() async {
+    final onClearCustomCover = widget.onClearCustomCover;
+    if (onClearCustomCover == null || _coverActionInProgress) return;
+    setState(() {
+      _coverActionInProgress = true;
+    });
+    try {
+      await onClearCustomCover();
+      if (mounted) {
+        setState(() {
+          _hasCustomCover = false;
+          if (_selectedCoverMode == 'custom') {
+            _selectedCoverMode = 'default';
+          }
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _coverActionInProgress = false;
         });
       }
     }
@@ -152,11 +204,38 @@ class _PlaylistItemEditorSheetState extends State<PlaylistItemEditorSheet> {
                   ],
                 ),
               ),
+              if (_selectedCoverMode == 'custom') ...[
+                const SizedBox(height: 8),
+                Text(
+                  _hasCustomCover
+                      ? 'A custom cover is attached to this playlist item.'
+                      : 'No custom cover uploaded yet.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton(
+                      onPressed:
+                          _coverActionInProgress ? null : _uploadCustomCover,
+                      child: const Text('Upload Cover'),
+                    ),
+                    if (_hasCustomCover)
+                      TextButton(
+                        onPressed:
+                            _coverActionInProgress ? null : _clearCustomCover,
+                        child: const Text('Remove Cover'),
+                      ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 16),
               Align(
                 alignment: Alignment.centerRight,
                 child: FilledButton(
-                  onPressed: _saving ? null : _save,
+                  onPressed: _saving || _coverActionInProgress ? null : _save,
                   child: const Text('Save'),
                 ),
               ),

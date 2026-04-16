@@ -134,6 +134,7 @@ void main() {
       await tester
           .tap(find.widgetWithText(RadioListTile<String>, 'Custom Cover'));
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Save'));
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
@@ -175,6 +176,46 @@ void main() {
 
     expect(find.text('Legacy Track'), findsOneWidget);
   });
+
+  testWidgets(
+    'Custom item cover overrides default cover in playlist detail',
+    (tester) async {
+      const item = PlaylistItem(
+        id: 9,
+        playlistId: 7,
+        trackId: 3,
+        groupId: 1,
+        position: 0,
+        note: '',
+        coverMode: 'custom',
+        customCoverPath: 'http://example.test/custom.jpg',
+        track: Track(
+          id: 3,
+          title: 'Track A',
+          audioPath: '/a.flac',
+          videoPath: '',
+        ),
+      );
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: PlaylistTrackRow(
+              item: item,
+              baseUrl: 'http://example.test',
+              onTap: _noop,
+              onRemove: _noop,
+            ),
+          ),
+        ),
+      );
+
+      final image = tester.widget<Image>(find.byType(Image).first);
+      final provider =
+          (image.image as ResizeImage).imageProvider as NetworkImage;
+      expect(provider.url, 'http://example.test/custom.jpg');
+    },
+  );
 
   testWidgets('PlaylistDetailScreen shows fetch errors with retry affordance', (
     tester,

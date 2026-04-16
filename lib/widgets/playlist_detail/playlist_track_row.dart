@@ -47,6 +47,30 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
   Track get _track => widget.item?.track ?? widget.track!;
   String get _vocalLine => _track.vocalLine;
   String get _note => widget.item?.note.trim() ?? '';
+  String get _coverUrl {
+    final item = widget.item;
+    if (item != null) {
+      if (item.coverMode == 'custom' &&
+          item.customCoverPath.trim().isNotEmpty) {
+        return _resolveCoverUrl(item.customCoverPath);
+      }
+      if (item.coverMode == 'library' &&
+          item.cachedCoverUrl.trim().isNotEmpty) {
+        return _resolveCoverUrl(item.cachedCoverUrl);
+      }
+    }
+    return '${widget.baseUrl}/api/stream/${_track.id}/thumb';
+  }
+
+  String _resolveCoverUrl(String url) {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    if (url.startsWith('/')) {
+      return '${widget.baseUrl}$url';
+    }
+    return url;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -86,7 +110,7 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: Image.network(
-                    '${widget.baseUrl}/api/stream/${track.id}/thumb',
+                    _coverUrl,
                     width: mobile ? 40 : 48,
                     height: mobile ? 40 : 48,
                     cacheWidth: mobile ? 80 : 96,
