@@ -50,6 +50,20 @@ class _PlaylistItemEditorSheetState extends State<PlaylistItemEditorSheet> {
 
   Future<void> _save() async {
     if (_saving) return;
+    String? libraryCoverId;
+    String? cachedCoverUrl;
+    if (_selectedCoverMode == 'library') {
+      final existingLibraryCoverId = widget.item.libraryCoverId.trim();
+      final existingCachedCoverUrl = widget.item.cachedCoverUrl.trim();
+      if (existingLibraryCoverId.isNotEmpty ||
+          existingCachedCoverUrl.isNotEmpty) {
+        libraryCoverId = existingLibraryCoverId;
+        cachedCoverUrl = existingCachedCoverUrl;
+      } else if (widget.item.track.albumId > 0) {
+        libraryCoverId = 'album:${widget.item.track.albumId}';
+        cachedCoverUrl = '/api/albums/${widget.item.track.albumId}/cover';
+      }
+    }
     setState(() {
       _saving = true;
     });
@@ -59,6 +73,8 @@ class _PlaylistItemEditorSheetState extends State<PlaylistItemEditorSheet> {
           note: _noteController.text.trim(),
           groupId: _selectedGroupId,
           coverMode: _selectedCoverMode,
+          libraryCoverId: libraryCoverId,
+          cachedCoverUrl: cachedCoverUrl,
         ),
       );
       if (mounted) {

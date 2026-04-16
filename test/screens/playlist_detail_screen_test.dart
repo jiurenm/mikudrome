@@ -8,6 +8,7 @@ import 'package:mikudrome/models/playlist_item.dart';
 import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/screens/playlist_detail_screen.dart';
 import 'package:mikudrome/services/playlist_repository.dart';
+import 'package:mikudrome/widgets/playlist_detail/playlist_item_editor_sheet.dart';
 import 'package:mikudrome/widgets/playlist_detail/playlist_track_row.dart';
 
 void main() {
@@ -153,6 +154,55 @@ void main() {
     },
   );
 
+  testWidgets(
+    'PlaylistDetailScreen edit mode drags items between groups with grouped reorder payload',
+    (tester) async {
+      final client = _EditableFakeApiClient(_buildReorderableDetail());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: client,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('EDIT'));
+      await tester.pumpAndSettle();
+
+      await tester.dragUntilVisible(
+        find.text('Act 2'),
+        find.byType(CustomScrollView),
+        const Offset(0, -160),
+      );
+      await tester.pumpAndSettle();
+
+      final handle = find.byKey(const ValueKey('playlist-item-101-drag-handle'));
+      final target = find.byKey(const ValueKey('playlist-group-2-slot-1'));
+
+      expect(handle, findsOneWidget);
+      expect(target, findsOneWidget);
+
+      final start = tester.getCenter(handle);
+      final end = tester.getCenter(target);
+      final gesture = await tester.startGesture(start);
+      await tester.pump();
+      await gesture.moveTo(end);
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(client.reorderRequests, hasLength(1));
+      expect(client.reorderRequests.single, hasLength(2));
+      expect(client.reorderRequests.single[0].id, 1);
+      expect(client.reorderRequests.single[0].itemIds, [102]);
+      expect(client.reorderRequests.single[1].id, 2);
+      expect(client.reorderRequests.single[1].itemIds, [201, 101]);
+    },
+  );
+
   testWidgets('PlaylistTrackRow.track keeps legacy track callers working', (
     tester,
   ) async {
@@ -214,6 +264,153 @@ void main() {
       final provider =
           (image.image as ResizeImage).imageProvider as NetworkImage;
       expect(provider.url, 'http://example.test/custom.jpg');
+    },
+  );
+
+  testWidgets(
+    'PlaylistTrackRow shows note in dedicated desktop column',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      const item = PlaylistItem(
+        id: 10,
+        playlistId: 7,
+        trackId: 4,
+        groupId: 1,
+        position: 0,
+        note: 'desktop note',
+        coverMode: 'default',
+        track: Track(
+          id: 4,
+          title: 'Column Track',
+          audioPath: '/column.flac',
+          videoPath: '',
+          vocal: 'Miku',
+        ),
+      );
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(size: Size(1280, 900)),
+            child: Scaffold(
+              body: PlaylistTrackRow(
+                item: item,
+                baseUrl: 'http://example.test',
+                onTap: _noop,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('playlist-track-row-note-desktop')), findsOneWidget);
+      expect(find.byKey(const ValueKey('playlist-track-row-note-mobile')), findsNothing);
+      expect(find.text('desktop note'), findsOneWidget);
+
+      final noteLeft = tester
+          .getTopLeft(find.byKey(const ValueKey('playlist-track-row-note-desktop')))
+          .dx;
+      expect(noteLeft, lessThan(600));
+    },
+  );
+
+  testWidgets(
+    'PlaylistTrackRow keeps note under title on mobile',
+    (tester) async {
+      const item = PlaylistItem(
+        id: 11,
+        playlistId: 7,
+        trackId: 5,
+        groupId: 1,
+        position: 0,
+        note: 'mobile note',
+        coverMode: 'default',
+        track: Track(
+          id: 5,
+          title: 'Mobile Track',
+          audioPath: '/mobile.flac',
+          videoPath: '',
+          vocal: 'Miku',
+        ),
+      );
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(size: Size(390, 844)),
+            child: Scaffold(
+              body: PlaylistTrackRow(
+                item: item,
+                baseUrl: 'http://example.test',
+                onTap: _noop,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('playlist-track-row-note-mobile')), findsOneWidget);
+      expect(find.byKey(const ValueKey('playlist-track-row-note-desktop')), findsNothing);
+      expect(find.text('mobile note'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'PlaylistItemEditorSheet snapshots library cover for album-backed tracks',
+    (tester) async {
+      PlaylistItemUpdateRequest? savedRequest;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PlaylistItemEditorSheet(
+              item: const PlaylistItem(
+                id: 9,
+                playlistId: 7,
+                trackId: 3,
+                groupId: 1,
+                position: 0,
+                note: '',
+                coverMode: 'default',
+                track: Track(
+                  id: 3,
+                  title: 'Track A',
+                  audioPath: '/a.flac',
+                  videoPath: '',
+                  albumId: 42,
+                ),
+              ),
+              groups: const [
+                PlaylistGroup(
+                  id: 1,
+                  playlistId: 7,
+                  title: 'Ungrouped',
+                  isSystem: true,
+                ),
+              ],
+              onSave: (request) async {
+                savedRequest = request;
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester
+          .tap(find.widgetWithText(RadioListTile<String>, 'Library Cover'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Save'));
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(savedRequest, isNotNull);
+      expect(savedRequest!.coverMode, 'library');
+      expect(savedRequest!.libraryCoverId, 'album:42');
+      expect(savedRequest!.cachedCoverUrl, '/api/albums/42/cover');
     },
   );
 
@@ -350,6 +547,7 @@ class _EditableFakeApiClient extends ApiClient {
   PlaylistDetailData _detail;
   final List<String> createdGroupTitles = [];
   final List<_UpdatedItemCall> updatedItemRequests = [];
+  final List<List<PlaylistGroupReorderInput>> reorderRequests = [];
 
   @override
   Future<PlaylistDetailData> getPlaylistItems(int id) async => _detail;
@@ -358,7 +556,60 @@ class _EditableFakeApiClient extends ApiClient {
   Future<void> reorderPlaylistItems(
     int id,
     List<PlaylistGroupReorderInput> groups,
-  ) async {}
+  ) async {
+    reorderRequests.add(groups);
+
+    final itemsById = <int, PlaylistItem>{
+      for (final group in _detail.groups)
+        for (final item in group.items) item.id: item,
+    };
+
+    _detail = PlaylistDetailData(
+      playlist: _detail.playlist,
+      groups: [
+        for (var groupIndex = 0; groupIndex < _detail.groups.length; groupIndex++)
+          PlaylistGroup(
+            id: _detail.groups[groupIndex].id,
+            playlistId: _detail.groups[groupIndex].playlistId,
+            title: _detail.groups[groupIndex].title,
+            position: groupIndex,
+            isSystem: _detail.groups[groupIndex].isSystem,
+            createdAt: _detail.groups[groupIndex].createdAt,
+            updatedAt: _detail.groups[groupIndex].updatedAt,
+            items: [
+              for (var itemIndex = 0;
+                  itemIndex < groups[groupIndex].itemIds.length;
+                  itemIndex++)
+                PlaylistItem(
+                  id: itemsById[groups[groupIndex].itemIds[itemIndex]]!.id,
+                  playlistId:
+                      itemsById[groups[groupIndex].itemIds[itemIndex]]!.playlistId,
+                  trackId: itemsById[groups[groupIndex].itemIds[itemIndex]]!.trackId,
+                  groupId: groups[groupIndex].id,
+                  position: itemIndex,
+                  note: itemsById[groups[groupIndex].itemIds[itemIndex]]!.note,
+                  coverMode:
+                      itemsById[groups[groupIndex].itemIds[itemIndex]]!.coverMode,
+                  libraryCoverId: itemsById[
+                          groups[groupIndex].itemIds[itemIndex]]!
+                      .libraryCoverId,
+                  cachedCoverUrl:
+                      itemsById[groups[groupIndex].itemIds[itemIndex]]!
+                          .cachedCoverUrl,
+                  customCoverPath:
+                      itemsById[groups[groupIndex].itemIds[itemIndex]]!
+                          .customCoverPath,
+                  createdAt:
+                      itemsById[groups[groupIndex].itemIds[itemIndex]]!.createdAt,
+                  updatedAt:
+                      itemsById[groups[groupIndex].itemIds[itemIndex]]!.updatedAt,
+                  track: itemsById[groups[groupIndex].itemIds[itemIndex]]!.track,
+                ),
+            ],
+          ),
+      ],
+    );
+  }
 
   @override
   Future<PlaylistGroup> createPlaylistGroup(int id, String title) async {
@@ -504,6 +755,80 @@ PlaylistDetailData _buildEditableDetail() {
               id: 11,
               title: 'Track A',
               audioPath: '/music/a.flac',
+              videoPath: '',
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+PlaylistDetailData _buildReorderableDetail() {
+  return const PlaylistDetailData(
+    playlist: Playlist(
+      id: 7,
+      name: 'Edit Mix',
+      trackCount: 3,
+    ),
+    groups: [
+      PlaylistGroup(
+        id: 1,
+        playlistId: 7,
+        title: 'Ungrouped',
+        position: 0,
+        isSystem: true,
+        items: [
+          PlaylistItem(
+            id: 101,
+            playlistId: 7,
+            trackId: 11,
+            groupId: 1,
+            position: 0,
+            note: '',
+            coverMode: 'default',
+            track: Track(
+              id: 11,
+              title: 'Track A',
+              audioPath: '/music/a.flac',
+              videoPath: '',
+            ),
+          ),
+          PlaylistItem(
+            id: 102,
+            playlistId: 7,
+            trackId: 12,
+            groupId: 1,
+            position: 1,
+            note: '',
+            coverMode: 'default',
+            track: Track(
+              id: 12,
+              title: 'Track B',
+              audioPath: '/music/b.flac',
+              videoPath: '',
+            ),
+          ),
+        ],
+      ),
+      PlaylistGroup(
+        id: 2,
+        playlistId: 7,
+        title: 'Act 2',
+        position: 1,
+        items: [
+          PlaylistItem(
+            id: 201,
+            playlistId: 7,
+            trackId: 21,
+            groupId: 2,
+            position: 0,
+            note: '',
+            coverMode: 'default',
+            track: Track(
+              id: 21,
+              title: 'Track C',
+              audioPath: '/music/c.flac',
               videoPath: '',
             ),
           ),

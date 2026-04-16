@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../api/api.dart';
 import '../models/playlist.dart';
 import '../models/playlist_detail_data.dart';
+import '../models/playlist_group.dart';
 import '../models/playlist_item.dart';
 import '../models/track.dart';
 import '../services/playlist_repository.dart';
@@ -48,6 +49,8 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   String? _error;
   bool _isEditMode = false;
   bool _isLoading = false; // Prevents concurrent _loadPlaylistAndTracks calls
+  bool _isPersistingOrder = false;
+  int? _draggingItemId;
 
   late final ApiClient _client;
   PlaylistDetailData? _detail;
@@ -255,11 +258,280 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   }
 
   Future<void> _finishEditMode() async {
-    await _persistGroupedOrder();
     if (!mounted) return;
     setState(() {
       _isEditMode = false;
+      _draggingItemId = null;
     });
+  }
+
+  Future<void> _moveItem(
+    PlaylistItem item,
+    int targetGroupId,
+    int targetIndex,
+  ) async {
+    final detail = _detail;
+    if (detail == null || _isPersistingOrder) return;
+
+    final sourceGroupIndex =
+        detail.groups.indexWhere((group) => group.id == item.groupId);
+    if (sourceGroupIndex < 0) return;
+
+    final sourceGroup = detail.groups[sourceGroupIndex];
+    final sourceIndex =
+        sourceGroup.items.indexWhere((candidate) => candidate.id == item.id);
+    if (sourceIndex < 0) return;
+
+    final targetGroupIndex =
+        detail.groups.indexWhere((group) => group.id == targetGroupId);
+    if (targetGroupIndex < 0) return;
+
+    var normalizedTargetIndex = targetIndex;
+    if (sourceGroupIndex == targetGroupIndex && sourceIndex < targetIndex) {
+      normalizedTargetIndex -= 1;
+    }
+
+    if (sourceGroupIndex == targetGroupIndex &&
+        sourceIndex == normalizedTargetIndex) {
+      if (!mounted) return;
+      setState(() {
+        _draggingItemId = null;
+      });
+      return;
+    }
+
+    final previousGroups = _cloneGroups(detail.groups);
+    final nextGroups = _cloneGroups(detail.groups);
+    final movingItem = nextGroups[sourceGroupIndex].items.removeAt(sourceIndex);
+    final destinationItems = nextGroups[targetGroupIndex].items;
+    final insertionIndex =
+        normalizedTargetIndex.clamp(0, destinationItems.length);
+    destinationItems.insert(
+      insertionIndex,
+      _copyItem(movingItem, groupId: targetGroupId, position: insertionIndex),
+    );
+
+    final normalizedGroups = [
+      for (var groupIndex = 0; groupIndex < nextGroups.length; groupIndex++)
+        _copyGroup(
+          nextGroups[groupIndex],
+          position: groupIndex,
+          items: [
+            for (var itemIndex = 0;
+                itemIndex < nextGroups[groupIndex].items.length;
+                itemIndex++)
+              _copyItem(
+                nextGroups[groupIndex].items[itemIndex],
+                groupId: nextGroups[groupIndex].id,
+                position: itemIndex,
+              ),
+          ],
+        ),
+    ];
+
+    setState(() {
+      _detail = PlaylistDetailData(
+        playlist: detail.playlist,
+        groups: normalizedGroups,
+      );
+      _draggingItemId = null;
+      _isPersistingOrder = true;
+    });
+
+    try {
+      await _persistGroupedOrder();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _detail = PlaylistDetailData(
+          playlist: detail.playlist,
+          groups: previousGroups,
+        );
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_sanitizeError(e))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isPersistingOrder = false;
+        });
+      }
+    }
+  }
+
+  List<PlaylistGroup> _cloneGroups(List<PlaylistGroup> groups) {
+    return groups
+        .map((group) => _copyGroup(group, items: [...group.items]))
+        .toList();
+  }
+
+  PlaylistGroup _copyGroup(
+    PlaylistGroup group, {
+    int? position,
+    List<PlaylistItem>? items,
+  }) {
+    return PlaylistGroup(
+      id: group.id,
+      playlistId: group.playlistId,
+      title: group.title,
+      position: position ?? group.position,
+      isSystem: group.isSystem,
+      createdAt: group.createdAt,
+      updatedAt: group.updatedAt,
+      items: items ?? group.items,
+    );
+  }
+
+  PlaylistItem _copyItem(
+    PlaylistItem item, {
+    int? groupId,
+    int? position,
+  }) {
+    return PlaylistItem(
+      id: item.id,
+      playlistId: item.playlistId,
+      trackId: item.trackId,
+      groupId: groupId ?? item.groupId,
+      position: position ?? item.position,
+      note: item.note,
+      coverMode: item.coverMode,
+      libraryCoverId: item.libraryCoverId,
+      cachedCoverUrl: item.cachedCoverUrl,
+      customCoverPath: item.customCoverPath,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      track: item.track,
+    );
+  }
+
+  Widget _buildDropSlot(
+    PlaylistGroup group,
+    int itemIndex,
+  ) {
+    return DragTarget<_PlaylistDragData>(
+      key: ValueKey('playlist-group-${group.id}-slot-$itemIndex'),
+      onWillAcceptWithDetails: (details) => !_isPersistingOrder,
+      onAcceptWithDetails: (details) {
+        final draggedItem = _items
+            .where((candidate) => candidate.id == details.data.itemId)
+            .firstOrNull;
+        if (draggedItem == null) return;
+        _moveItem(draggedItem, group.id, itemIndex);
+      },
+      builder: (context, candidateData, rejectedData) {
+        final active = candidateData.isNotEmpty;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          height: active ? 20 : 8,
+          margin: const EdgeInsets.symmetric(vertical: 2),
+          decoration: BoxDecoration(
+            color: active
+                ? AppTheme.mikuGreen.withValues(alpha: 0.18)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+            border: active
+                ? Border.all(
+                    color: AppTheme.mikuGreen.withValues(alpha: 0.75),
+                  )
+                : null,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDragHandle(PlaylistItem item) {
+    final dragging = _draggingItemId == item.id;
+    final icon = Semantics(
+      label: 'Drag to reorder',
+      child: Icon(
+        Icons.drag_handle,
+        key: ValueKey('playlist-item-${item.id}-drag-handle'),
+        size: 20,
+        color: dragging || _isPersistingOrder
+            ? AppTheme.textMuted.withValues(alpha: 0.45)
+            : AppTheme.textMuted,
+      ),
+    );
+
+    if (_isPersistingOrder) return icon;
+
+    return Draggable<_PlaylistDragData>(
+      data: _PlaylistDragData(itemId: item.id),
+      onDragStarted: () {
+        setState(() {
+          _draggingItemId = item.id;
+        });
+      },
+      onDragEnd: (_) {
+        if (!mounted) return;
+        setState(() {
+          _draggingItemId = null;
+        });
+      },
+      feedback: Material(
+        color: Colors.transparent,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 280),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppTheme.cardBg,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.08),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Text(
+            item.track.title,
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+        ),
+      ),
+      childWhenDragging: icon,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.grab,
+        child: icon,
+      ),
+    );
+  }
+
+  List<Widget> _buildGroupChildren(PlaylistGroup group) {
+    final children = <Widget>[];
+    if (_isEditMode) {
+      children.add(_buildDropSlot(group, 0));
+    }
+    for (var index = 0; index < group.items.length; index++) {
+      final item = group.items[index];
+      children.add(
+        Opacity(
+          opacity: _draggingItemId == item.id ? 0.5 : 1,
+          child: PlaylistTrackRow(
+            key: ValueKey(item.id),
+            item: item,
+            baseUrl: widget._effectiveBaseUrl,
+            onTap: () => _playItem(item),
+            onEdit: _isEditMode ? () => _editItem(item) : null,
+            showDragHandle: _isEditMode,
+            dragHandle: _isEditMode ? _buildDragHandle(item) : null,
+            isCurrentlyPlaying:
+                widget.currentPlayingTrackId == item.track.id && widget.isPlaying,
+          ),
+        ),
+      );
+      if (_isEditMode) {
+        children.add(_buildDropSlot(group, index + 1));
+      }
+    }
+    return children;
   }
 
   @override
@@ -386,22 +658,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                 padding: const EdgeInsets.only(bottom: 24),
                                 child: PlaylistGroupSection(
                                   title: group.title,
-                                  children: [
-                                    for (final item in group.items)
-                                      PlaylistTrackRow(
-                                        key: ValueKey(item.id),
-                                        item: item,
-                                        baseUrl: widget._effectiveBaseUrl,
-                                        onTap: () => _playItem(item),
-                                        onEdit: _isEditMode
-                                            ? () => _editItem(item)
-                                            : null,
-                                        isCurrentlyPlaying:
-                                            widget.currentPlayingTrackId ==
-                                                    item.track.id &&
-                                                widget.isPlaying,
-                                      ),
-                                  ],
+                                  children: _buildGroupChildren(group),
                                 ),
                               ),
                           ]),
@@ -416,4 +673,12 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
       ),
     );
   }
+}
+
+class _PlaylistDragData {
+  const _PlaylistDragData({
+    required this.itemId,
+  });
+
+  final int itemId;
 }

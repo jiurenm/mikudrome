@@ -14,6 +14,7 @@ class PlaylistTrackRow extends StatefulWidget {
     this.onEdit,
     this.onRemove,
     this.showDragHandle = false,
+    this.dragHandle,
     this.isCurrentlyPlaying = false,
   }) : track = null;
 
@@ -25,6 +26,7 @@ class PlaylistTrackRow extends StatefulWidget {
     this.onEdit,
     this.onRemove,
     this.showDragHandle = false,
+    this.dragHandle,
     this.isCurrentlyPlaying = false,
   }) : item = null;
 
@@ -35,6 +37,7 @@ class PlaylistTrackRow extends StatefulWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onRemove;
   final bool showDragHandle;
+  final Widget? dragHandle;
   final bool isCurrentlyPlaying;
 
   @override
@@ -72,6 +75,99 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
     return url;
   }
 
+  Widget _buildTitleBlock({
+    required BuildContext context,
+    required Track track,
+    required Color titleColor,
+    required String vocalLine,
+    required String note,
+    required bool mobile,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          track.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: titleColor,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        if (mobile && note.isNotEmpty)
+          Text(
+            note,
+            key: const ValueKey('playlist-track-row-note-mobile'),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppTheme.textMuted,
+                ),
+          ),
+        if (vocalLine.isNotEmpty)
+          Text(
+            vocalLine,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppTheme.textMuted,
+                  fontSize: 12,
+                ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildDesktopNoteColumn(BuildContext context, String note) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: note.isEmpty
+          ? const SizedBox.shrink()
+          : Text(
+              note,
+              key: const ValueKey('playlist-track-row-note-desktop'),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppTheme.textMuted,
+                  ),
+            ),
+    );
+  }
+
+  Widget _buildDesktopContentBlock({
+    required BuildContext context,
+    required Track track,
+    required Color titleColor,
+    required String vocalLine,
+    required String note,
+  }) {
+    return Expanded(
+      child: Row(
+        children: [
+          Flexible(
+            flex: 2,
+            child: _buildTitleBlock(
+              context: context,
+              track: track,
+              titleColor: titleColor,
+              vocalLine: vocalLine,
+              note: note,
+              mobile: false,
+            ),
+          ),
+          const SizedBox(width: 24),
+          Flexible(
+            flex: 3,
+            child: _buildDesktopNoteColumn(context, note),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final track = _track;
@@ -97,14 +193,15 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
             child: Row(
               children: [
                 if (widget.showDragHandle) ...[
-                  Semantics(
-                    label: 'Drag to reorder',
-                    child: const Icon(
-                      Icons.drag_handle,
-                      size: 20,
-                      color: AppTheme.textMuted,
-                    ),
-                  ),
+                  widget.dragHandle ??
+                      Semantics(
+                        label: 'Drag to reorder',
+                        child: const Icon(
+                          Icons.drag_handle,
+                          size: 20,
+                          color: AppTheme.textMuted,
+                        ),
+                      ),
                   const SizedBox(width: 12),
                 ],
                 ClipRRect(
@@ -152,44 +249,25 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        track.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: titleColor,
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                      if (note.isNotEmpty)
-                        Text(
-                          note,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: AppTheme.textMuted,
-                                  ),
-                        ),
-                      if (vocalLine.isNotEmpty)
-                        Text(
-                          vocalLine,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: AppTheme.textMuted,
-                                    fontSize: 12,
-                                  ),
-                        ),
-                    ],
+                if (mobile)
+                  Expanded(
+                    child: _buildTitleBlock(
+                      context: context,
+                      track: track,
+                      titleColor: titleColor,
+                      vocalLine: vocalLine,
+                      note: note,
+                      mobile: true,
+                    ),
+                  )
+                else
+                  _buildDesktopContentBlock(
+                    context: context,
+                    track: track,
+                    titleColor: titleColor,
+                    vocalLine: vocalLine,
+                    note: note,
                   ),
-                ),
                 const SizedBox(width: 12),
                 if (!mobile) ...[
                   SizedBox(
