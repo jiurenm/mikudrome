@@ -184,15 +184,31 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case http.MethodPost:
 			h.createPlaylist(w, r)
 		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/playlists/") {
 		trimmed := strings.TrimPrefix(r.URL.Path, "/api/playlists/")
+		if trimmed == "" || strings.HasPrefix(trimmed, "/") {
+			jsonError(w, "not found", http.StatusNotFound)
+			return
+		}
 		parts := strings.SplitN(trimmed, "/", 3)
 		if parts[0] != "" {
 			idStr := parts[0]
+			if len(parts) == 3 && strings.Contains(parts[2], "/") {
+				jsonError(w, "not found", http.StatusNotFound)
+				return
+			}
+			if len(parts) == 2 && strings.HasSuffix(trimmed, "/") {
+				jsonError(w, "not found", http.StatusNotFound)
+				return
+			}
+			if len(parts) == 3 && parts[1] == "groups" && parts[2] == "" {
+				jsonError(w, "not found", http.StatusNotFound)
+				return
+			}
 			if len(parts) == 1 {
 				switch r.Method {
 				case http.MethodGet:
@@ -202,7 +218,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				case http.MethodDelete:
 					h.deletePlaylist(w, r, idStr)
 				default:
-					http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+					jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
 				}
 				return
 			}
@@ -215,7 +231,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				case http.MethodDelete:
 					h.removePlaylistTracks(w, r, idStr)
 				default:
-					http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+					jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
 				}
 				return
 			}
@@ -228,12 +244,66 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				case http.MethodDelete:
 					h.deletePlaylistCover(w, r, idStr)
 				default:
-					http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+					jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+			}
+			if len(parts) == 2 && parts[1] == "items" && r.Method == http.MethodGet {
+				h.getPlaylistItems(w, r, idStr)
+				return
+			}
+			if len(parts) == 2 && parts[1] == "groups" && r.Method == http.MethodPost {
+				h.createPlaylistGroup(w, r, idStr)
+				return
+			}
+			if len(parts) == 3 && parts[1] == "items" && parts[2] == "order" && r.Method == http.MethodPut {
+				h.reorderGroupedPlaylistItems(w, r, idStr)
+				return
+			}
+			if len(parts) == 3 && parts[1] == "groups" {
+				switch r.Method {
+				case http.MethodPatch:
+					h.renamePlaylistGroup(w, r, idStr, parts[2])
+				case http.MethodDelete:
+					h.deletePlaylistGroup(w, r, idStr, parts[2])
+				default:
+					jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
 				}
 				return
 			}
 			if len(parts) == 3 && parts[1] == "tracks" && parts[2] == "order" && r.Method == http.MethodPut {
 				h.reorderPlaylistTracks(w, r, idStr)
+				return
+			}
+			if len(parts) >= 2 {
+				switch parts[1] {
+				case "tracks":
+					if len(parts) == 2 || (len(parts) == 3 && parts[2] == "order") {
+						jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
+					} else {
+						jsonError(w, "not found", http.StatusNotFound)
+					}
+				case "cover":
+					if len(parts) == 2 {
+						jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
+					} else {
+						jsonError(w, "not found", http.StatusNotFound)
+					}
+				case "items":
+					if len(parts) == 2 || (len(parts) == 3 && parts[2] == "order") {
+						jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
+					} else {
+						jsonError(w, "not found", http.StatusNotFound)
+					}
+				case "groups":
+					if len(parts) == 2 || len(parts) == 3 {
+						jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
+					} else {
+						jsonError(w, "not found", http.StatusNotFound)
+					}
+				default:
+					jsonError(w, "not found", http.StatusNotFound)
+				}
 				return
 			}
 		}

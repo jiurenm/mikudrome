@@ -104,16 +104,138 @@ func playlistWire(p store.Playlist) map[string]interface{} {
 	if p.CoverPath != "" {
 		coverURL = fmt.Sprintf("/api/playlists/%d/cover", p.ID)
 	}
-	return map[string]interface{}{
-		"id":               p.ID,
-		"name":             p.Name,
-		"cover_path":       coverURL,
-		"track_count":      p.TrackCount,
-		"cover_track_ids":  p.CoverTrackIDs,
-		"cover_album_ids":  p.CoverAlbumIDs,
-		"created_at":       p.CreatedAt,
-		"updated_at":       p.UpdatedAt,
+	coverTrackIDs := p.CoverTrackIDs
+	if coverTrackIDs == nil {
+		coverTrackIDs = []int64{}
 	}
+	coverAlbumIDs := p.CoverAlbumIDs
+	if coverAlbumIDs == nil {
+		coverAlbumIDs = []int64{}
+	}
+	return map[string]interface{}{
+		"id":              p.ID,
+		"name":            p.Name,
+		"cover_path":      coverURL,
+		"track_count":     p.TrackCount,
+		"cover_track_ids": coverTrackIDs,
+		"cover_album_ids": coverAlbumIDs,
+		"created_at":      p.CreatedAt,
+		"updated_at":      p.UpdatedAt,
+	}
+}
+
+type playlistItemWire struct {
+	ID              int64    `json:"id"`
+	PlaylistID      int64    `json:"playlist_id"`
+	TrackID         int64    `json:"track_id"`
+	GroupID         int64    `json:"group_id"`
+	Position        int      `json:"position"`
+	Note            string   `json:"note"`
+	CoverMode       string   `json:"cover_mode"`
+	LibraryCoverID  string   `json:"library_cover_id"`
+	CachedCoverURL  string   `json:"cached_cover_url"`
+	CustomCoverPath string   `json:"custom_cover_path"`
+	CreatedAt       int64    `json:"created_at"`
+	UpdatedAt       int64    `json:"updated_at"`
+	Track           TrackDTO `json:"track"`
+}
+
+type playlistGroupWire struct {
+	ID         int64              `json:"id"`
+	PlaylistID int64              `json:"playlist_id"`
+	Title      string             `json:"title"`
+	Position   int                `json:"position"`
+	IsSystem   bool               `json:"is_system"`
+	CreatedAt  int64              `json:"created_at"`
+	UpdatedAt  int64              `json:"updated_at"`
+	Items      []playlistItemWire `json:"items"`
+}
+
+type playlistDetailWire struct {
+	Playlist map[string]interface{} `json:"playlist"`
+	Groups   []playlistGroupWire    `json:"groups"`
+}
+
+func playlistGroupToWire(group store.PlaylistGroup) playlistGroupWire {
+	return playlistGroupWire{
+		ID:         group.ID,
+		PlaylistID: group.PlaylistID,
+		Title:      group.Title,
+		Position:   group.Position,
+		IsSystem:   group.IsSystem,
+		CreatedAt:  group.CreatedAt,
+		UpdatedAt:  group.UpdatedAt,
+		Items:      []playlistItemWire{},
+	}
+}
+
+func playlistDetailToWire(detail store.PlaylistDetail, favSet map[int64]bool) playlistDetailWire {
+	groups := make([]playlistGroupWire, len(detail.Groups))
+	for groupIdx, group := range detail.Groups {
+		groupWire := playlistGroupToWire(group.PlaylistGroup)
+		groupWire.Items = make([]playlistItemWire, len(group.Items))
+		for itemIdx, item := range group.Items {
+			groupWire.Items[itemIdx] = playlistItemWire{
+				ID:              item.ID,
+				PlaylistID:      item.PlaylistID,
+				TrackID:         item.TrackID,
+				GroupID:         item.GroupID,
+				Position:        item.Position,
+				Note:            item.Note,
+				CoverMode:       item.CoverMode,
+				LibraryCoverID:  item.LibraryCoverID,
+				CachedCoverURL:  item.CachedCoverURL,
+				CustomCoverPath: item.CustomCoverPath,
+				CreatedAt:       item.CreatedAt,
+				UpdatedAt:       item.UpdatedAt,
+				Track:           TrackDTO{Track: item.Track, IsFavorite: favSet[item.Track.ID]},
+			}
+		}
+		groups[groupIdx] = groupWire
+	}
+	return playlistDetailWire{
+		Playlist: playlistWire(detail.Playlist),
+		Groups:   groups,
+	}
+}
+
+func parsePlaylistID(idStr string) (int64, error) {
+	return strconv.ParseInt(idStr, 10, 64)
+}
+
+func parsePlaylistGroupID(groupIDStr string) (int64, error) {
+	return strconv.ParseInt(groupIDStr, 10, 64)
+}
+
+func (h *Handler) loadPlaylistDetail(id int64) (store.PlaylistDetail, bool, error) {
+	return h.store.GetPlaylistDetail(id)
+}
+
+func (h *Handler) findPlaylistGroup(playlistID, groupID int64) (store.PlaylistGroupDetail, bool, bool, error) {
+	detail, ok, err := h.loadPlaylistDetail(playlistID)
+	if err != nil || !ok {
+		return store.PlaylistGroupDetail{}, ok, false, err
+	}
+	for _, group := range detail.Groups {
+		if group.ID == groupID {
+			return group, true, true, nil
+		}
+	}
+	return store.PlaylistGroupDetail{}, true, false, nil
+}
+
+func playlistConflictStatus(err error) (string, int, bool) {
+	switch {
+	case errors.Is(err, store.ErrSystemPlaylistGroup):
+		return "system group cannot be modified", http.StatusConflict, true
+	case strings.Contains(err.Error(), "flat reorder unsupported"):
+		return "flat reorder unsupported once playlist is grouped", http.StatusConflict, true
+	case strings.Contains(err.Error(), "reorder set mismatch"):
+		return "reorder set mismatch", http.StatusConflict, true
+	case strings.Contains(err.Error(), "reorder group mismatch"):
+		return "reorder group mismatch", http.StatusConflict, true
+	}
+	return "", 0, false
 }
 
 func (h *Handler) listPlaylists(w http.ResponseWriter, _ *http.Request) {
@@ -244,6 +366,24 @@ func (h *Handler) getPlaylistTracks(w http.ResponseWriter, _ *http.Request, idSt
 	writeJSON(w, http.StatusOK, map[string]interface{}{"tracks": tagFavorites(tracks, favSet)})
 }
 
+func (h *Handler) getPlaylistItems(w http.ResponseWriter, _ *http.Request, idStr string) {
+	id, err := parsePlaylistID(idStr)
+	if err != nil {
+		jsonError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	detail, ok, err := h.loadPlaylistDetail(id)
+	if err != nil {
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		jsonError(w, "playlist not found", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, playlistDetailToWire(detail, h.loadFavSet()))
+}
+
 func (h *Handler) addPlaylistTracks(w http.ResponseWriter, r *http.Request, idStr string) {
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -330,8 +470,182 @@ func (h *Handler) reorderPlaylistTracks(w http.ResponseWriter, r *http.Request, 
 	}
 	err = h.store.ReorderPlaylist(id, body.TrackIDs)
 	if err != nil {
-		if strings.Contains(err.Error(), "reorder set mismatch") {
-			jsonError(w, "reorder set mismatch", http.StatusConflict)
+		if msg, status, ok := playlistConflictStatus(err); ok {
+			jsonError(w, msg, status)
+			return
+		}
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) createPlaylistGroup(w http.ResponseWriter, r *http.Request, idStr string) {
+	id, err := parsePlaylistID(idStr)
+	if err != nil {
+		jsonError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var body struct {
+		Title string `json:"title"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonError(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+	groupID, err := h.store.CreatePlaylistGroup(id, body.Title)
+	if err != nil {
+		if errors.Is(err, store.ErrInvalidName) {
+			jsonError(w, "invalid name", http.StatusBadRequest)
+			return
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			jsonError(w, "playlist not found", http.StatusNotFound)
+			return
+		}
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	}
+	group, playlistExists, groupExists, err := h.findPlaylistGroup(id, groupID)
+	if err != nil || !playlistExists || !groupExists {
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusCreated, playlistGroupToWire(group.PlaylistGroup))
+}
+
+func (h *Handler) renamePlaylistGroup(w http.ResponseWriter, r *http.Request, playlistIDStr, groupIDStr string) {
+	playlistID, err := parsePlaylistID(playlistIDStr)
+	if err != nil {
+		jsonError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	groupID, err := parsePlaylistGroupID(groupIDStr)
+	if err != nil {
+		jsonError(w, "invalid group id", http.StatusBadRequest)
+		return
+	}
+	if _, playlistExists, groupExists, err := h.findPlaylistGroup(playlistID, groupID); err != nil {
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	} else if !playlistExists {
+		jsonError(w, "playlist not found", http.StatusNotFound)
+		return
+	} else if !groupExists {
+		jsonError(w, "group not found", http.StatusNotFound)
+		return
+	}
+	var body struct {
+		Title string `json:"title"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonError(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+	if err := h.store.RenamePlaylistGroup(groupID, body.Title); err != nil {
+		if errors.Is(err, store.ErrInvalidName) {
+			jsonError(w, "invalid name", http.StatusBadRequest)
+			return
+		}
+		if msg, status, ok := playlistConflictStatus(err); ok {
+			jsonError(w, msg, status)
+			return
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			jsonError(w, "group not found", http.StatusNotFound)
+			return
+		}
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) deletePlaylistGroup(w http.ResponseWriter, _ *http.Request, playlistIDStr, groupIDStr string) {
+	playlistID, err := parsePlaylistID(playlistIDStr)
+	if err != nil {
+		jsonError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	groupID, err := parsePlaylistGroupID(groupIDStr)
+	if err != nil {
+		jsonError(w, "invalid group id", http.StatusBadRequest)
+		return
+	}
+	if _, playlistExists, groupExists, err := h.findPlaylistGroup(playlistID, groupID); err != nil {
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	} else if !playlistExists {
+		jsonError(w, "playlist not found", http.StatusNotFound)
+		return
+	} else if !groupExists {
+		jsonError(w, "group not found", http.StatusNotFound)
+		return
+	}
+	if err := h.store.DeletePlaylistGroup(groupID); err != nil {
+		if msg, status, ok := playlistConflictStatus(err); ok {
+			jsonError(w, msg, status)
+			return
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			jsonError(w, "group not found", http.StatusNotFound)
+			return
+		}
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) reorderGroupedPlaylistItems(w http.ResponseWriter, r *http.Request, idStr string) {
+	id, err := parsePlaylistID(idStr)
+	if err != nil {
+		jsonError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if _, ok, err := h.loadPlaylistDetail(id); err != nil {
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	} else if !ok {
+		jsonError(w, "playlist not found", http.StatusNotFound)
+		return
+	}
+
+	var body struct {
+		Groups []struct {
+			ID    int64   `json:"id"`
+			Items []int64 `json:"items"`
+		} `json:"groups"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonError(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+
+	order := make([]store.PlaylistGroupOrder, len(body.Groups))
+	for idx, group := range body.Groups {
+		if group.ID <= 0 {
+			jsonError(w, "invalid group id", http.StatusBadRequest)
+			return
+		}
+		itemIDs := make([]int64, len(group.Items))
+		for itemIdx, itemID := range group.Items {
+			if itemID <= 0 {
+				jsonError(w, "invalid item id", http.StatusBadRequest)
+				return
+			}
+			itemIDs[itemIdx] = itemID
+		}
+		order[idx] = store.PlaylistGroupOrder{GroupID: group.ID, ItemIDs: itemIDs}
+	}
+
+	if err := h.store.ReorderPlaylistItems(id, order); err != nil {
+		if msg, status, ok := playlistConflictStatus(err); ok {
+			jsonError(w, msg, status)
+			return
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			jsonError(w, "playlist not found", http.StatusNotFound)
 			return
 		}
 		jsonError(w, "internal", http.StatusInternalServerError)

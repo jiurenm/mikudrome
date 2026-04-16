@@ -106,6 +106,10 @@ func New(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
+	// SQLite PRAGMA settings are connection-local. Keep a single pooled
+	// connection so foreign-key enforcement and cascades remain reliable.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 	// WAL mode reduces locking so the db file is less often "busy or locked" when copying.
 	if _, err := db.Exec(`PRAGMA journal_mode=WAL`); err != nil {
 		db.Close()
@@ -202,17 +206,49 @@ func migrate(db *sql.DB) error {
 		CREATE INDEX IF NOT EXISTS idx_playlists_updated
 			ON playlists(updated_at DESC);
 
-		CREATE TABLE IF NOT EXISTS playlist_tracks (
+		CREATE TABLE IF NOT EXISTS playlist_groups (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
 			playlist_id INTEGER NOT NULL
 			            REFERENCES playlists(id) ON DELETE CASCADE,
-			track_id    INTEGER NOT NULL
-			            REFERENCES tracks(id) ON DELETE CASCADE,
+			title       TEXT NOT NULL,
 			position    INTEGER NOT NULL,
-			added_at    INTEGER NOT NULL,
-			PRIMARY KEY (playlist_id, track_id)
+			is_system   INTEGER NOT NULL DEFAULT 0,
+			created_at  INTEGER NOT NULL,
+			updated_at  INTEGER NOT NULL,
+			UNIQUE (playlist_id, position)
 		);
-		CREATE INDEX IF NOT EXISTS idx_playlist_tracks_order
-			ON playlist_tracks(playlist_id, position);
+		CREATE INDEX IF NOT EXISTS idx_playlist_groups_playlist
+			ON playlist_groups(playlist_id, position);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_playlist_groups_id_playlist
+			ON playlist_groups(id, playlist_id);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_playlist_groups_single_system
+			ON playlist_groups(playlist_id)
+			WHERE is_system = 1;
+
+		CREATE TABLE IF NOT EXISTS playlist_items (
+			id                INTEGER PRIMARY KEY AUTOINCREMENT,
+			playlist_id        INTEGER NOT NULL
+			                  REFERENCES playlists(id) ON DELETE CASCADE,
+			track_id           INTEGER NOT NULL
+			                  REFERENCES tracks(id) ON DELETE CASCADE,
+			group_id           INTEGER NOT NULL
+			                  REFERENCES playlist_groups(id) ON DELETE CASCADE,
+			position           INTEGER NOT NULL,
+			note               TEXT NOT NULL DEFAULT '',
+			cover_mode         TEXT NOT NULL DEFAULT 'default',
+			library_cover_id   TEXT NOT NULL DEFAULT '',
+			cached_cover_url   TEXT NOT NULL DEFAULT '',
+			custom_cover_path  TEXT NOT NULL DEFAULT '',
+			created_at         INTEGER NOT NULL,
+			updated_at         INTEGER NOT NULL,
+			FOREIGN KEY (group_id, playlist_id)
+				REFERENCES playlist_groups(id, playlist_id) ON DELETE CASCADE,
+			UNIQUE (group_id, position)
+		);
+		CREATE INDEX IF NOT EXISTS idx_playlist_items_playlist
+			ON playlist_items(playlist_id);
+		CREATE INDEX IF NOT EXISTS idx_playlist_items_group_order
+			ON playlist_items(group_id, position);
 	`)
 	if err != nil {
 		return err

@@ -118,21 +118,106 @@ func normalizeName(name string) (string, error) {
 	return n, nil
 }
 
-// CreatePlaylist inserts a new playlist with the given name. Returns the new playlist ID.
+func playlistNow() int64 {
+	return time.Now().UnixNano()
+}
+
+// PlaylistGroup represents a visual section inside a playlist.
+type PlaylistGroup struct {
+	ID         int64  `json:"id"`
+	PlaylistID int64  `json:"playlist_id"`
+	Title      string `json:"title"`
+	Position   int    `json:"position"`
+	IsSystem   bool   `json:"is_system"`
+	CreatedAt  int64  `json:"created_at"`
+	UpdatedAt  int64  `json:"updated_at"`
+}
+
+// PlaylistItem stores playlist-local metadata for a track entry.
+type PlaylistItem struct {
+	ID              int64  `json:"id"`
+	PlaylistID      int64  `json:"playlist_id"`
+	TrackID         int64  `json:"track_id"`
+	GroupID         int64  `json:"group_id"`
+	Position        int    `json:"position"`
+	Note            string `json:"note"`
+	CoverMode       string `json:"cover_mode"`
+	LibraryCoverID  string `json:"library_cover_id"`
+	CachedCoverURL  string `json:"cached_cover_url"`
+	CustomCoverPath string `json:"custom_cover_path"`
+	CreatedAt       int64  `json:"created_at"`
+	UpdatedAt       int64  `json:"updated_at"`
+	Track           Track  `json:"track"`
+}
+
+// PlaylistGroupDetail includes the items belonging to a playlist group.
+type PlaylistGroupDetail struct {
+	PlaylistGroup
+	Items []PlaylistItem `json:"items"`
+}
+
+// PlaylistDetail is the grouped playlist read model used by the API and tests.
+type PlaylistDetail struct {
+	Playlist Playlist              `json:"playlist"`
+	Groups   []PlaylistGroupDetail `json:"groups"`
+}
+
+// PlaylistGroupOrder defines a grouped reorder payload.
+type PlaylistGroupOrder struct {
+	GroupID int64
+	ItemIDs []int64
+}
+
+// PlaylistItemUpdate updates playlist-local metadata on an item.
+type PlaylistItemUpdate struct {
+	GroupID         *int64
+	Position        *int
+	Note            *string
+	CoverMode       *string
+	LibraryCoverID  *string
+	CachedCoverURL  *string
+	CustomCoverPath *string
+}
+
+// ErrSystemPlaylistGroup is returned when callers try to mutate the system group.
+var ErrSystemPlaylistGroup = errors.New("system playlist group")
+
+// CreatePlaylist inserts a new playlist and its default Ungrouped group.
 func (s *Store) CreatePlaylist(name string) (int64, error) {
 	n, err := normalizeName(name)
 	if err != nil {
 		return 0, err
 	}
-	now := time.Now().Unix()
-	res, err := s.db.Exec(
+
+	now := playlistNow()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	res, err := tx.Exec(
 		`INSERT INTO playlists (name, created_at, updated_at) VALUES (?, ?, ?)`,
 		n, now, now,
 	)
 	if err != nil {
 		return 0, err
 	}
-	return res.LastInsertId()
+	playlistID, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	if _, err := tx.Exec(
+		`INSERT INTO playlist_groups (playlist_id, title, position, is_system, created_at, updated_at)
+		 VALUES (?, 'Ungrouped', 0, 1, ?, ?)`,
+		playlistID, now, now,
+	); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return playlistID, nil
 }
 
 // RenamePlaylist updates the name of a playlist. Returns sql.ErrNoRows if not found.
@@ -141,7 +226,7 @@ func (s *Store) RenamePlaylist(id int64, name string) error {
 	if err != nil {
 		return err
 	}
-	now := time.Now().Unix()
+	now := playlistNow()
 	res, err := s.db.Exec(
 		`UPDATE playlists SET name = ?, updated_at = ? WHERE id = ?`,
 		n, now, id,
@@ -177,7 +262,7 @@ func (s *Store) DeletePlaylist(id int64) error {
 
 // SetPlaylistCover sets the cover_path for a playlist.
 func (s *Store) SetPlaylistCover(id int64, coverPath string) error {
-	now := time.Now().Unix()
+	now := playlistNow()
 	res, err := s.db.Exec(
 		`UPDATE playlists SET cover_path = ?, updated_at = ? WHERE id = ?`,
 		coverPath, now, id,
@@ -200,14 +285,25 @@ func (s *Store) ClearPlaylistCover(id int64) error {
 	return s.SetPlaylistCover(id, "")
 }
 
-// firstNTrackIDs returns the first N track IDs and their album IDs from a playlist ordered by position.
+type sqlQueryer interface {
+	Query(string, ...any) (*sql.Rows, error)
+	QueryRow(string, ...any) *sql.Row
+}
+
+// firstNTrackIDs returns the first N track IDs and their album IDs from a playlist
+// ordered by group position then item position.
 func (s *Store) firstNTrackIDs(playlistID int64, n int) (trackIDs []int64, albumIDs []int64, err error) {
-	rows, err := s.db.Query(
-		`SELECT pt.track_id, COALESCE(t.album_id, 0)
-		 FROM playlist_tracks pt
-		 LEFT JOIN tracks t ON t.id = pt.track_id
-		 WHERE pt.playlist_id = ?
-		 ORDER BY pt.position
+	return firstNTrackIDsWithQueryer(s.db, playlistID, n)
+}
+
+func firstNTrackIDsWithQueryer(queryer sqlQueryer, playlistID int64, n int) (trackIDs []int64, albumIDs []int64, err error) {
+	rows, err := queryer.Query(
+		`SELECT pi.track_id, COALESCE(t.album_id, 0)
+		 FROM playlist_items pi
+		 INNER JOIN playlist_groups pg ON pg.id = pi.group_id
+		 LEFT JOIN tracks t ON t.id = pi.track_id
+		 WHERE pi.playlist_id = ?
+		 ORDER BY pg.position, pi.position
 		 LIMIT ?`,
 		playlistID, n,
 	)
@@ -228,7 +324,11 @@ func (s *Store) firstNTrackIDs(playlistID int64, n int) (trackIDs []int64, album
 
 // scanPlaylist reads a playlist row and populates CoverTrackIDs and CoverAlbumIDs.
 func (s *Store) scanPlaylist(p *Playlist) error {
-	trackIDs, albumIDs, err := s.firstNTrackIDs(p.ID, 4)
+	return scanPlaylistWithQueryer(s.db, p)
+}
+
+func scanPlaylistWithQueryer(queryer sqlQueryer, p *Playlist) error {
+	trackIDs, albumIDs, err := firstNTrackIDsWithQueryer(queryer, p.ID, 4)
 	if err != nil {
 		return err
 	}
@@ -239,11 +339,17 @@ func (s *Store) scanPlaylist(p *Playlist) error {
 
 // ListPlaylists returns all playlists ordered by updated_at DESC, with track count and cover track IDs.
 func (s *Store) ListPlaylists() ([]Playlist, error) {
-	rows, err := s.db.Query(`
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.Query(`
 		SELECT p.id, p.name, p.cover_path, p.created_at, p.updated_at,
-		       COUNT(pt.track_id) AS track_count
+		       COUNT(pi.id) AS track_count
 		FROM playlists p
-		LEFT JOIN playlist_tracks pt ON pt.playlist_id = p.id
+		LEFT JOIN playlist_items pi ON pi.playlist_id = p.id
 		GROUP BY p.id
 		ORDER BY p.updated_at DESC
 	`)
@@ -257,22 +363,45 @@ func (s *Store) ListPlaylists() ([]Playlist, error) {
 		if err := rows.Scan(&p.ID, &p.Name, &p.CoverPath, &p.CreatedAt, &p.UpdatedAt, &p.TrackCount); err != nil {
 			return nil, err
 		}
-		if err := s.scanPlaylist(&p); err != nil {
+		if err := scanPlaylistWithQueryer(tx, &p); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // GetPlaylistByID returns a single playlist by ID with track count and cover track IDs.
 func (s *Store) GetPlaylistByID(id int64) (Playlist, bool, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return Playlist{}, false, err
+	}
+	defer tx.Rollback()
+
+	p, ok, err := getPlaylistByIDWithQueryer(tx, id)
+	if err != nil || !ok {
+		return Playlist{}, ok, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Playlist{}, false, err
+	}
+	return p, true, nil
+}
+
+func getPlaylistByIDWithQueryer(queryer sqlQueryer, id int64) (Playlist, bool, error) {
 	var p Playlist
-	err := s.db.QueryRow(`
+	err := queryer.QueryRow(`
 		SELECT p.id, p.name, p.cover_path, p.created_at, p.updated_at,
-		       COUNT(pt.track_id) AS track_count
+		       COUNT(pi.id) AS track_count
 		FROM playlists p
-		LEFT JOIN playlist_tracks pt ON pt.playlist_id = p.id
+		LEFT JOIN playlist_items pi ON pi.playlist_id = p.id
 		WHERE p.id = ?
 		GROUP BY p.id
 	`, id).Scan(&p.ID, &p.Name, &p.CoverPath, &p.CreatedAt, &p.UpdatedAt, &p.TrackCount)
@@ -282,15 +411,145 @@ func (s *Store) GetPlaylistByID(id int64) (Playlist, bool, error) {
 	if err != nil {
 		return Playlist{}, false, err
 	}
-	if err := s.scanPlaylist(&p); err != nil {
+	if err := scanPlaylistWithQueryer(queryer, &p); err != nil {
 		return Playlist{}, false, err
 	}
 	return p, true, nil
 }
 
+// GetPlaylistDetail returns grouped playlist data with embedded track metadata.
+func (s *Store) GetPlaylistDetail(id int64) (PlaylistDetail, bool, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return PlaylistDetail{}, false, err
+	}
+	defer tx.Rollback()
+
+	playlist, ok, err := getPlaylistByIDWithQueryer(tx, id)
+	if err != nil || !ok {
+		return PlaylistDetail{}, ok, err
+	}
+
+	groupRows, err := tx.Query(
+		`SELECT id, playlist_id, title, position, is_system, created_at, updated_at
+		 FROM playlist_groups
+		 WHERE playlist_id = ?
+		 ORDER BY position`,
+		id,
+	)
+	if err != nil {
+		return PlaylistDetail{}, false, err
+	}
+	defer groupRows.Close()
+
+	detail := PlaylistDetail{Playlist: playlist}
+	groupIndex := make(map[int64]int)
+	for groupRows.Next() {
+		var group PlaylistGroupDetail
+		var isSystem int
+		if err := groupRows.Scan(
+			&group.ID,
+			&group.PlaylistID,
+			&group.Title,
+			&group.Position,
+			&isSystem,
+			&group.CreatedAt,
+			&group.UpdatedAt,
+		); err != nil {
+			return PlaylistDetail{}, false, err
+		}
+		group.IsSystem = isSystem != 0
+		groupIndex[group.ID] = len(detail.Groups)
+		detail.Groups = append(detail.Groups, group)
+	}
+	if err := groupRows.Err(); err != nil {
+		return PlaylistDetail{}, false, err
+	}
+
+	itemRows, err := tx.Query(
+		`SELECT pi.id, pi.playlist_id, pi.track_id, pi.group_id, pi.position, pi.note,
+		        pi.cover_mode, pi.library_cover_id, pi.cached_cover_url, pi.custom_cover_path,
+		        pi.created_at, pi.updated_at,
+		        t.id, t.title, t.audio_path, t.video_path, COALESCE(t.video_thumb_path, ''),
+		        COALESCE(t.album_id, 0), COALESCE(t.disc_number, 1), COALESCE(t.track_number, 0),
+		        COALESCE(t.artists, ''), COALESCE(t.year, 0), COALESCE(t.duration_seconds, 0),
+		        COALESCE(t.format, ''), COALESCE(t.composer, ''), COALESCE(t.lyricist, ''),
+		        COALESCE(t.arranger, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''),
+		        COALESCE(t.illustrator, ''), COALESCE(t.movie, ''), COALESCE(t.source, ''),
+		        COALESCE(t.lyrics, ''), COALESCE(t.comment, ''), COALESCE(a.album_artist, '')
+		 FROM playlist_items pi
+		 INNER JOIN playlist_groups pg ON pg.id = pi.group_id
+		 INNER JOIN tracks t ON t.id = pi.track_id
+		 LEFT JOIN albums a ON t.album_id = a.id
+		 WHERE pi.playlist_id = ?
+		 ORDER BY pg.position, pi.position`,
+		id,
+	)
+	if err != nil {
+		return PlaylistDetail{}, false, err
+	}
+	defer itemRows.Close()
+
+	for itemRows.Next() {
+		var item PlaylistItem
+		if err := itemRows.Scan(
+			&item.ID,
+			&item.PlaylistID,
+			&item.TrackID,
+			&item.GroupID,
+			&item.Position,
+			&item.Note,
+			&item.CoverMode,
+			&item.LibraryCoverID,
+			&item.CachedCoverURL,
+			&item.CustomCoverPath,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+			&item.Track.ID,
+			&item.Track.Title,
+			&item.Track.AudioPath,
+			&item.Track.VideoPath,
+			&item.Track.VideoThumbPath,
+			&item.Track.AlbumID,
+			&item.Track.DiscNumber,
+			&item.Track.TrackNumber,
+			&item.Track.Artists,
+			&item.Track.Year,
+			&item.Track.DurationSeconds,
+			&item.Track.Format,
+			&item.Track.Composer,
+			&item.Track.Lyricist,
+			&item.Track.Arranger,
+			&item.Track.Vocal,
+			&item.Track.VoiceManipulator,
+			&item.Track.Illustrator,
+			&item.Track.Movie,
+			&item.Track.Source,
+			&item.Track.Lyrics,
+			&item.Track.Comment,
+			&item.Track.AlbumArtist,
+		); err != nil {
+			return PlaylistDetail{}, false, err
+		}
+		idx, exists := groupIndex[item.GroupID]
+		if !exists {
+			return PlaylistDetail{}, false, fmt.Errorf("playlist item %d references unknown group %d", item.ID, item.GroupID)
+		}
+		detail.Groups[idx].Items = append(detail.Groups[idx].Items, item)
+	}
+	if err := itemRows.Err(); err != nil {
+		return PlaylistDetail{}, false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return PlaylistDetail{}, false, err
+	}
+	return detail, true, nil
+}
+
 // --- Playlist Tracks ---
 
-// GetPlaylistTracks returns the tracks in a playlist ordered by position.
+// GetPlaylistTracks returns the tracks in a playlist ordered by group position
+// then item position.
 func (s *Store) GetPlaylistTracks(playlistID int64) ([]Track, error) {
 	rows, err := s.db.Query(
 		`SELECT t.id, t.title, t.audio_path, t.video_path, COALESCE(t.video_thumb_path, ''), COALESCE(t.album_id, 0),
@@ -299,11 +558,12 @@ func (s *Store) GetPlaylistTracks(playlistID int64) ([]Track, error) {
 		 COALESCE(t.arranger, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''), COALESCE(t.illustrator, ''),
 		 COALESCE(t.movie, ''), COALESCE(t.source, ''), COALESCE(t.lyrics, ''), COALESCE(t.comment, ''),
 		 COALESCE(a.album_artist, '')
-		 FROM playlist_tracks pt
-		 INNER JOIN tracks t ON t.id = pt.track_id
+		 FROM playlist_items pi
+		 INNER JOIN playlist_groups pg ON pg.id = pi.group_id
+		 INNER JOIN tracks t ON t.id = pi.track_id
 		 LEFT JOIN albums a ON t.album_id = a.id
-		 WHERE pt.playlist_id = ?
-		 ORDER BY pt.position`,
+		 WHERE pi.playlist_id = ?
+		 ORDER BY pg.position, pi.position`,
 		playlistID,
 	)
 	if err != nil {
@@ -324,8 +584,7 @@ func (s *Store) GetPlaylistTracks(playlistID int64) ([]Track, error) {
 	return out, rows.Err()
 }
 
-// AddTracksToPlaylist appends tracks to a playlist, skipping duplicates.
-// Returns the number of actually inserted rows.
+// AddTracksToPlaylist appends track items into the system Ungrouped section.
 func (s *Store) AddTracksToPlaylist(playlistID int64, trackIDs []int64) (int, error) {
 	if len(trackIDs) == 0 {
 		return 0, nil
@@ -337,23 +596,16 @@ func (s *Store) AddTracksToPlaylist(playlistID int64, trackIDs []int64) (int, er
 	}
 	defer tx.Rollback()
 
-	// Dedupe input, preserving order
-	seen := make(map[int64]bool)
-	var unique []int64
-	for _, id := range trackIDs {
-		if !seen[id] {
-			seen[id] = true
-			unique = append(unique, id)
-		}
+	ungroupedID, err := lookupSystemGroupIDTx(tx, playlistID)
+	if err != nil {
+		return 0, err
 	}
 
-	// Get current max position
 	var maxPos sql.NullInt64
-	err = tx.QueryRow(
-		`SELECT MAX(position) FROM playlist_tracks WHERE playlist_id = ?`,
-		playlistID,
-	).Scan(&maxPos)
-	if err != nil {
+	if err := tx.QueryRow(
+		`SELECT MAX(position) FROM playlist_items WHERE group_id = ?`,
+		ungroupedID,
+	).Scan(&maxPos); err != nil {
 		return 0, err
 	}
 	nextPos := int64(0)
@@ -361,38 +613,30 @@ func (s *Store) AddTracksToPlaylist(playlistID int64, trackIDs []int64) (int, er
 		nextPos = maxPos.Int64 + 1
 	}
 
-	now := time.Now().Unix()
+	now := playlistNow()
 	added := 0
-	for _, tid := range unique {
-		// Verify track exists
+	for _, tid := range trackIDs {
 		var exists int
 		err := tx.QueryRow(`SELECT 1 FROM tracks WHERE id = ?`, tid).Scan(&exists)
 		if err == sql.ErrNoRows {
-			continue // skip non-existent tracks
+			continue
 		}
 		if err != nil {
 			return 0, err
 		}
 
-		// Try to insert; skip if already present (PRIMARY KEY conflict)
-		res, err := tx.Exec(
-			`INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position, added_at) VALUES (?, ?, ?, ?)`,
-			playlistID, tid, nextPos, now,
-		)
-		if err != nil {
+		if _, err := tx.Exec(
+			`INSERT INTO playlist_items
+			 (playlist_id, track_id, group_id, position, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?)`,
+			playlistID, tid, ungroupedID, nextPos, now, now,
+		); err != nil {
 			return 0, err
 		}
-		rows, err := res.RowsAffected()
-		if err != nil {
-			return 0, err
-		}
-		if rows > 0 {
-			added++
-			nextPos++
-		}
+		added++
+		nextPos++
 	}
 
-	// Update playlist updated_at
 	if added > 0 {
 		if _, err := tx.Exec(`UPDATE playlists SET updated_at = ? WHERE id = ?`, now, playlistID); err != nil {
 			return 0, err
@@ -405,7 +649,7 @@ func (s *Store) AddTracksToPlaylist(playlistID int64, trackIDs []int64) (int, er
 	return added, nil
 }
 
-// RemoveTracksFromPlaylist deletes specified tracks from a playlist and rebalances positions.
+// RemoveTracksFromPlaylist deletes all playlist items whose track IDs match.
 func (s *Store) RemoveTracksFromPlaylist(playlistID int64, trackIDs []int64) error {
 	if len(trackIDs) == 0 {
 		return nil
@@ -417,7 +661,14 @@ func (s *Store) RemoveTracksFromPlaylist(playlistID int64, trackIDs []int64) err
 	}
 	defer tx.Rollback()
 
-	// Delete specified tracks
+	var exists int
+	if err := tx.QueryRow(`SELECT 1 FROM playlists WHERE id = ?`, playlistID).Scan(&exists); err != nil {
+		if err == sql.ErrNoRows {
+			return sql.ErrNoRows
+		}
+		return err
+	}
+
 	placeholders := make([]string, len(trackIDs))
 	args := make([]any, 0, len(trackIDs)+1)
 	args = append(args, playlistID)
@@ -425,18 +676,16 @@ func (s *Store) RemoveTracksFromPlaylist(playlistID int64, trackIDs []int64) err
 		placeholders[i] = "?"
 		args = append(args, tid)
 	}
-	query := `DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id IN (` + strings.Join(placeholders, ",") + `)`
+	query := `DELETE FROM playlist_items WHERE playlist_id = ? AND track_id IN (` + strings.Join(placeholders, ",") + `)`
 	if _, err := tx.Exec(query, args...); err != nil {
 		return err
 	}
 
-	// Rebalance positions
-	if err := rebalancePositionsTx(tx, playlistID); err != nil {
+	if err := rebalancePlaylistItemPositionsTx(tx, playlistID); err != nil {
 		return err
 	}
 
-	// Update playlist updated_at
-	now := time.Now().Unix()
+	now := playlistNow()
 	if _, err := tx.Exec(`UPDATE playlists SET updated_at = ? WHERE id = ?`, now, playlistID); err != nil {
 		return err
 	}
@@ -444,101 +693,720 @@ func (s *Store) RemoveTracksFromPlaylist(playlistID int64, trackIDs []int64) err
 	return tx.Commit()
 }
 
-// ReorderPlaylist sets new positions for all tracks in a playlist.
-// orderedTrackIDs must be exactly the same set as current playlist tracks.
+// ReorderPlaylist preserves the old flat API by reordering items inside the
+// current Ungrouped section when a playlist has no custom groups in use.
 func (s *Store) ReorderPlaylist(playlistID int64, orderedTrackIDs []int64) error {
+	detail, ok, err := s.GetPlaylistDetail(playlistID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return sql.ErrNoRows
+	}
+
+	group := detail.Groups[0]
+	for _, currentGroup := range detail.Groups[1:] {
+		if len(currentGroup.Items) > 0 {
+			return fmt.Errorf("flat reorder unsupported once playlist has items outside Ungrouped")
+		}
+	}
+
+	if len(orderedTrackIDs) != len(group.Items) {
+		return fmt.Errorf("reorder set mismatch: have %d tracks, got %d ids", len(group.Items), len(orderedTrackIDs))
+	}
+
+	itemQueues := make(map[int64][]int64)
+	for _, item := range group.Items {
+		itemQueues[item.TrackID] = append(itemQueues[item.TrackID], item.ID)
+	}
+	var itemIDs []int64
+	for _, trackID := range orderedTrackIDs {
+		queue := itemQueues[trackID]
+		if len(queue) == 0 {
+			return fmt.Errorf("reorder set mismatch: unknown id %d", trackID)
+		}
+		itemIDs = append(itemIDs, queue[0])
+		itemQueues[trackID] = queue[1:]
+	}
+
+	order := make([]PlaylistGroupOrder, 0, len(detail.Groups))
+	for idx, currentGroup := range detail.Groups {
+		groupOrder := PlaylistGroupOrder{GroupID: currentGroup.ID}
+		if idx == 0 {
+			groupOrder.ItemIDs = itemIDs
+		}
+		order = append(order, groupOrder)
+	}
+	return s.ReorderPlaylistItems(playlistID, order)
+}
+
+// ReorderPlaylistItems rewrites group order and item order within each group.
+func (s *Store) ReorderPlaylistItems(playlistID int64, order []PlaylistGroupOrder) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	// Get current track IDs
-	rows, err := tx.Query(
-		`SELECT track_id FROM playlist_tracks WHERE playlist_id = ? ORDER BY position`,
-		playlistID,
-	)
-	if err != nil {
+	now := playlistNow()
+	if err := reorderPlaylistItemsTx(tx, playlistID, order, now); err != nil {
 		return err
 	}
-	currentSet := make(map[int64]bool)
-	for rows.Next() {
-		var tid int64
-		if err := rows.Scan(&tid); err != nil {
-			rows.Close()
-			return err
-		}
-		currentSet[tid] = true
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return err
-	}
-
-	// Validate: orderedTrackIDs must be same set as currentSet (no dups, same cardinality)
-	if len(orderedTrackIDs) != len(currentSet) {
-		return fmt.Errorf("reorder set mismatch: have %d tracks, got %d ids", len(currentSet), len(orderedTrackIDs))
-	}
-	newSet := make(map[int64]bool)
-	for _, tid := range orderedTrackIDs {
-		if newSet[tid] {
-			return fmt.Errorf("reorder set mismatch: duplicate id %d", tid)
-		}
-		if !currentSet[tid] {
-			return fmt.Errorf("reorder set mismatch: unknown id %d", tid)
-		}
-		newSet[tid] = true
-	}
-
-	// Update positions
-	for i, tid := range orderedTrackIDs {
-		if _, err := tx.Exec(
-			`UPDATE playlist_tracks SET position = ? WHERE playlist_id = ? AND track_id = ?`,
-			i, playlistID, tid,
-		); err != nil {
-			return err
-		}
-	}
-
-	// Update playlist updated_at
-	now := time.Now().Unix()
-	if _, err := tx.Exec(`UPDATE playlists SET updated_at = ? WHERE id = ?`, now, playlistID); err != nil {
-		return err
-	}
-
 	return tx.Commit()
 }
 
-// rebalancePositionsTx rewrites positions to 0..N-1 in current order within a transaction.
-func rebalancePositionsTx(tx *sql.Tx, playlistID int64) error {
-	rows, err := tx.Query(
-		`SELECT track_id FROM playlist_tracks WHERE playlist_id = ? ORDER BY position`,
+func reorderPlaylistItemsTx(tx *sql.Tx, playlistID int64, order []PlaylistGroupOrder, now int64) error {
+	groups, err := listPlaylistGroupsTx(tx, playlistID)
+	if err != nil {
+		return err
+	}
+	if len(groups) == 0 {
+		return sql.ErrNoRows
+	}
+	if len(order) != len(groups) {
+		return fmt.Errorf("reorder group mismatch: have %d groups, got %d", len(groups), len(order))
+	}
+
+	groupByID := make(map[int64]PlaylistGroup, len(groups))
+	var systemGroupID int64
+	for _, group := range groups {
+		groupByID[group.ID] = group
+		if group.IsSystem {
+			systemGroupID = group.ID
+		}
+	}
+	if len(order) > 0 && order[0].GroupID != systemGroupID {
+		return ErrSystemPlaylistGroup
+	}
+
+	seenGroups := make(map[int64]bool, len(order))
+	for idx, groupOrder := range order {
+		group, ok := groupByID[groupOrder.GroupID]
+		if !ok {
+			return fmt.Errorf("reorder group mismatch: unknown group %d", groupOrder.GroupID)
+		}
+		if seenGroups[groupOrder.GroupID] {
+			return fmt.Errorf("reorder group mismatch: duplicate group %d", groupOrder.GroupID)
+		}
+		seenGroups[groupOrder.GroupID] = true
+		if group.IsSystem && idx != 0 {
+			return ErrSystemPlaylistGroup
+		}
+	}
+
+	rows, err := tx.Query(`SELECT id FROM playlist_items WHERE playlist_id = ?`, playlistID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	currentItems := make(map[int64]bool)
+	itemCount := 0
+	for rows.Next() {
+		var itemID int64
+		if err := rows.Scan(&itemID); err != nil {
+			return err
+		}
+		currentItems[itemID] = true
+		itemCount++
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	payloadItems := make(map[int64]bool, itemCount)
+	seenItemCount := 0
+	for _, groupOrder := range order {
+		for _, itemID := range groupOrder.ItemIDs {
+			if payloadItems[itemID] {
+				return fmt.Errorf("reorder set mismatch: duplicate item %d", itemID)
+			}
+			if !currentItems[itemID] {
+				return fmt.Errorf("reorder set mismatch: unknown item %d", itemID)
+			}
+			payloadItems[itemID] = true
+			seenItemCount++
+		}
+	}
+	if seenItemCount != itemCount {
+		return fmt.Errorf("reorder set mismatch: have %d items, got %d ids", itemCount, seenItemCount)
+	}
+
+	if _, err := tx.Exec(
+		`UPDATE playlist_groups SET position = -position - 1, updated_at = ? WHERE playlist_id = ?`,
+		now, playlistID,
+	); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(
+		`UPDATE playlist_items SET position = -position - 1, updated_at = ? WHERE playlist_id = ?`,
+		now, playlistID,
+	); err != nil {
+		return err
+	}
+
+	for groupPos, groupOrder := range order {
+		if _, err := tx.Exec(
+			`UPDATE playlist_groups SET position = ?, updated_at = ? WHERE id = ? AND playlist_id = ?`,
+			groupPos, now, groupOrder.GroupID, playlistID,
+		); err != nil {
+			return err
+		}
+		for itemPos, itemID := range groupOrder.ItemIDs {
+			if _, err := tx.Exec(
+				`UPDATE playlist_items
+				 SET group_id = ?, position = ?, updated_at = ?
+				 WHERE id = ? AND playlist_id = ?`,
+				groupOrder.GroupID, itemPos, now, itemID, playlistID,
+			); err != nil {
+				return err
+			}
+		}
+	}
+	if _, err := tx.Exec(`UPDATE playlists SET updated_at = ? WHERE id = ?`, now, playlistID); err != nil {
+		return err
+	}
+	return nil
+}
+
+// CreatePlaylistGroup appends a new user-defined group to a playlist.
+func (s *Store) CreatePlaylistGroup(playlistID int64, title string) (int64, error) {
+	n, err := normalizeName(title)
+	if err != nil {
+		return 0, err
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	var exists int
+	if err := tx.QueryRow(`SELECT 1 FROM playlists WHERE id = ?`, playlistID).Scan(&exists); err != nil {
+		if err == sql.ErrNoRows {
+			return 0, sql.ErrNoRows
+		}
+		return 0, err
+	}
+
+	var maxPos sql.NullInt64
+	if err := tx.QueryRow(
+		`SELECT MAX(position) FROM playlist_groups WHERE playlist_id = ?`,
 		playlistID,
+	).Scan(&maxPos); err != nil {
+		return 0, err
+	}
+	nextPos := int64(1)
+	if maxPos.Valid {
+		nextPos = maxPos.Int64 + 1
+	}
+	now := playlistNow()
+	res, err := tx.Exec(
+		`INSERT INTO playlist_groups (playlist_id, title, position, is_system, created_at, updated_at)
+		 VALUES (?, ?, ?, 0, ?, ?)`,
+		playlistID, n, nextPos, now, now,
+	)
+	if err != nil {
+		return 0, err
+	}
+	if _, err := tx.Exec(`UPDATE playlists SET updated_at = ? WHERE id = ?`, now, playlistID); err != nil {
+		return 0, err
+	}
+	groupID, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return groupID, nil
+}
+
+// RenamePlaylistGroup renames a non-system group.
+func (s *Store) RenamePlaylistGroup(groupID int64, title string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	group, err := getPlaylistGroupTx(tx, groupID)
+	if err != nil {
+		return err
+	}
+	if group.IsSystem {
+		return ErrSystemPlaylistGroup
+	}
+	n, err := normalizeName(title)
+	if err != nil {
+		return err
+	}
+	now := playlistNow()
+	res, err := tx.Exec(
+		`UPDATE playlist_groups SET title = ?, updated_at = ? WHERE id = ?`,
+		n, now, groupID,
 	)
 	if err != nil {
 		return err
 	}
-	var trackIDs []int64
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	if _, err := tx.Exec(`UPDATE playlists SET updated_at = ? WHERE id = ?`, now, group.PlaylistID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// DeletePlaylistGroup deletes a non-system group and moves its items to Ungrouped.
+func (s *Store) DeletePlaylistGroup(groupID int64) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	group, err := getPlaylistGroupTx(tx, groupID)
+	if err != nil {
+		return err
+	}
+	if group.IsSystem {
+		return ErrSystemPlaylistGroup
+	}
+
+	ungroupedID, err := lookupSystemGroupIDTx(tx, group.PlaylistID)
+	if err != nil {
+		return err
+	}
+
+	var maxPos sql.NullInt64
+	if err := tx.QueryRow(
+		`SELECT MAX(position) FROM playlist_items WHERE group_id = ?`,
+		ungroupedID,
+	).Scan(&maxPos); err != nil {
+		return err
+	}
+	nextPos := int64(0)
+	if maxPos.Valid {
+		nextPos = maxPos.Int64 + 1
+	}
+
+	rows, err := tx.Query(
+		`SELECT id FROM playlist_items WHERE group_id = ? ORDER BY position`,
+		groupID,
+	)
+	if err != nil {
+		return err
+	}
+	var itemIDs []int64
 	for rows.Next() {
-		var tid int64
-		if err := rows.Scan(&tid); err != nil {
+		var itemID int64
+		if err := rows.Scan(&itemID); err != nil {
 			rows.Close()
 			return err
 		}
-		trackIDs = append(trackIDs, tid)
+		itemIDs = append(itemIDs, itemID)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return err
 	}
 
-	for i, tid := range trackIDs {
+	now := playlistNow()
+	for _, itemID := range itemIDs {
 		if _, err := tx.Exec(
-			`UPDATE playlist_tracks SET position = ? WHERE playlist_id = ? AND track_id = ?`,
-			i, playlistID, tid,
+			`UPDATE playlist_items
+			 SET group_id = ?, position = ?, updated_at = ?
+			 WHERE id = ?`,
+			ungroupedID, nextPos, now, itemID,
+		); err != nil {
+			return err
+		}
+		nextPos++
+	}
+	res, err := tx.Exec(`DELETE FROM playlist_groups WHERE id = ?`, groupID)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+	if err := rebalancePlaylistGroupPositionsTx(tx, group.PlaylistID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`UPDATE playlists SET updated_at = ? WHERE id = ?`, now, group.PlaylistID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// UpdatePlaylistItem updates playlist-local item metadata and optional placement.
+func (s *Store) UpdatePlaylistItem(itemID int64, update PlaylistItemUpdate) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	item, err := getPlaylistItemTx(tx, itemID)
+	if err != nil {
+		return err
+	}
+
+	note := item.Note
+	coverMode := item.CoverMode
+	libraryCoverID := item.LibraryCoverID
+	cachedCoverURL := item.CachedCoverURL
+	customCoverPath := item.CustomCoverPath
+
+	if update.Note != nil {
+		note = *update.Note
+	}
+	if update.CoverMode != nil {
+		coverMode = *update.CoverMode
+	}
+	if update.LibraryCoverID != nil {
+		libraryCoverID = *update.LibraryCoverID
+	}
+	if update.CachedCoverURL != nil {
+		cachedCoverURL = *update.CachedCoverURL
+	}
+	if update.CustomCoverPath != nil {
+		customCoverPath = *update.CustomCoverPath
+	}
+
+	targetGroupID := item.GroupID
+	if update.GroupID != nil {
+		targetGroupID = *update.GroupID
+	}
+	targetPosition := item.Position
+	if update.Position != nil {
+		targetPosition = *update.Position
+	}
+
+	now := playlistNow()
+	if targetGroupID != item.GroupID || targetPosition != item.Position {
+		targetGroup, err := getPlaylistGroupTx(tx, targetGroupID)
+		if err != nil {
+			return err
+		}
+		if targetGroup.PlaylistID != item.PlaylistID {
+			return sql.ErrNoRows
+		}
+
+		groupOrders, err := loadPlaylistGroupOrdersTx(tx, item.PlaylistID)
+		if err != nil {
+			return err
+		}
+
+		sourceGroupIdx := -1
+		targetGroupIdx := -1
+		for groupIdx := range groupOrders {
+			if groupOrders[groupIdx].GroupID == targetGroupID {
+				targetGroupIdx = groupIdx
+			}
+			for itemIdx, currentItemID := range groupOrders[groupIdx].ItemIDs {
+				if currentItemID != item.ID {
+					continue
+				}
+				sourceGroupIdx = groupIdx
+				groupOrders[groupIdx].ItemIDs = append(
+					groupOrders[groupIdx].ItemIDs[:itemIdx],
+					groupOrders[groupIdx].ItemIDs[itemIdx+1:]...,
+				)
+				break
+			}
+		}
+		if sourceGroupIdx == -1 || targetGroupIdx == -1 {
+			return sql.ErrNoRows
+		}
+
+		targetItems := groupOrders[targetGroupIdx].ItemIDs
+		if update.GroupID != nil && update.Position == nil && targetGroupID != item.GroupID {
+			targetPosition = len(targetItems)
+		}
+		if targetPosition < 0 {
+			targetPosition = 0
+		}
+		if targetPosition > len(targetItems) {
+			targetPosition = len(targetItems)
+		}
+		targetItems = append(targetItems, 0)
+		copy(targetItems[targetPosition+1:], targetItems[targetPosition:])
+		targetItems[targetPosition] = item.ID
+		groupOrders[targetGroupIdx].ItemIDs = targetItems
+
+		if err := reorderPlaylistItemsTx(tx, item.PlaylistID, groupOrders, now); err != nil {
+			return err
+		}
+	}
+
+	if _, err := tx.Exec(
+		`UPDATE playlist_items
+		 SET group_id = ?, position = ?, note = ?, cover_mode = ?, library_cover_id = ?, cached_cover_url = ?, custom_cover_path = ?, updated_at = ?
+		 WHERE id = ?`,
+		targetGroupID, targetPosition, note, coverMode, libraryCoverID, cachedCoverURL, customCoverPath, now, itemID,
+	); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`UPDATE playlists SET updated_at = ? WHERE id = ?`, now, item.PlaylistID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *Store) getPlaylistGroup(groupID int64) (PlaylistGroup, error) {
+	return getPlaylistGroupTx(s.db, groupID)
+}
+
+func getPlaylistGroupTx(queryer interface {
+	QueryRow(string, ...any) *sql.Row
+}, groupID int64) (PlaylistGroup, error) {
+	var group PlaylistGroup
+	var isSystem int
+	err := queryer.QueryRow(
+		`SELECT id, playlist_id, title, position, is_system, created_at, updated_at
+		 FROM playlist_groups
+		 WHERE id = ?`,
+		groupID,
+	).Scan(
+		&group.ID,
+		&group.PlaylistID,
+		&group.Title,
+		&group.Position,
+		&isSystem,
+		&group.CreatedAt,
+		&group.UpdatedAt,
+	)
+	if err != nil {
+		return PlaylistGroup{}, err
+	}
+	group.IsSystem = isSystem != 0
+	return group, nil
+}
+
+func (s *Store) getPlaylistItem(itemID int64) (PlaylistItem, error) {
+	return getPlaylistItemTx(s.db, itemID)
+}
+
+func getPlaylistItemTx(queryer interface {
+	QueryRow(string, ...any) *sql.Row
+}, itemID int64) (PlaylistItem, error) {
+	var item PlaylistItem
+	err := queryer.QueryRow(
+		`SELECT id, playlist_id, track_id, group_id, position, note, cover_mode,
+		        library_cover_id, cached_cover_url, custom_cover_path, created_at, updated_at
+		 FROM playlist_items
+		 WHERE id = ?`,
+		itemID,
+	).Scan(
+		&item.ID,
+		&item.PlaylistID,
+		&item.TrackID,
+		&item.GroupID,
+		&item.Position,
+		&item.Note,
+		&item.CoverMode,
+		&item.LibraryCoverID,
+		&item.CachedCoverURL,
+		&item.CustomCoverPath,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	)
+	return item, err
+}
+
+func (s *Store) listPlaylistGroups(playlistID int64) ([]PlaylistGroup, error) {
+	return listPlaylistGroupsTx(s.db, playlistID)
+}
+
+func listPlaylistGroupsTx(queryer interface {
+	Query(string, ...any) (*sql.Rows, error)
+}, playlistID int64) ([]PlaylistGroup, error) {
+	rows, err := queryer.Query(
+		`SELECT id, playlist_id, title, position, is_system, created_at, updated_at
+		 FROM playlist_groups
+		 WHERE playlist_id = ?
+		 ORDER BY position`,
+		playlistID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []PlaylistGroup
+	for rows.Next() {
+		var group PlaylistGroup
+		var isSystem int
+		if err := rows.Scan(
+			&group.ID,
+			&group.PlaylistID,
+			&group.Title,
+			&group.Position,
+			&isSystem,
+			&group.CreatedAt,
+			&group.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		group.IsSystem = isSystem != 0
+		out = append(out, group)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) lookupSystemGroupID(playlistID int64) (int64, error) {
+	return lookupSystemGroupIDTx(s.db, playlistID)
+}
+
+func lookupSystemGroupIDTx(queryer interface {
+	QueryRow(string, ...any) *sql.Row
+}, playlistID int64) (int64, error) {
+	var groupID int64
+	err := queryer.QueryRow(
+		`SELECT id FROM playlist_groups
+		 WHERE playlist_id = ? AND is_system = 1
+		 ORDER BY position
+		 LIMIT 1`,
+		playlistID,
+	).Scan(&groupID)
+	return groupID, err
+}
+
+func rebalancePlaylistGroupPositionsTx(tx *sql.Tx, playlistID int64) error {
+	rows, err := tx.Query(
+		`SELECT id FROM playlist_groups WHERE playlist_id = ? ORDER BY position`,
+		playlistID,
+	)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var groupIDs []int64
+	for rows.Next() {
+		var groupID int64
+		if err := rows.Scan(&groupID); err != nil {
+			return err
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for idx, groupID := range groupIDs {
+		if _, err := tx.Exec(
+			`UPDATE playlist_groups SET position = ? WHERE id = ?`,
+			idx, groupID,
 		); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func rebalancePlaylistItemPositionsTx(tx *sql.Tx, playlistID int64) error {
+	rows, err := tx.Query(
+		`SELECT id FROM playlist_groups WHERE playlist_id = ? ORDER BY position`,
+		playlistID,
+	)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var groupIDs []int64
+	for rows.Next() {
+		var groupID int64
+		if err := rows.Scan(&groupID); err != nil {
+			return err
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, groupID := range groupIDs {
+		if err := rebalanceGroupItemsTx(tx, groupID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func rebalanceGroupItemsTx(tx *sql.Tx, groupID int64) error {
+	rows, err := tx.Query(
+		`SELECT id FROM playlist_items WHERE group_id = ? ORDER BY position`,
+		groupID,
+	)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var itemIDs []int64
+	for rows.Next() {
+		var itemID int64
+		if err := rows.Scan(&itemID); err != nil {
+			return err
+		}
+		itemIDs = append(itemIDs, itemID)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for idx, itemID := range itemIDs {
+		if _, err := tx.Exec(
+			`UPDATE playlist_items SET position = ? WHERE id = ?`,
+			idx, itemID,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func loadPlaylistGroupOrdersTx(tx *sql.Tx, playlistID int64) ([]PlaylistGroupOrder, error) {
+	groups, err := listPlaylistGroupsTx(tx, playlistID)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]PlaylistGroupOrder, 0, len(groups))
+	for _, group := range groups {
+		rows, err := tx.Query(
+			`SELECT id FROM playlist_items WHERE group_id = ? ORDER BY position`,
+			group.ID,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		order := PlaylistGroupOrder{GroupID: group.ID}
+		for rows.Next() {
+			var itemID int64
+			if err := rows.Scan(&itemID); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			order.ItemIDs = append(order.ItemIDs, itemID)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		rows.Close()
+		out = append(out, order)
+	}
+	return out, nil
 }

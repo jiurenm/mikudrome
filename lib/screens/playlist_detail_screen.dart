@@ -1,85 +1,23 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../api/api.dart';
 import '../models/playlist.dart';
+import '../models/playlist_detail_data.dart';
+import '../models/playlist_item.dart';
 import '../models/track.dart';
 import '../services/playlist_repository.dart';
 import '../theme/app_theme.dart';
 import '../utils/responsive.dart';
-import '../widgets/playlist_detail/playlist_edit_bar.dart';
+import '../widgets/playlist_detail/playlist_group_section.dart';
 import '../widgets/playlist_detail/playlist_hero.dart';
 import '../widgets/playlist_detail/playlist_track_row.dart';
-
-// Constants
-const _kMessageDuration = Duration(seconds: 3);
-const _kMessageTopOffset = 16.0;
-const _kMessageHorizontalPadding = 24.0;
-const _kMessageInternalPadding = EdgeInsets.symmetric(horizontal: 20, vertical: 14);
-const _kMessageBorderRadius = 8.0;
-const _kMessageIconSize = 22.0;
-
-/// Shows a temporary message at the top of the screen.
-/// Returns a Timer that can be cancelled to prevent the message from being removed.
-Timer _showTopMessage(BuildContext context, String message,
-    {required bool isError}) {
-  final overlay = Overlay.of(context);
-  late OverlayEntry entry;
-  entry = OverlayEntry(
-    builder: (ctx) => Positioned(
-      top: MediaQuery.paddingOf(ctx).top + _kMessageTopOffset,
-      left: _kMessageHorizontalPadding,
-      right: _kMessageHorizontalPadding,
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          padding: _kMessageInternalPadding,
-          decoration: BoxDecoration(
-            color: isError ? Colors.red.shade800 : AppTheme.mikuGreen,
-            borderRadius: BorderRadius.circular(_kMessageBorderRadius),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Icon(
-                isError ? Icons.error_outline : Icons.check_circle_outline,
-                color: isError ? Colors.white : Colors.black,
-                size: _kMessageIconSize,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  message,
-                  style: TextStyle(
-                    color: isError ? Colors.white : Colors.black,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
-  overlay.insert(entry);
-  return Timer(_kMessageDuration, () {
-    entry.remove();
-  });
-}
 
 class PlaylistDetailScreen extends StatefulWidget {
   const PlaylistDetailScreen({
     super.key,
     required this.playlistId,
     this.baseUrl = '',
+    this.client,
     this.onBack,
     this.onPlayTrack,
     this.currentPlayingTrackId,
@@ -88,6 +26,7 @@ class PlaylistDetailScreen extends StatefulWidget {
 
   final int playlistId;
   final String baseUrl;
+  final ApiClient? client;
   final VoidCallback? onBack;
   final void Function(Track track, List<Track> queue, int index)? onPlayTrack;
   final int? currentPlayingTrackId;
@@ -101,36 +40,40 @@ class PlaylistDetailScreen extends StatefulWidget {
 }
 
 class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
-  List<Track> _tracks = [];
   bool _loading = true;
   String? _error;
-  bool _isEditMode = false;
   bool _isLoading = false; // Prevents concurrent _loadPlaylistAndTracks calls
-  bool _isOperating = false; // Shows loading feedback during operations
 
   late final ApiClient _client;
+  PlaylistDetailData? _detail;
   Playlist? _playlist;
-  Timer? _messageTimer; // Tracks the message overlay timer for cleanup
+
+  List<PlaylistItem> get _items => _detail == null
+      ? const []
+      : _detail!.groups.expand((group) => group.items).toList();
+
+  List<Track> get _queue => _items.map((item) => item.track).toList();
 
   @override
   void initState() {
     super.initState();
-    // ApiClient uses http package which doesn't require disposal.
-    // The http.Client is created per-request and closed automatically.
-    _client = ApiClient(baseUrl: widget._effectiveBaseUrl);
+    _client = widget.client ?? ApiClient(baseUrl: widget._effectiveBaseUrl);
+    _playlist = PlaylistRepository.instance.playlists
+        .where((p) => p.id == widget.playlistId)
+        .firstOrNull;
     _loadPlaylistAndTracks();
     PlaylistRepository.instance.addListener(_onRepositoryUpdate);
   }
 
   @override
   void dispose() {
-    _messageTimer?.cancel();
     PlaylistRepository.instance.removeListener(_onRepositoryUpdate);
     super.dispose();
   }
 
   void _onRepositoryUpdate() {
     if (!mounted) return;
+    if (_detail != null) return;
     final updated = PlaylistRepository.instance.playlists
         .where((p) => p.id == widget.playlistId)
         .firstOrNull;
@@ -156,14 +99,11 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
       _error = null;
     });
     try {
-      final playlist = PlaylistRepository.instance.playlists
-          .where((p) => p.id == widget.playlistId)
-          .firstOrNull;
-      final tracks = await _client.getPlaylistTracks(widget.playlistId);
+      final detail = await _client.getPlaylistItems(widget.playlistId);
       if (!mounted) return;
       setState(() {
-        _playlist = playlist;
-        _tracks = tracks;
+        _playlist = detail.playlist;
+        _detail = detail;
         _loading = false;
         _isLoading = false;
       });
@@ -194,106 +134,21 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     return errorStr;
   }
 
-  void _playTrack(Track track, int index) {
-    widget.onPlayTrack?.call(track, _tracks, index);
+  void _playItem(PlaylistItem item) {
+    final queue = _queue;
+    final index = _items.indexWhere((candidate) => candidate.id == item.id);
+    if (index < 0 || index >= queue.length) return;
+    widget.onPlayTrack?.call(item.track, queue, index);
   }
 
   void _playAll() {
-    if (_tracks.isEmpty) return;
-    _playTrack(_tracks.first, 0);
-  }
-
-  void _toggleEditMode() {
-    setState(() {
-      _isEditMode = !_isEditMode;
-    });
-  }
-
-  Future<void> _handleReorder(int oldIndex, int newIndex) async {
-    // Prevent concurrent operations
-    if (_isOperating) return;
-
-    // Adjust newIndex if moving down (ReorderableListView quirk)
-    if (newIndex > oldIndex) {
-      newIndex -= 1;
-    }
-
-    // Optimistic update
-    final updatedTracks = List<Track>.from(_tracks);
-    final movedTrack = updatedTracks.removeAt(oldIndex);
-    updatedTracks.insert(newIndex, movedTrack);
-
-    setState(() {
-      _tracks = updatedTracks;
-      _isOperating = true;
-    });
-
-    // Call API
-    try {
-      final trackIds = updatedTracks.map((t) => t.id).toList();
-      await _client.reorderPlaylist(widget.playlistId, trackIds);
-    } catch (e) {
-      // Revert on error
-      if (!mounted) return;
-      await _loadPlaylistAndTracks();
-      if (!mounted) return;
-      _messageTimer?.cancel();
-      _messageTimer = _showTopMessage(
-        context,
-        'Failed to reorder: ${_sanitizeError(e)}',
-        isError: true,
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isOperating = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _handleRemoveTrack(Track track) async {
-    // Prevent concurrent operations
-    if (_isOperating) return;
-
-    // Optimistic update
-    final originalTracks = _tracks;
-    final updatedTracks = _tracks.where((t) => t.id != track.id).toList();
-
-    setState(() {
-      _tracks = updatedTracks;
-      _isOperating = true;
-    });
-
-    // Call API
-    try {
-      await _client.removeTracksFromPlaylist(widget.playlistId, [track.id]);
-      // Refresh playlist metadata to update track count
-      await PlaylistRepository.instance.refreshPlaylists(_client);
-    } catch (e) {
-      // Revert on error
-      if (!mounted) return;
-      setState(() {
-        _tracks = originalTracks;
-      });
-      _messageTimer?.cancel();
-      _messageTimer = _showTopMessage(
-        context,
-        'Failed to remove track: ${_sanitizeError(e)}',
-        isError: true,
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isOperating = false;
-        });
-      }
-    }
+    if (_items.isEmpty) return;
+    _playItem(_items.first);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_playlist == null && !_loading) {
+    if (_playlist == null && !_loading && _error == null) {
       return Scaffold(
         backgroundColor: AppTheme.mikuDark,
         body: Center(
@@ -318,10 +173,6 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
         children: [
           Column(
             children: [
-              if (_isEditMode)
-                PlaylistEditBar(
-                  onDone: _toggleEditMode,
-                ),
               Expanded(
                 child: CustomScrollView(
                   slivers: [
@@ -345,7 +196,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                           playlist: _playlist!,
                           client: _client,
                           onPlay: _playAll,
-                          onEdit: _toggleEditMode,
+                          canPlay: _items.isNotEmpty,
                         ),
                       ),
                     if (_loading)
@@ -371,7 +222,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                           ),
                         ),
                       )
-                    else if (_tracks.isEmpty)
+                    else if (_items.isEmpty)
                       SliverFillRemaining(
                         child: Center(
                           child: Padding(
@@ -382,7 +233,8 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                 Icon(
                                   Icons.music_note,
                                   size: 64,
-                                  color: AppTheme.textMuted.withValues(alpha: 0.5),
+                                  color:
+                                      AppTheme.textMuted.withValues(alpha: 0.5),
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
@@ -405,27 +257,29 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                           horizontal: isMobile(context) ? 8 : 32,
                           vertical: 16,
                         ),
-                        sliver: SliverReorderableList(
-                          itemCount: _tracks.length,
-                          onReorder: _handleReorder,
-                          itemBuilder: (context, index) {
-                            final track = _tracks[index];
-                            return ReorderableDelayedDragStartListener(
-                              key: ValueKey(track.id),
-                              index: index,
-                              enabled: _isEditMode,
-                              child: PlaylistTrackRow(
-                                track: track,
-                                baseUrl: widget._effectiveBaseUrl,
-                                onTap: () => _playTrack(track, index),
-                                onRemove: () => _handleRemoveTrack(track),
-                                showDragHandle: _isEditMode,
-                                isCurrentlyPlaying:
-                                    widget.currentPlayingTrackId == track.id &&
-                                        widget.isPlaying,
+                        sliver: SliverList(
+                          delegate: SliverChildListDelegate([
+                            for (final group in _detail?.groups ?? const [])
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 24),
+                                child: PlaylistGroupSection(
+                                  title: group.title,
+                                  children: [
+                                    for (final item in group.items)
+                                      PlaylistTrackRow(
+                                        key: ValueKey(item.id),
+                                        item: item,
+                                        baseUrl: widget._effectiveBaseUrl,
+                                        onTap: () => _playItem(item),
+                                        isCurrentlyPlaying:
+                                            widget.currentPlayingTrackId ==
+                                                    item.track.id &&
+                                                widget.isPlaying,
+                                      ),
+                                  ],
+                                ),
                               ),
-                            );
-                          },
+                          ]),
                         ),
                       ),
                   ],
@@ -433,16 +287,6 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
               ),
             ],
           ),
-          // Loading overlay during operations
-          if (_isOperating)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.3),
-                child: const Center(
-                  child: CircularProgressIndicator(),
-                ),
-              ),
-            ),
         ],
       ),
     );

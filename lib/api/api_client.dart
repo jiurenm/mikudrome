@@ -6,6 +6,8 @@ import 'package:http_parser/http_parser.dart';
 import '../models/album.dart';
 import '../models/producer.dart';
 import '../models/playlist.dart';
+import '../models/playlist_detail_data.dart';
+import '../models/playlist_group.dart';
 import '../models/track.dart';
 import '../models/video.dart';
 import '../models/vocalist.dart';
@@ -44,7 +46,8 @@ class ApiClient {
 
   /// Download MV for a track from [url] (e.g. YouTube) via backend yt-dlp, then associate with track.
   /// Returns the updated track's video_path and video_thumb_path on success.
-  Future<({String videoPath, String videoThumbPath})> downloadTrackMv(int trackId, String url) async {
+  Future<({String videoPath, String videoThumbPath})> downloadTrackMv(
+      int trackId, String url) async {
     final res = await http.post(
       Uri.parse(_url(ApiEndpoints.trackDownloadMv(trackId))),
       headers: {'Content-Type': 'application/json'},
@@ -89,7 +92,8 @@ class ApiClient {
         .toList();
   }
 
-  Future<({Producer producer, List<Track> tracks, List<Album> albums})?> getProducer(
+  Future<({Producer producer, List<Track> tracks, List<Album> albums})?>
+      getProducer(
     int id,
   ) async {
     final res = await http.get(Uri.parse(_url(ApiEndpoints.producer(id))));
@@ -158,7 +162,11 @@ class ApiClient {
     final albums = albumsList
         .map((e) => Album.fromJson(e as Map<String, dynamic>, baseUrl))
         .toList();
-    return (name: data['name'] as String? ?? name, tracks: tracks, albums: albums);
+    return (
+      name: data['name'] as String? ?? name,
+      tracks: tracks,
+      albums: albums
+    );
   }
 
   // --- Videos ---
@@ -188,15 +196,12 @@ class ApiClient {
 
   // --- Stream URLs (no HTTP call, just URL builder) ---
 
-  String streamAudioUrl(int trackId) =>
-      _url(ApiEndpoints.streamAudio(trackId));
+  String streamAudioUrl(int trackId) => _url(ApiEndpoints.streamAudio(trackId));
 
-  String streamVideoUrl(int trackId) =>
-      _url(ApiEndpoints.streamVideo(trackId));
+  String streamVideoUrl(int trackId) => _url(ApiEndpoints.streamVideo(trackId));
 
   /// Full URL for MV thumbnail. 404 if not set.
-  String streamThumbUrl(int trackId) =>
-      _url(ApiEndpoints.streamThumb(trackId));
+  String streamThumbUrl(int trackId) => _url(ApiEndpoints.streamThumb(trackId));
 
   /// Full URL for album cover image.
   String albumCoverUrl(String albumId) =>
@@ -224,9 +229,7 @@ class ApiClient {
     }
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     final list = data['tracks'] as List<dynamic>? ?? [];
-    return list
-        .map((e) => Track.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return list.map((e) => Track.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<void> addFavorite(int trackId) async {
@@ -310,9 +313,17 @@ class ApiClient {
     }
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     final list = data['tracks'] as List<dynamic>? ?? [];
-    return list
-        .map((e) => Track.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return list.map((e) => Track.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<PlaylistDetailData> getPlaylistItems(int id) async {
+    final res = await http.get(Uri.parse(_url(ApiEndpoints.playlistItems(id))));
+    if (res.statusCode != 200) {
+      throw ApiException('Failed to load playlist items', res.statusCode);
+    }
+    return PlaylistDetailData.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    );
   }
 
   /// Add tracks to a playlist. Returns the number of tracks actually added.
@@ -352,6 +363,56 @@ class ApiClient {
     );
     if (res.statusCode != 204) {
       throw ApiException('Failed to reorder playlist', res.statusCode);
+    }
+  }
+
+  Future<void> reorderPlaylistItems(
+    int id,
+    List<PlaylistGroupReorderInput> groups,
+  ) async {
+    final res = await http.put(
+      Uri.parse(_url(ApiEndpoints.playlistItemsOrder(id))),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(PlaylistItemsOrderInput(groups: groups).toJson()),
+    );
+    if (res.statusCode != 204) {
+      throw ApiException('Failed to reorder playlist items', res.statusCode);
+    }
+  }
+
+  Future<PlaylistGroup> createPlaylistGroup(int id, String title) async {
+    final res = await http.post(
+      Uri.parse(_url(ApiEndpoints.playlistGroups(id))),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(PlaylistGroupTitleInput(title: title).toJson()),
+    );
+    if (res.statusCode != 201) {
+      throw ApiException('Failed to create playlist group', res.statusCode);
+    }
+    return PlaylistGroup.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  Future<void> renamePlaylistGroup(
+    int playlistId,
+    int groupId,
+    String title,
+  ) async {
+    final res = await http.patch(
+      Uri.parse(_url(ApiEndpoints.playlistGroup(playlistId, groupId))),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(PlaylistGroupTitleInput(title: title).toJson()),
+    );
+    if (res.statusCode != 204) {
+      throw ApiException('Failed to rename playlist group', res.statusCode);
+    }
+  }
+
+  Future<void> deletePlaylistGroup(int playlistId, int groupId) async {
+    final res = await http.delete(
+      Uri.parse(_url(ApiEndpoints.playlistGroup(playlistId, groupId))),
+    );
+    if (res.statusCode != 204) {
+      throw ApiException('Failed to delete playlist group', res.statusCode);
     }
   }
 
@@ -399,5 +460,45 @@ class ApiException implements Exception {
   final int? statusCode;
 
   @override
-  String toString() => 'ApiException: $message${statusCode != null ? ' (HTTP $statusCode)' : ''}';
+  String toString() =>
+      'ApiException: $message${statusCode != null ? ' (HTTP $statusCode)' : ''}';
+}
+
+class PlaylistGroupReorderInput {
+  const PlaylistGroupReorderInput({
+    required this.id,
+    required this.itemIds,
+  });
+
+  final int id;
+  final List<int> itemIds;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'items': itemIds,
+      };
+}
+
+class PlaylistItemsOrderInput {
+  const PlaylistItemsOrderInput({
+    required this.groups,
+  });
+
+  final List<PlaylistGroupReorderInput> groups;
+
+  Map<String, dynamic> toJson() => {
+        'groups': groups.map((group) => group.toJson()).toList(),
+      };
+}
+
+class PlaylistGroupTitleInput {
+  const PlaylistGroupTitleInput({
+    required this.title,
+  });
+
+  final String title;
+
+  Map<String, dynamic> toJson() => {
+        'title': title,
+      };
 }

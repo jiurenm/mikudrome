@@ -47,6 +47,12 @@ abstract final class ApiEndpoints {
   static String playlistTracks(int id) => '$_prefix/playlists/$id/tracks';
   static String playlistTracksOrder(int id) =>
       '$_prefix/playlists/$id/tracks/order';
+  static String playlistItems(int id) => '$_prefix/playlists/$id/items';
+  static String playlistItemsOrder(int id) =>
+      '$_prefix/playlists/$id/items/order';
+  static String playlistGroups(int id) => '$_prefix/playlists/$id/groups';
+  static String playlistGroup(int playlistId, int groupId) =>
+      '$_prefix/playlists/$playlistId/groups/$groupId';
   static String playlistCover(int id) => '$_prefix/playlists/$id/cover';
 
   // DB

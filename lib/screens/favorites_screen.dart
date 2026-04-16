@@ -14,7 +14,8 @@ import '../widgets/playlist_detail/playlist_track_row.dart';
 const _kMessageDuration = Duration(seconds: 3);
 const _kMessageTopOffset = 16.0;
 const _kMessageHorizontalPadding = 24.0;
-const _kMessageInternalPadding = EdgeInsets.symmetric(horizontal: 20, vertical: 14);
+const _kMessageInternalPadding =
+    EdgeInsets.symmetric(horizontal: 20, vertical: 14);
 const _kMessageBorderRadius = 8.0;
 const _kMessageIconSize = 22.0;
 
@@ -277,12 +278,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                           const SizedBox(height: 16),
                           Text(
                             'No favorite tracks yet',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyLarge
-                                ?.copyWith(
-                                  color: AppTheme.textMuted,
-                                ),
+                            style:
+                                Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      color: AppTheme.textMuted,
+                                    ),
                           ),
                         ],
                       ),
@@ -299,7 +298,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
                         final track = _tracks[index];
-                        return PlaylistTrackRow(
+                        return PlaylistTrackRow.track(
                           key: ValueKey(track.id),
                           track: track,
                           baseUrl: widget._effectiveBaseUrl,

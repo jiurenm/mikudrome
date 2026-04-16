@@ -66,6 +66,42 @@ func seedTrack(t *testing.T, h *Handler, title string) int64 {
 	return 0
 }
 
+func createTestPlaylist(t *testing.T, h *Handler, name string) int64 {
+	t.Helper()
+	rr := doReq(h, "POST", "/api/playlists", `{"name":"`+name+`"}`)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("createPlaylist: expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	return resp.ID
+}
+
+func getPlaylistDetail(t *testing.T, h *Handler, playlistID int64) store.PlaylistDetail {
+	t.Helper()
+	detail, ok, err := h.store.GetPlaylistDetail(playlistID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatalf("playlist %d not found", playlistID)
+	}
+	return detail
+}
+
+func mustJSON(t *testing.T, value interface{}) string {
+	t.Helper()
+	body, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(body)
+}
+
 func TestFavoritesHTTP_RoundTrip(t *testing.T) {
 	h := newTestHandler(t)
 	tid := seedTrack(t, h, "FavSong")
@@ -194,6 +230,38 @@ func TestPlaylistsHTTP_CRUD(t *testing.T) {
 	}
 }
 
+func TestPlaylistsHTTP_EmptyPlaylistHasEmptyCoverIDArrays(t *testing.T) {
+	h := newTestHandler(t)
+
+	playlistID := createTestPlaylist(t, h, "Empty Covers")
+	playlistIDStr := mustJSON(t, playlistID)
+
+	rr := doReq(h, "GET", "/api/playlists/"+playlistIDStr, "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("getPlaylist: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		CoverTrackIDs []int64 `json:"cover_track_ids"`
+		CoverAlbumIDs []int64 `json:"cover_album_ids"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.CoverTrackIDs == nil {
+		t.Fatal("expected cover_track_ids to be an empty array, got null")
+	}
+	if resp.CoverAlbumIDs == nil {
+		t.Fatal("expected cover_album_ids to be an empty array, got null")
+	}
+	if len(resp.CoverTrackIDs) != 0 {
+		t.Fatalf("expected 0 cover_track_ids, got %d", len(resp.CoverTrackIDs))
+	}
+	if len(resp.CoverAlbumIDs) != 0 {
+		t.Fatalf("expected 0 cover_album_ids, got %d", len(resp.CoverAlbumIDs))
+	}
+}
+
 func TestPlaylistTracksHTTP_RoundTrip(t *testing.T) {
 	h := newTestHandler(t)
 	t1 := seedTrack(t, h, "Track1")
@@ -277,6 +345,537 @@ func TestPlaylistTracksHTTP_RoundTrip(t *testing.T) {
 	}
 	if tracksResp.Tracks[0].ID != t2 {
 		t.Fatalf("remaining track should be %d, got %d", t2, tracksResp.Tracks[0].ID)
+	}
+}
+
+func TestPlaylistItemsHTTP_GroupedReadReturnsUngroupedWithItems(t *testing.T) {
+	h := newTestHandler(t)
+	t1 := seedTrack(t, h, "GroupedTrack1")
+	t2 := seedTrack(t, h, "GroupedTrack2")
+	playlistID := createTestPlaylist(t, h, "GroupedRead")
+	playlistIDStr := mustJSON(t, playlistID)
+
+	addBody := mustJSON(t, map[string][]int64{"track_ids": []int64{t1, t2}})
+	rr := doReq(h, "POST", "/api/playlists/"+playlistIDStr+"/tracks", addBody)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("addPlaylistTracks: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	rr = doReq(h, "GET", "/api/playlists/"+playlistIDStr+"/items", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("getPlaylistItems: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Playlist struct {
+			ID int64 `json:"id"`
+		} `json:"playlist"`
+		Groups []struct {
+			ID       int64  `json:"id"`
+			Title    string `json:"title"`
+			IsSystem bool   `json:"is_system"`
+			Items    []struct {
+				ID    int64 `json:"id"`
+				Track struct {
+					ID    int64  `json:"id"`
+					Title string `json:"title"`
+				} `json:"track"`
+			} `json:"items"`
+		} `json:"groups"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Playlist.ID != playlistID {
+		t.Fatalf("expected playlist id %d, got %d", playlistID, resp.Playlist.ID)
+	}
+	if len(resp.Groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(resp.Groups))
+	}
+	group := resp.Groups[0]
+	if group.Title != "Ungrouped" {
+		t.Fatalf("expected system group title Ungrouped, got %q", group.Title)
+	}
+	if !group.IsSystem {
+		t.Fatal("expected Ungrouped to be marked as system")
+	}
+	if len(group.Items) != 2 {
+		t.Fatalf("expected 2 items in Ungrouped, got %d", len(group.Items))
+	}
+	if group.Items[0].Track.ID != t1 || group.Items[1].Track.ID != t2 {
+		t.Fatalf("expected tracks [%d, %d], got [%d, %d]", t1, t2, group.Items[0].Track.ID, group.Items[1].Track.ID)
+	}
+}
+
+func TestPlaylistItemsHTTP_EmptyGroupIncludesItemsArray(t *testing.T) {
+	h := newTestHandler(t)
+	playlistID := createTestPlaylist(t, h, "EmptyGroup")
+	playlistIDStr := mustJSON(t, playlistID)
+
+	rr := doReq(h, "POST", "/api/playlists/"+playlistIDStr+"/groups", `{"title":"Empty"}`)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create group: expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var createResp struct {
+		Title string `json:"title"`
+		Items []struct {
+			ID int64 `json:"id"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &createResp); err != nil {
+		t.Fatal(err)
+	}
+	if createResp.Title != "Empty" {
+		t.Fatalf("expected create response title Empty, got %q", createResp.Title)
+	}
+	if createResp.Items == nil {
+		t.Fatal("expected create group response items field to be present as empty array")
+	}
+	if len(createResp.Items) != 0 {
+		t.Fatalf("expected create group response to have 0 items, got %d", len(createResp.Items))
+	}
+
+	rr = doReq(h, "GET", "/api/playlists/"+playlistIDStr+"/items", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("getPlaylistItems: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Groups []struct {
+			Title string `json:"title"`
+			Items []struct {
+				ID int64 `json:"id"`
+			} `json:"items"`
+		} `json:"groups"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Groups) != 2 {
+		t.Fatalf("expected 2 groups, got %d", len(resp.Groups))
+	}
+	if resp.Groups[1].Title != "Empty" {
+		t.Fatalf("expected created group title Empty, got %q", resp.Groups[1].Title)
+	}
+	if resp.Groups[1].Items == nil {
+		t.Fatal("expected empty group items field to be present as empty array")
+	}
+	if len(resp.Groups[1].Items) != 0 {
+		t.Fatalf("expected empty group to have 0 items, got %d", len(resp.Groups[1].Items))
+	}
+}
+
+func TestPlaylistGroupsHTTP_RejectsSystemMutationsAndDeletesMoveItems(t *testing.T) {
+	h := newTestHandler(t)
+	trackID := seedTrack(t, h, "GroupedDeleteTrack")
+	playlistID := createTestPlaylist(t, h, "GroupedDelete")
+	playlistIDStr := mustJSON(t, playlistID)
+
+	addBody := mustJSON(t, map[string][]int64{"track_ids": []int64{trackID}})
+	rr := doReq(h, "POST", "/api/playlists/"+playlistIDStr+"/tracks", addBody)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("addPlaylistTracks: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	detail := getPlaylistDetail(t, h, playlistID)
+	systemGroupID := detail.Groups[0].ID
+	systemGroupIDStr := mustJSON(t, systemGroupID)
+
+	rr = doReq(h, "PATCH", "/api/playlists/"+playlistIDStr+"/groups/"+systemGroupIDStr, `{"title":"Nope"}`)
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("rename system group: expected 409, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	rr = doReq(h, "DELETE", "/api/playlists/"+playlistIDStr+"/groups/"+systemGroupIDStr, "")
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("delete system group: expected 409, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	rr = doReq(h, "POST", "/api/playlists/"+playlistIDStr+"/groups", `{"title":"Set B"}`)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create group: expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var createGroupResp struct {
+		ID       int64  `json:"id"`
+		Title    string `json:"title"`
+		IsSystem bool   `json:"is_system"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &createGroupResp); err != nil {
+		t.Fatal(err)
+	}
+	if createGroupResp.Title != "Set B" {
+		t.Fatalf("expected group title Set B, got %q", createGroupResp.Title)
+	}
+	if createGroupResp.IsSystem {
+		t.Fatal("expected created group to be non-system")
+	}
+
+	detail = getPlaylistDetail(t, h, playlistID)
+	itemID := detail.Groups[0].Items[0].ID
+	if err := h.store.UpdatePlaylistItem(itemID, store.PlaylistItemUpdate{GroupID: &createGroupResp.ID}); err != nil {
+		t.Fatal(err)
+	}
+
+	groupIDStr := mustJSON(t, createGroupResp.ID)
+	rr = doReq(h, "DELETE", "/api/playlists/"+playlistIDStr+"/groups/"+groupIDStr, "")
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("delete group: expected 204, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	rr = doReq(h, "GET", "/api/playlists/"+playlistIDStr+"/items", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("getPlaylistItems after delete: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		Groups []struct {
+			Title string `json:"title"`
+			Items []struct {
+				Track struct {
+					ID int64 `json:"id"`
+				} `json:"track"`
+			} `json:"items"`
+		} `json:"groups"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Groups) != 1 {
+		t.Fatalf("expected 1 remaining group, got %d", len(resp.Groups))
+	}
+	if resp.Groups[0].Title != "Ungrouped" {
+		t.Fatalf("expected remaining group Ungrouped, got %q", resp.Groups[0].Title)
+	}
+	if len(resp.Groups[0].Items) != 1 || resp.Groups[0].Items[0].Track.ID != trackID {
+		t.Fatalf("expected track %d moved back to Ungrouped", trackID)
+	}
+}
+
+func TestPlaylistItemsHTTP_GroupedReorderPersistsShape(t *testing.T) {
+	h := newTestHandler(t)
+	t1 := seedTrack(t, h, "GroupedReorder1")
+	t2 := seedTrack(t, h, "GroupedReorder2")
+	t3 := seedTrack(t, h, "GroupedReorder3")
+	playlistID := createTestPlaylist(t, h, "GroupedReorder")
+	playlistIDStr := mustJSON(t, playlistID)
+
+	addBody := mustJSON(t, map[string][]int64{"track_ids": []int64{t1, t2, t3}})
+	rr := doReq(h, "POST", "/api/playlists/"+playlistIDStr+"/tracks", addBody)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("addPlaylistTracks: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	rr = doReq(h, "POST", "/api/playlists/"+playlistIDStr+"/groups", `{"title":"Highlights"}`)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create group: expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var createGroupResp struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &createGroupResp); err != nil {
+		t.Fatal(err)
+	}
+
+	detail := getPlaylistDetail(t, h, playlistID)
+	ungroupedID := detail.Groups[0].ID
+	highlightID := createGroupResp.ID
+	if len(detail.Groups[0].Items) != 3 {
+		t.Fatalf("expected 3 items in Ungrouped, got %d", len(detail.Groups[0].Items))
+	}
+	item1 := detail.Groups[0].Items[0].ID
+	item2 := detail.Groups[0].Items[1].ID
+	item3 := detail.Groups[0].Items[2].ID
+
+	reorderBody := mustJSON(t, map[string][]map[string]interface{}{
+		"groups": []map[string]interface{}{
+			{"id": ungroupedID, "items": []int64{item3, item1}},
+			{"id": highlightID, "items": []int64{item2}},
+		},
+	})
+	rr = doReq(h, "PUT", "/api/playlists/"+playlistIDStr+"/items/order", reorderBody)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("grouped reorder: expected 204, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	rr = doReq(h, "GET", "/api/playlists/"+playlistIDStr+"/items", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("getPlaylistItems after reorder: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		Groups []struct {
+			ID    int64  `json:"id"`
+			Title string `json:"title"`
+			Items []struct {
+				ID    int64 `json:"id"`
+				Track struct {
+					ID int64 `json:"id"`
+				} `json:"track"`
+			} `json:"items"`
+		} `json:"groups"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Groups) != 2 {
+		t.Fatalf("expected 2 groups after reorder, got %d", len(resp.Groups))
+	}
+	if resp.Groups[0].ID != ungroupedID || resp.Groups[1].ID != highlightID {
+		t.Fatalf("unexpected group order after reorder: [%d, %d]", resp.Groups[0].ID, resp.Groups[1].ID)
+	}
+	if len(resp.Groups[0].Items) != 2 || resp.Groups[0].Items[0].ID != item3 || resp.Groups[0].Items[1].ID != item1 {
+		t.Fatalf("unexpected ungrouped item order after reorder")
+	}
+	if len(resp.Groups[1].Items) != 1 || resp.Groups[1].Items[0].ID != item2 {
+		t.Fatalf("unexpected highlight item order after reorder")
+	}
+	if resp.Groups[0].Items[0].Track.ID != t3 || resp.Groups[0].Items[1].Track.ID != t1 || resp.Groups[1].Items[0].Track.ID != t2 {
+		t.Fatalf("unexpected track grouping after reorder")
+	}
+}
+
+func TestPlaylistItemsHTTP_GroupedReorderConflictReturnsJSON(t *testing.T) {
+	h := newTestHandler(t)
+	t1 := seedTrack(t, h, "GroupedConflict1")
+	t2 := seedTrack(t, h, "GroupedConflict2")
+	playlistID := createTestPlaylist(t, h, "GroupedConflict")
+	playlistIDStr := mustJSON(t, playlistID)
+
+	addBody := mustJSON(t, map[string][]int64{"track_ids": []int64{t1, t2}})
+	rr := doReq(h, "POST", "/api/playlists/"+playlistIDStr+"/tracks", addBody)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("addPlaylistTracks: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	detail := getPlaylistDetail(t, h, playlistID)
+	ungroupedID := detail.Groups[0].ID
+	item1 := detail.Groups[0].Items[0].ID
+	item2 := detail.Groups[0].Items[1].ID
+
+	conflictBody := mustJSON(t, map[string][]map[string]interface{}{
+		"groups": []map[string]interface{}{
+			{"id": ungroupedID, "items": []int64{item1, item1}},
+		},
+	})
+	rr = doReq(h, "PUT", "/api/playlists/"+playlistIDStr+"/items/order", conflictBody)
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("grouped reorder conflict: expected 409, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Fatalf("grouped reorder conflict: expected JSON content type, got %q", ct)
+	}
+	var errResp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
+		t.Fatal(err)
+	}
+	if errResp.Error == "" || errResp.Error == "internal" {
+		t.Fatalf("expected conflict-style error body, got %q", errResp.Error)
+	}
+
+	rr = doReq(h, "GET", "/api/playlists/"+playlistIDStr+"/items", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("getPlaylistItems after conflict: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		Groups []struct {
+			ID    int64 `json:"id"`
+			Items []struct {
+				ID int64 `json:"id"`
+			} `json:"items"`
+		} `json:"groups"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Groups) != 1 || resp.Groups[0].ID != ungroupedID {
+		t.Fatalf("unexpected groups after conflict response")
+	}
+	if len(resp.Groups[0].Items) != 2 || resp.Groups[0].Items[0].ID != item1 || resp.Groups[0].Items[1].ID != item2 {
+		t.Fatalf("expected reorder conflict to leave playlist unchanged")
+	}
+}
+
+func TestPlaylistTracksHTTP_ReorderReturnsConflictOncePlaylistIsGrouped(t *testing.T) {
+	h := newTestHandler(t)
+	t1 := seedTrack(t, h, "FlatConflict1")
+	t2 := seedTrack(t, h, "FlatConflict2")
+	playlistID := createTestPlaylist(t, h, "FlatConflict")
+	playlistIDStr := mustJSON(t, playlistID)
+
+	addBody := mustJSON(t, map[string][]int64{"track_ids": []int64{t1, t2}})
+	rr := doReq(h, "POST", "/api/playlists/"+playlistIDStr+"/tracks", addBody)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("addPlaylistTracks: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	rr = doReq(h, "POST", "/api/playlists/"+playlistIDStr+"/groups", `{"title":"Moved"}`)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create group: expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var createGroupResp struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &createGroupResp); err != nil {
+		t.Fatal(err)
+	}
+
+	detail := getPlaylistDetail(t, h, playlistID)
+	itemID := detail.Groups[0].Items[0].ID
+	if err := h.store.UpdatePlaylistItem(itemID, store.PlaylistItemUpdate{GroupID: &createGroupResp.ID}); err != nil {
+		t.Fatal(err)
+	}
+
+	reorderBody := mustJSON(t, map[string][]int64{"track_ids": []int64{t2, t1}})
+	rr = doReq(h, "PUT", "/api/playlists/"+playlistIDStr+"/tracks/order", reorderBody)
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("flat reorder on grouped playlist: expected 409, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var errResp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
+		t.Fatal(err)
+	}
+	if errResp.Error == "" || errResp.Error == "internal" {
+		t.Fatalf("expected conflict-style error body, got %q", errResp.Error)
+	}
+}
+
+func TestPlaylistHTTP_UnknownNestedSubrouteReturnsJSONNotFound(t *testing.T) {
+	h := newTestHandler(t)
+	playlistID := createTestPlaylist(t, h, "NestedMiss")
+	playlistIDStr := mustJSON(t, playlistID)
+
+	rr := doReq(h, "GET", "/api/playlists/"+playlistIDStr+"/unknown", "")
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("unknown nested subroute: expected 404, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Fatalf("expected JSON content type for unknown nested subroute, got %q", ct)
+	}
+
+	var errResp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
+		t.Fatal(err)
+	}
+	if errResp.Error == "" {
+		t.Fatal("expected non-empty API error body for unknown nested subroute")
+	}
+}
+
+func TestPlaylistHTTP_MalformedPlaylistSubroutesReturnJSONNotFound(t *testing.T) {
+	h := newTestHandler(t)
+
+	for _, path := range []string{"/api/playlists/", "/api/playlists//tracks"} {
+		rr := doReq(h, "GET", path, "")
+		if rr.Code != http.StatusNotFound {
+			t.Fatalf("%s: expected 404, got %d: %s", path, rr.Code, rr.Body.String())
+		}
+		if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+			t.Fatalf("%s: expected JSON content type, got %q", path, ct)
+		}
+
+		var errResp struct {
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
+			t.Fatal(err)
+		}
+		if errResp.Error == "" {
+			t.Fatalf("%s: expected non-empty API error body", path)
+		}
+	}
+}
+
+func TestPlaylistHTTP_DeeperSubroutesReturnJSONNotFound(t *testing.T) {
+	h := newTestHandler(t)
+	playlistID := createTestPlaylist(t, h, "DeepMiss")
+	playlistIDStr := mustJSON(t, playlistID)
+
+	for _, path := range []string{
+		"/api/playlists/" + playlistIDStr + "/groups/123/extra",
+		"/api/playlists/" + playlistIDStr + "/items/order/extra",
+	} {
+		rr := doReq(h, "GET", path, "")
+		if rr.Code != http.StatusNotFound {
+			t.Fatalf("%s: expected 404, got %d: %s", path, rr.Code, rr.Body.String())
+		}
+		if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+			t.Fatalf("%s: expected JSON content type, got %q", path, ct)
+		}
+		var errResp struct {
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
+			t.Fatal(err)
+		}
+		if errResp.Error == "" {
+			t.Fatalf("%s: expected non-empty API error body", path)
+		}
+	}
+}
+
+func TestPlaylistHTTP_MethodMismatchReturnsJSON(t *testing.T) {
+	h := newTestHandler(t)
+	playlistID := createTestPlaylist(t, h, "MethodMismatch")
+	playlistIDStr := mustJSON(t, playlistID)
+
+	tests := []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodPut, path: "/api/playlists"},
+		{method: http.MethodPost, path: "/api/playlists/" + playlistIDStr},
+		{method: http.MethodPatch, path: "/api/playlists/" + playlistIDStr + "/cover"},
+		{method: http.MethodGet, path: "/api/playlists/" + playlistIDStr + "/groups"},
+	}
+
+	for _, tc := range tests {
+		rr := doReq(h, tc.method, tc.path, "")
+		if rr.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("%s %s: expected 405, got %d: %s", tc.method, tc.path, rr.Code, rr.Body.String())
+		}
+		if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+			t.Fatalf("%s %s: expected JSON content type, got %q", tc.method, tc.path, ct)
+		}
+		var errResp struct {
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
+			t.Fatal(err)
+		}
+		if errResp.Error == "" {
+			t.Fatalf("%s %s: expected non-empty API error body", tc.method, tc.path)
+		}
+	}
+}
+
+func TestPlaylistHTTP_TrailingSlashGroupResourceReturnsJSONNotFound(t *testing.T) {
+	h := newTestHandler(t)
+	playlistID := createTestPlaylist(t, h, "TrailingGroupSlash")
+	playlistIDStr := mustJSON(t, playlistID)
+
+	for _, method := range []string{http.MethodGet, http.MethodPatch, http.MethodDelete} {
+		rr := doReq(h, method, "/api/playlists/"+playlistIDStr+"/groups/", "")
+		if rr.Code != http.StatusNotFound {
+			t.Fatalf("%s trailing slash group resource: expected 404, got %d: %s", method, rr.Code, rr.Body.String())
+		}
+		if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+			t.Fatalf("%s trailing slash group resource: expected JSON content type, got %q", method, ct)
+		}
+		var errResp struct {
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
+			t.Fatal(err)
+		}
+		if errResp.Error == "" {
+			t.Fatalf("%s trailing slash group resource: expected non-empty API error body", method)
+		}
 	}
 }
 

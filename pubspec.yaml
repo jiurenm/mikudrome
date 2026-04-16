@@ -25,3 +25,10 @@ flutter:
   uses-material-design: true
   assets:
     - lib/assets/thumb.png
+  fonts:
+    - family: NotoSansJP
+      fonts:
+        - asset: lib/assets/fonts/NotoSansJP-Regular.ttf
+    - family: NotoSansSC
+      fonts:
+        - asset: lib/assets/fonts/NotoSansSC-Regular.ttf

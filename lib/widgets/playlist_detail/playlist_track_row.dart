@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../models/playlist_item.dart';
 import '../../models/track.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/responsive.dart';
@@ -7,18 +8,29 @@ import '../../utils/responsive.dart';
 class PlaylistTrackRow extends StatefulWidget {
   const PlaylistTrackRow({
     super.key,
+    required this.item,
+    required this.baseUrl,
+    required this.onTap,
+    this.onRemove,
+    this.showDragHandle = false,
+    this.isCurrentlyPlaying = false,
+  }) : track = null;
+
+  const PlaylistTrackRow.track({
+    super.key,
     required this.track,
     required this.baseUrl,
     required this.onTap,
-    required this.onRemove,
+    this.onRemove,
     this.showDragHandle = false,
     this.isCurrentlyPlaying = false,
-  });
+  }) : item = null;
 
-  final Track track;
+  final PlaylistItem? item;
+  final Track? track;
   final String baseUrl;
   final VoidCallback onTap;
-  final VoidCallback onRemove;
+  final VoidCallback? onRemove;
   final bool showDragHandle;
   final bool isCurrentlyPlaying;
 
@@ -29,14 +41,17 @@ class PlaylistTrackRow extends StatefulWidget {
 class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
   bool _hovering = false;
 
-  String get _vocalLine => widget.track.vocalLine;
+  Track get _track => widget.item?.track ?? widget.track!;
+  String get _vocalLine => _track.vocalLine;
+  String get _note => widget.item?.note.trim() ?? '';
 
   @override
   Widget build(BuildContext context) {
-    final track = widget.track;
+    final track = _track;
     final isActive = widget.isCurrentlyPlaying;
     final mobile = isMobile(context);
     final vocalLine = _vocalLine;
+    final note = _note;
     final titleColor =
         isActive || _hovering ? AppTheme.mikuGreen : AppTheme.textPrimary;
 
@@ -124,6 +139,16 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
                               fontWeight: FontWeight.w700,
                             ),
                       ),
+                      if (note.isNotEmpty)
+                        Text(
+                          note,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: AppTheme.textMuted,
+                                  ),
+                        ),
                       if (vocalLine.isNotEmpty)
                         Text(
                           vocalLine,
@@ -155,41 +180,42 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
                   ),
                   const SizedBox(width: 8),
                 ],
-                Semantics(
-                  label: 'More options',
-                  button: true,
-                  child: PopupMenuButton<String>(
-                    icon: const Icon(
-                      Icons.more_horiz,
-                      color: AppTheme.textMuted,
-                    ),
-                    iconSize: 20,
-                    padding: EdgeInsets.zero,
-                    style: IconButton.styleFrom(
-                      minimumSize: Size.zero,
-                      padding: const EdgeInsets.all(8),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    onSelected: (value) {
-                      if (value == 'remove') {
-                        widget.onRemove();
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem<String>(
-                        value: 'remove',
-                        child: Row(
-                          children: [
-                            Icon(Icons.remove_circle_outline,
-                                size: 18, color: AppTheme.textMuted),
-                            SizedBox(width: 12),
-                            Text('Remove from playlist'),
-                          ],
-                        ),
+                if (widget.onRemove != null)
+                  Semantics(
+                    label: 'More options',
+                    button: true,
+                    child: PopupMenuButton<String>(
+                      icon: const Icon(
+                        Icons.more_horiz,
+                        color: AppTheme.textMuted,
                       ),
-                    ],
+                      iconSize: 20,
+                      padding: EdgeInsets.zero,
+                      style: IconButton.styleFrom(
+                        minimumSize: Size.zero,
+                        padding: const EdgeInsets.all(8),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      onSelected: (value) {
+                        if (value == 'remove') {
+                          widget.onRemove?.call();
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem<String>(
+                          value: 'remove',
+                          child: Row(
+                            children: [
+                              Icon(Icons.remove_circle_outline,
+                                  size: 18, color: AppTheme.textMuted),
+                              SizedBox(width: 12),
+                              Text('Remove from playlist'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
           ),

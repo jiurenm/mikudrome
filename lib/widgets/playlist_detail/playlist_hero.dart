@@ -12,13 +12,15 @@ class PlaylistHero extends StatelessWidget {
     required this.playlist,
     required this.client,
     required this.onPlay,
-    required this.onEdit,
+    this.canPlay,
+    this.onEdit,
   });
 
   final Playlist playlist;
   final ApiClient client;
   final VoidCallback onPlay;
-  final VoidCallback onEdit;
+  final bool? canPlay;
+  final VoidCallback? onEdit;
 
   static final _gradient = BoxDecoration(
     gradient: LinearGradient(
@@ -44,6 +46,7 @@ class PlaylistHero extends StatelessWidget {
   Widget _buildMobileLayout(BuildContext context, BoxDecoration gradient) {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final coverSize = screenWidth * 0.6;
+    final playEnabled = canPlay ?? playlist.trackCount > 0;
 
     return Container(
       decoration: gradient,
@@ -89,12 +92,12 @@ class PlaylistHero extends StatelessWidget {
                 label: 'Play playlist',
                 button: true,
                 child: FilledButton.icon(
-                  onPressed: playlist.trackCount > 0 ? onPlay : null,
+                  onPressed: playEnabled ? onPlay : null,
                   style: FilledButton.styleFrom(
                     backgroundColor: AppTheme.mikuGreen,
                     foregroundColor: Colors.black,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(24),
                     ),
@@ -103,24 +106,26 @@ class PlaylistHero extends StatelessWidget {
                   label: const Text('PLAY'),
                 ),
               ),
-              const SizedBox(width: 12),
-              Semantics(
-                label: 'Edit playlist',
-                button: true,
-                child: OutlinedButton(
-                  onPressed: onEdit,
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppTheme.textMuted),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
+              if (onEdit != null) ...[
+                const SizedBox(width: 12),
+                Semantics(
+                  label: 'Edit playlist',
+                  button: true,
+                  child: OutlinedButton(
+                    onPressed: onEdit,
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: AppTheme.textMuted),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
+                      foregroundColor: AppTheme.textPrimary,
                     ),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    foregroundColor: AppTheme.textPrimary,
+                    child: const Text('EDIT'),
                   ),
-                  child: const Text('EDIT'),
                 ),
-              ),
+              ],
             ],
           ),
         ],
@@ -129,6 +134,8 @@ class PlaylistHero extends StatelessWidget {
   }
 
   Widget _buildDesktopLayout(BuildContext context, BoxDecoration gradient) {
+    final playEnabled = canPlay ?? playlist.trackCount > 0;
+
     return Container(
       height: 320,
       decoration: gradient,
@@ -180,7 +187,7 @@ class PlaylistHero extends StatelessWidget {
                         label: 'Play playlist',
                         button: true,
                         child: FilledButton.icon(
-                          onPressed: playlist.trackCount > 0 ? onPlay : null,
+                          onPressed: playEnabled ? onPlay : null,
                           style: FilledButton.styleFrom(
                             backgroundColor: AppTheme.mikuGreen,
                             foregroundColor: Colors.black,
@@ -194,24 +201,26 @@ class PlaylistHero extends StatelessWidget {
                           label: const Text('PLAY'),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Semantics(
-                        label: 'Edit playlist',
-                        button: true,
-                        child: OutlinedButton(
-                          onPressed: onEdit,
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: AppTheme.textMuted),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
+                      if (onEdit != null) ...[
+                        const SizedBox(width: 12),
+                        Semantics(
+                          label: 'Edit playlist',
+                          button: true,
+                          child: OutlinedButton(
+                            onPressed: onEdit,
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: AppTheme.textMuted),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 32, vertical: 12),
+                              foregroundColor: AppTheme.textPrimary,
                             ),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 32, vertical: 12),
-                            foregroundColor: AppTheme.textPrimary,
+                            child: const Text('EDIT'),
                           ),
-                          child: const Text('EDIT'),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ],
