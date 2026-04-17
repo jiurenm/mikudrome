@@ -10,6 +10,7 @@ import 'package:mikudrome/models/playlist_item.dart';
 import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/screens/playlist_detail_screen.dart';
 import 'package:mikudrome/services/playlist_repository.dart';
+import 'package:mikudrome/widgets/playlist_detail/playlist_cover_grid.dart';
 import 'package:mikudrome/widgets/playlist_detail/playlist_item_editor_sheet.dart';
 import 'package:mikudrome/widgets/playlist_detail/playlist_track_row.dart';
 
@@ -210,6 +211,47 @@ void main() {
     expect(playButtonSize.width, lessThanOrEqualTo(40));
     expect(playButtonSize.height, lessThanOrEqualTo(40));
   });
+
+  testWidgets(
+    'PlaylistDetailScreen cover mode only shows play button on hover',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: _FakeApiClient(_buildReorderableDetail()),
+            currentPlayingTrackId: 11,
+            isPlaying: true,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('封面'));
+      await tester.pumpAndSettle();
+
+      final hiddenOpacity = tester.widget<AnimatedOpacity>(
+        find.byKey(const ValueKey('playlist-cover-play-opacity-101')),
+      );
+      expect(hiddenOpacity.opacity, 0);
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(gesture.removePointer);
+      await gesture.addPointer();
+      await gesture.moveTo(
+        tester.getCenter(find.byKey(const ValueKey('playlist-cover-card-101'))),
+      );
+      await tester.pumpAndSettle();
+
+      final visibleOpacity = tester.widget<AnimatedOpacity>(
+        find.byKey(const ValueKey('playlist-cover-play-opacity-101')),
+      );
+      expect(visibleOpacity.opacity, 1);
+    },
+  );
 
   testWidgets('PlaylistDetailScreen cover mode shows title toggle on desktop', (
     tester,
@@ -691,6 +733,56 @@ void main() {
       final provider =
           (image.image as ResizeImage).imageProvider as NetworkImage;
       expect(provider.url, 'http://example.test/custom.jpg');
+    },
+  );
+
+  testWidgets(
+    'PlaylistCoverGrid falls back to album cover for album-backed tracks',
+    (tester) async {
+      const item = PlaylistItem(
+        id: 12,
+        playlistId: 7,
+        trackId: 6,
+        groupId: 1,
+        position: 0,
+        note: '',
+        coverMode: 'default',
+        track: Track(
+          id: 6,
+          title: 'Album Backed Track',
+          audioPath: '/album.flac',
+          videoPath: '',
+          albumId: 42,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PlaylistCoverGrid(
+              items: const [item],
+              selectedItemId: null,
+              baseUrl: 'http://example.test',
+              showTitles: true,
+              onSelect: (_) {},
+              onPlay: (_) {},
+            ),
+          ),
+        ),
+      );
+
+      final imageFinder = find.byType(Image).first;
+      final image = tester.widget<Image>(imageFinder);
+      final fallback = image.errorBuilder!(
+        tester.element(imageFinder),
+        Exception('cover load failed'),
+        StackTrace.empty,
+      );
+
+      expect(fallback, isA<Image>());
+      final provider = ((fallback as Image).image as ResizeImage).imageProvider
+          as NetworkImage;
+      expect(provider.url, 'http://example.test/api/albums/42/cover');
     },
   );
 

@@ -153,15 +153,34 @@ class _PlaylistCoverCardState extends State<_PlaylistCoverCard> {
                             fit: BoxFit.cover,
                             cacheWidth: 420,
                             cacheHeight: 420,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: AppTheme.cardBg,
-                              alignment: Alignment.center,
-                              child: const Icon(
-                                Icons.music_note,
-                                size: 36,
-                                color: AppTheme.textMuted,
-                              ),
-                            ),
+                            errorBuilder: (_, __, ___) {
+                              if (item.track.albumId > 0) {
+                                return Image.network(
+                                  '${widget.baseUrl}/api/albums/${item.track.albumId}/cover',
+                                  fit: BoxFit.cover,
+                                  cacheWidth: 420,
+                                  cacheHeight: 420,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    color: AppTheme.cardBg,
+                                    alignment: Alignment.center,
+                                    child: const Icon(
+                                      Icons.music_note,
+                                      size: 36,
+                                      color: AppTheme.textMuted,
+                                    ),
+                                  ),
+                                );
+                              }
+                              return Container(
+                                color: AppTheme.cardBg,
+                                alignment: Alignment.center,
+                                child: const Icon(
+                                  Icons.music_note,
+                                  size: 36,
+                                  color: AppTheme.textMuted,
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ),
@@ -238,10 +257,13 @@ class _PlaylistCoverCardState extends State<_PlaylistCoverCard> {
                         ),
                       Center(
                         child: IgnorePointer(
-                          ignoring: !_hovering && !widget.selected,
+                          ignoring: !_hovering,
                           child: AnimatedOpacity(
+                            key: ValueKey(
+                              'playlist-cover-play-opacity-${item.id}',
+                            ),
                             duration: const Duration(milliseconds: 140),
-                            opacity: _hovering || widget.selected ? 1 : 0,
+                            opacity: _hovering ? 1 : 0,
                             child: Material(
                               color: Colors.black.withValues(alpha: 0.38),
                               shape: const CircleBorder(),
