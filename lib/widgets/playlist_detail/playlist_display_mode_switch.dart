@@ -21,18 +21,31 @@ class PlaylistDisplayModeSwitch extends StatelessWidget {
       segments: const [
         ButtonSegment<PlaylistDisplayMode>(
           value: PlaylistDisplayMode.list,
-          label: Text('歌单'),
-          icon: Icon(Icons.view_list_rounded),
+          icon: Icon(
+            Icons.view_list_rounded,
+            key: ValueKey('playlist-display-mode-list-icon'),
+            size: 18,
+          ),
+          tooltip: '歌单',
         ),
         ButtonSegment<PlaylistDisplayMode>(
           value: PlaylistDisplayMode.cover,
-          label: Text('封面'),
-          icon: Icon(Icons.grid_view_rounded),
+          icon: Icon(
+            Icons.grid_view_rounded,
+            key: ValueKey('playlist-display-mode-cover-icon'),
+            size: 18,
+          ),
+          tooltip: '封面',
         ),
       ],
       selected: {value},
       showSelectedIcon: false,
       style: ButtonStyle(
+        minimumSize: const WidgetStatePropertyAll(Size(48, 40)),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        ),
         backgroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return AppTheme.mikuGreen.withValues(alpha: 0.16);

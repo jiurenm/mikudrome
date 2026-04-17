@@ -816,6 +816,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
             padding: const EdgeInsets.only(bottom: 24),
             child: PlaylistGroupSection(
               title: group.title,
+              spacing: 16,
               children: [
                 PlaylistCoverGrid(
                   items: group.items,

@@ -5,10 +5,12 @@ class PlaylistGroupSection extends StatelessWidget {
     super.key,
     required this.title,
     required this.children,
+    this.spacing = 8,
   });
 
   final String title;
   final List<Widget> children;
+  final double spacing;
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +21,7 @@ class PlaylistGroupSection extends StatelessWidget {
           title,
           style: Theme.of(context).textTheme.titleMedium,
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: spacing),
         ...children,
       ],
     );

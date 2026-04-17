@@ -116,9 +116,41 @@ void main() {
       find.byKey(const ValueKey('playlist-display-mode-switch')),
       findsOneWidget,
     );
-    expect(find.text('歌单'), findsOneWidget);
-    expect(find.text('封面'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('playlist-display-mode-list-icon')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('playlist-display-mode-cover-icon')),
+      findsOneWidget,
+    );
+    expect(find.text('歌单'), findsNothing);
+    expect(find.text('封面'), findsNothing);
   });
+
+  testWidgets(
+    'PlaylistDetailScreen keeps desktop display mode switch compact on one row',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: _FakeApiClient(_buildReorderableDetail()),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final switchSize = tester.getSize(
+        find.byKey(const ValueKey('playlist-display-mode-switch')),
+      );
+      expect(switchSize.height, lessThanOrEqualTo(44));
+      expect(switchSize.width, lessThanOrEqualTo(132));
+    },
+  );
 
   testWidgets(
     'PlaylistDetailScreen desktop cover mode switches grouped content rendering',
@@ -145,7 +177,9 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.text('封面'));
+      await tester.tap(
+        find.byKey(const ValueKey('playlist-display-mode-cover-icon')),
+      );
       await tester.pumpAndSettle();
 
       expect(
@@ -158,6 +192,36 @@ void main() {
       );
       expect(find.text('Ungrouped'), findsOneWidget);
       expect(find.text('Act 2'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'PlaylistDetailScreen cover mode adds more space between group title and covers',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: _FakeApiClient(_buildReorderableDetail()),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(
+        find.byKey(const ValueKey('playlist-display-mode-cover-icon')),
+      );
+      await tester.pumpAndSettle();
+
+      final titleBottom = tester.getBottomLeft(find.text('Ungrouped')).dy;
+      final coverTop = tester
+          .getTopLeft(find.byKey(const ValueKey('playlist-cover-card-101')))
+          .dy;
+
+      expect(coverTop - titleBottom, greaterThanOrEqualTo(16));
     },
   );
 
@@ -177,7 +241,9 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('封面'));
+    await tester.tap(
+      find.byKey(const ValueKey('playlist-display-mode-cover-icon')),
+    );
     await tester.pumpAndSettle();
 
     final coverSize = tester.getSize(
@@ -202,7 +268,9 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('封面'));
+    await tester.tap(
+      find.byKey(const ValueKey('playlist-display-mode-cover-icon')),
+    );
     await tester.pumpAndSettle();
 
     final playButtonSize = tester.getSize(
@@ -230,7 +298,9 @@ void main() {
       );
       await tester.pump();
 
-      await tester.tap(find.text('封面'));
+      await tester.tap(
+        find.byKey(const ValueKey('playlist-display-mode-cover-icon')),
+      );
       await tester.pumpAndSettle();
 
       final hiddenOpacity = tester.widget<AnimatedOpacity>(
@@ -269,7 +339,9 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('封面'));
+    await tester.tap(
+      find.byKey(const ValueKey('playlist-display-mode-cover-icon')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('显示标题'), findsOneWidget);
@@ -293,7 +365,9 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('封面'));
+    await tester.tap(
+      find.byKey(const ValueKey('playlist-display-mode-cover-icon')),
+    );
     await tester.pumpAndSettle();
 
     final titleToggleSize = tester.getSize(
@@ -318,7 +392,9 @@ void main() {
       );
       await tester.pump();
 
-      await tester.tap(find.text('封面'));
+      await tester.tap(
+        find.byKey(const ValueKey('playlist-display-mode-cover-icon')),
+      );
       await tester.pumpAndSettle();
 
       final initialCardHeight = tester
@@ -354,7 +430,9 @@ void main() {
       );
       await tester.pump();
 
-      await tester.tap(find.text('封面'));
+      await tester.tap(
+        find.byKey(const ValueKey('playlist-display-mode-cover-icon')),
+      );
       await tester.pumpAndSettle();
       await tester
           .tap(find.byKey(const ValueKey('playlist-cover-title-toggle')));
@@ -392,7 +470,9 @@ void main() {
       );
       await tester.pump();
 
-      await tester.tap(find.text('封面'));
+      await tester.tap(
+        find.byKey(const ValueKey('playlist-display-mode-cover-icon')),
+      );
       await tester.pumpAndSettle();
 
       expect(
@@ -418,7 +498,9 @@ void main() {
       );
       await tester.pump();
 
-      await tester.tap(find.text('封面'));
+      await tester.tap(
+        find.byKey(const ValueKey('playlist-display-mode-cover-icon')),
+      );
       await tester.pumpAndSettle();
 
       expect(
@@ -444,7 +526,9 @@ void main() {
       );
       await tester.pump();
 
-      await tester.tap(find.text('封面'));
+      await tester.tap(
+        find.byKey(const ValueKey('playlist-display-mode-cover-icon')),
+      );
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const ValueKey('playlist-cover-card-102')));
@@ -486,7 +570,9 @@ void main() {
       );
       await tester.pump();
 
-      await tester.tap(find.text('封面'));
+      await tester.tap(
+        find.byKey(const ValueKey('playlist-display-mode-cover-icon')),
+      );
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const ValueKey('playlist-cover-card-102')));
