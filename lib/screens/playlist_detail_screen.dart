@@ -45,6 +45,9 @@ class PlaylistDetailScreen extends StatefulWidget {
 }
 
 class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
+  static const double _desktopTitleColumnMinWidth = 220;
+  static const double _desktopTitleColumnMaxWidth = 420;
+
   bool _loading = true;
   String? _error;
   bool _isEditMode = false;
@@ -240,6 +243,15 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Custom cover removed')),
+    );
+  }
+
+  Future<void> _removeItem(PlaylistItem item) async {
+    await _client.removeTracksFromPlaylist(widget.playlistId, [item.trackId]);
+    await _loadPlaylistAndTracks();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Removed from playlist')),
     );
   }
 
@@ -504,7 +516,43 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     );
   }
 
-  List<Widget> _buildGroupChildren(PlaylistGroup group) {
+  double _desktopTitleColumnWidth(BuildContext context) {
+    final textStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+        );
+    if (textStyle == null || _items.isEmpty) {
+      return _desktopTitleColumnMinWidth;
+    }
+
+    final textDirection = Directionality.of(context);
+    final textScaler = MediaQuery.textScalerOf(context);
+    var longestWidth = 0.0;
+
+    for (final item in _items) {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: item.track.title,
+          style: textStyle,
+        ),
+        maxLines: 1,
+        textDirection: textDirection,
+        textScaler: textScaler,
+      )..layout();
+      if (painter.width > longestWidth) {
+        longestWidth = painter.width;
+      }
+    }
+
+    return (longestWidth.ceilToDouble() + 8).clamp(
+      _desktopTitleColumnMinWidth,
+      _desktopTitleColumnMaxWidth,
+    );
+  }
+
+  List<Widget> _buildGroupChildren(
+    PlaylistGroup group, {
+    required double? desktopTitleWidth,
+  }) {
     final children = <Widget>[];
     if (_isEditMode) {
       children.add(_buildDropSlot(group, 0));
@@ -520,8 +568,10 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
             baseUrl: widget._effectiveBaseUrl,
             onTap: () => _playItem(item),
             onEdit: _isEditMode ? () => _editItem(item) : null,
+            onRemove: _isEditMode ? () => _removeItem(item) : null,
             showDragHandle: _isEditMode,
             dragHandle: _isEditMode ? _buildDragHandle(item) : null,
+            desktopTitleWidth: desktopTitleWidth,
             isCurrentlyPlaying:
                 widget.currentPlayingTrackId == item.track.id && widget.isPlaying,
           ),
@@ -536,6 +586,9 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final desktopTitleWidth =
+        isMobile(context) ? null : _desktopTitleColumnWidth(context);
+
     if (_playlist == null && !_loading && _error == null) {
       return Scaffold(
         backgroundColor: AppTheme.mikuDark,
@@ -658,7 +711,10 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                 padding: const EdgeInsets.only(bottom: 24),
                                 child: PlaylistGroupSection(
                                   title: group.title,
-                                  children: _buildGroupChildren(group),
+                                  children: _buildGroupChildren(
+                                    group,
+                                    desktopTitleWidth: desktopTitleWidth,
+                                  ),
                                 ),
                               ),
                           ]),

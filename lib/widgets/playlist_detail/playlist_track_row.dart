@@ -15,6 +15,7 @@ class PlaylistTrackRow extends StatefulWidget {
     this.onRemove,
     this.showDragHandle = false,
     this.dragHandle,
+    this.desktopTitleWidth,
     this.isCurrentlyPlaying = false,
   }) : track = null;
 
@@ -27,6 +28,7 @@ class PlaylistTrackRow extends StatefulWidget {
     this.onRemove,
     this.showDragHandle = false,
     this.dragHandle,
+    this.desktopTitleWidth,
     this.isCurrentlyPlaying = false,
   }) : item = null;
 
@@ -38,6 +40,7 @@ class PlaylistTrackRow extends StatefulWidget {
   final VoidCallback? onRemove;
   final bool showDragHandle;
   final Widget? dragHandle;
+  final double? desktopTitleWidth;
   final bool isCurrentlyPlaying;
 
   @override
@@ -100,7 +103,7 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
           Text(
             note,
             key: const ValueKey('playlist-track-row-note-mobile'),
-            maxLines: 2,
+            maxLines: 3,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppTheme.textMuted,
@@ -128,7 +131,7 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
           : Text(
               note,
               key: const ValueKey('playlist-track-row-note-desktop'),
-              maxLines: 2,
+              maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppTheme.textMuted,
@@ -147,8 +150,11 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
     return Expanded(
       child: Row(
         children: [
-          Flexible(
-            flex: 2,
+          SizedBox(
+            key: ValueKey(
+              'playlist-track-row-title-desktop-${widget.item?.id ?? track.id}',
+            ),
+            width: widget.desktopTitleWidth ?? 280,
             child: _buildTitleBlock(
               context: context,
               track: track,
@@ -159,8 +165,7 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
             ),
           ),
           const SizedBox(width: 24),
-          Flexible(
-            flex: 3,
+          Expanded(
             child: _buildDesktopNoteColumn(context, note),
           ),
         ],
@@ -314,7 +319,12 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
                               Icon(Icons.remove_circle_outline,
                                   size: 18, color: AppTheme.textMuted),
                               SizedBox(width: 12),
-                              Text('Remove from playlist'),
+                              Flexible(
+                                child: Text(
+                                  'Remove from playlist',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                             ],
                           ),
                         ),

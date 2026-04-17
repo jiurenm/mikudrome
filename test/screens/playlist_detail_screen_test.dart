@@ -155,6 +155,42 @@ void main() {
   );
 
   testWidgets(
+    'PlaylistDetailScreen edit mode removes item from playlist',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final client = _EditableFakeApiClient(_buildEditableDetail());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: client,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('EDIT'));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.more_horiz), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.more_horiz));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Remove from playlist'));
+      await tester.pumpAndSettle();
+
+      expect(client.removedTrackIds, [
+        [11],
+      ]);
+      expect(find.text('Track A'), findsNothing);
+      expect(find.text('No tracks in this playlist'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'PlaylistDetailScreen edit mode drags items between groups with grouped reorder payload',
     (tester) async {
       final client = _EditableFakeApiClient(_buildReorderableDetail());
@@ -306,9 +342,25 @@ void main() {
       );
       await tester.pump();
 
+      expect(
+        find.byKey(const ValueKey('playlist-track-row-title-desktop-10')),
+        findsOneWidget,
+      );
       expect(find.byKey(const ValueKey('playlist-track-row-note-desktop')), findsOneWidget);
       expect(find.byKey(const ValueKey('playlist-track-row-note-mobile')), findsNothing);
       expect(find.text('desktop note'), findsOneWidget);
+
+      final titleWidth = tester
+          .getSize(
+            find.byKey(const ValueKey('playlist-track-row-title-desktop-10')),
+          )
+          .width;
+      expect(titleWidth, lessThan(320));
+
+      final noteText = tester.widget<Text>(
+        find.byKey(const ValueKey('playlist-track-row-note-desktop')),
+      );
+      expect(noteText.maxLines, 3);
 
       final noteLeft = tester
           .getTopLeft(find.byKey(const ValueKey('playlist-track-row-note-desktop')))
@@ -356,6 +408,82 @@ void main() {
       expect(find.byKey(const ValueKey('playlist-track-row-note-mobile')), findsOneWidget);
       expect(find.byKey(const ValueKey('playlist-track-row-note-desktop')), findsNothing);
       expect(find.text('mobile note'), findsOneWidget);
+
+      final noteText = tester.widget<Text>(
+        find.byKey(const ValueKey('playlist-track-row-note-mobile')),
+      );
+      expect(noteText.maxLines, 3);
+    },
+  );
+
+  testWidgets(
+    'PlaylistDetailScreen uses minimum shared desktop title width for short titles',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1440, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: _FakeApiClient(
+              _buildDesktopTitleWidthDetail(
+                shortTitle: 'A',
+                longTitle: 'Short Song',
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final firstTitle = find.byKey(
+        const ValueKey('playlist-track-row-title-desktop-101'),
+      );
+      final secondTitle = find.byKey(
+        const ValueKey('playlist-track-row-title-desktop-102'),
+      );
+
+      expect(firstTitle, findsOneWidget);
+      expect(secondTitle, findsOneWidget);
+      expect(tester.getSize(firstTitle).width, 220);
+      expect(tester.getSize(secondTitle).width, 220);
+    },
+  );
+
+  testWidgets(
+    'PlaylistDetailScreen clamps shared desktop title width to max for long titles',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1440, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: _FakeApiClient(
+              _buildDesktopTitleWidthDetail(
+                shortTitle: 'A',
+                longTitle:
+                    'An Extremely Long Playlist Song Title That Should Hit The Desktop Clamp Width Limit',
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final firstTitle = find.byKey(
+        const ValueKey('playlist-track-row-title-desktop-101'),
+      );
+      final secondTitle = find.byKey(
+        const ValueKey('playlist-track-row-title-desktop-102'),
+      );
+
+      expect(firstTitle, findsOneWidget);
+      expect(secondTitle, findsOneWidget);
+      expect(tester.getSize(firstTitle).width, 420);
+      expect(tester.getSize(secondTitle).width, 420);
     },
   );
 
@@ -548,6 +676,7 @@ class _EditableFakeApiClient extends ApiClient {
   final List<String> createdGroupTitles = [];
   final List<_UpdatedItemCall> updatedItemRequests = [];
   final List<List<PlaylistGroupReorderInput>> reorderRequests = [];
+  final List<List<int>> removedTrackIds = [];
 
   @override
   Future<PlaylistDetailData> getPlaylistItems(int id) async => _detail;
@@ -626,6 +755,30 @@ class _EditableFakeApiClient extends ApiClient {
       groups: [..._detail.groups, group],
     );
     return group;
+  }
+
+  @override
+  Future<void> removeTracksFromPlaylist(int id, List<int> trackIds) async {
+    removedTrackIds.add(trackIds);
+    _detail = PlaylistDetailData(
+      playlist: _detail.playlist,
+      groups: [
+        for (final group in _detail.groups)
+          PlaylistGroup(
+            id: group.id,
+            playlistId: group.playlistId,
+            title: group.title,
+            position: group.position,
+            isSystem: group.isSystem,
+            createdAt: group.createdAt,
+            updatedAt: group.updatedAt,
+            items: [
+              for (final item in group.items)
+                if (!trackIds.contains(item.trackId)) item,
+            ],
+          ),
+      ],
+    );
   }
 
   @override
@@ -755,6 +908,60 @@ PlaylistDetailData _buildEditableDetail() {
               id: 11,
               title: 'Track A',
               audioPath: '/music/a.flac',
+              videoPath: '',
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+PlaylistDetailData _buildDesktopTitleWidthDetail({
+  required String shortTitle,
+  required String longTitle,
+}) {
+  return PlaylistDetailData(
+    playlist: const Playlist(
+      id: 7,
+      name: 'Desktop Width Mix',
+      trackCount: 2,
+    ),
+    groups: [
+      PlaylistGroup(
+        id: 1,
+        playlistId: 7,
+        title: 'Ungrouped',
+        position: 0,
+        isSystem: true,
+        items: [
+          PlaylistItem(
+            id: 101,
+            playlistId: 7,
+            trackId: 11,
+            groupId: 1,
+            position: 0,
+            note: 'note a',
+            coverMode: 'default',
+            track: Track(
+              id: 11,
+              title: shortTitle,
+              audioPath: '/music/a.flac',
+              videoPath: '',
+            ),
+          ),
+          PlaylistItem(
+            id: 102,
+            playlistId: 7,
+            trackId: 12,
+            groupId: 1,
+            position: 1,
+            note: 'note b',
+            coverMode: 'default',
+            track: Track(
+              id: 12,
+              title: longTitle,
+              audioPath: '/music/b.flac',
               videoPath: '',
             ),
           ),
