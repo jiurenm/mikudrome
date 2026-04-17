@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/api/api_client.dart';
@@ -91,6 +93,394 @@ void main() {
 
     expect(find.text('Focus Mix'), findsOneWidget);
     expect(find.text('Stale Name'), findsNothing);
+  });
+
+  testWidgets('PlaylistDetailScreen shows desktop display mode switch', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlaylistDetailScreen(
+          playlistId: 7,
+          client: _FakeApiClient(_buildReorderableDetail()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('playlist-display-mode-switch')),
+      findsOneWidget,
+    );
+    expect(find.text('歌单'), findsOneWidget);
+    expect(find.text('封面'), findsOneWidget);
+  });
+
+  testWidgets(
+    'PlaylistDetailScreen desktop cover mode switches grouped content rendering',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: _FakeApiClient(_buildReorderableDetail()),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('playlist-cover-grid')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('playlist-track-row-title-desktop-101')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('封面'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('playlist-cover-grid')),
+        findsWidgets,
+      );
+      expect(
+        find.byKey(const ValueKey('playlist-track-row-title-desktop-101')),
+        findsNothing,
+      );
+      expect(find.text('Ungrouped'), findsOneWidget);
+      expect(find.text('Act 2'), findsOneWidget);
+    },
+  );
+
+  testWidgets('PlaylistDetailScreen cover mode renders square cover media', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlaylistDetailScreen(
+          playlistId: 7,
+          client: _FakeApiClient(_buildReorderableDetail()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('封面'));
+    await tester.pumpAndSettle();
+
+    final coverSize = tester.getSize(
+      find.byKey(const ValueKey('playlist-cover-media-101')),
+    );
+    expect(coverSize.width, closeTo(coverSize.height, 0.1));
+  });
+
+  testWidgets('PlaylistDetailScreen cover mode uses a compact play button', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlaylistDetailScreen(
+          playlistId: 7,
+          client: _FakeApiClient(_buildReorderableDetail()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('封面'));
+    await tester.pumpAndSettle();
+
+    final playButtonSize = tester.getSize(
+      find.byKey(const ValueKey('playlist-cover-play-101')),
+    );
+    expect(playButtonSize.width, lessThanOrEqualTo(40));
+    expect(playButtonSize.height, lessThanOrEqualTo(40));
+  });
+
+  testWidgets('PlaylistDetailScreen cover mode shows title toggle on desktop', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlaylistDetailScreen(
+          playlistId: 7,
+          client: _FakeApiClient(_buildReorderableDetail()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('封面'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('显示标题'), findsOneWidget);
+    expect(find.byKey(const ValueKey('playlist-cover-title-toggle')),
+        findsOneWidget);
+  });
+
+  testWidgets('PlaylistDetailScreen cover mode uses a compact title toggle', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlaylistDetailScreen(
+          playlistId: 7,
+          client: _FakeApiClient(_buildReorderableDetail()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('封面'));
+    await tester.pumpAndSettle();
+
+    final titleToggleSize = tester.getSize(
+      find.byKey(const ValueKey('playlist-cover-title-control')),
+    );
+    expect(titleToggleSize.height, lessThanOrEqualTo(36));
+  });
+
+  testWidgets(
+    'PlaylistDetailScreen cover mode can hide persistent titles and shrink cards',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: _FakeApiClient(_buildReorderableDetail()),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('封面'));
+      await tester.pumpAndSettle();
+
+      final initialCardHeight = tester
+          .getSize(find.byKey(const ValueKey('playlist-cover-card-101')))
+          .height;
+      expect(find.text('Track A'), findsOneWidget);
+
+      await tester
+          .tap(find.byKey(const ValueKey('playlist-cover-title-toggle')));
+      await tester.pumpAndSettle();
+
+      final collapsedCardHeight = tester
+          .getSize(find.byKey(const ValueKey('playlist-cover-card-101')))
+          .height;
+      expect(collapsedCardHeight, lessThan(initialCardHeight));
+      expect(find.text('Track A'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'PlaylistDetailScreen hidden cover titles appear on hover overlay',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: _FakeApiClient(_buildReorderableDetail()),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('封面'));
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.byKey(const ValueKey('playlist-cover-title-toggle')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Track A'), findsNothing);
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(gesture.removePointer);
+      await gesture.addPointer();
+      await gesture.moveTo(
+        tester.getCenter(find.byKey(const ValueKey('playlist-cover-card-101'))),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Track A'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'PlaylistDetailScreen cover mode selects current playing item when available',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: _FakeApiClient(_buildReorderableDetail()),
+            currentPlayingTrackId: 12,
+            isPlaying: true,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('封面'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('playlist-cover-card-selected-102')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'PlaylistDetailScreen cover mode selects first item when nothing is playing',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: _FakeApiClient(_buildReorderableDetail()),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('封面'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('playlist-cover-card-selected-101')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'PlaylistDetailScreen cover mode taps to select another visible item',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: _FakeApiClient(_buildReorderableDetail()),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('封面'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('playlist-cover-card-102')));
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(
+        find.byKey(const ValueKey('playlist-cover-card-selected-102')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('playlist-cover-card-selected-101')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'PlaylistDetailScreen cover mode double tap plays selected item',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      Track? playedTrack;
+      List<Track>? playedQueue;
+      int? playedIndex;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: _FakeApiClient(_buildReorderableDetail()),
+            onPlayTrack: (track, queue, index) {
+              playedTrack = track;
+              playedQueue = queue;
+              playedIndex = index;
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('封面'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('playlist-cover-card-102')));
+      await tester.pump(const Duration(milliseconds: 40));
+      await tester.tap(find.byKey(const ValueKey('playlist-cover-card-102')));
+      await tester.pumpAndSettle();
+
+      expect(playedTrack?.id, 12);
+      expect(playedQueue?.length, 3);
+      expect(playedIndex, 1);
+    },
+  );
+
+  testWidgets('PlaylistDetailScreen keeps mobile layout without display switch',
+      (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(size: Size(390, 844)),
+        child: MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: _FakeApiClient(_buildReorderableDetail()),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('playlist-display-mode-switch')),
+      findsNothing,
+    );
+    expect(find.text('歌单'), findsNothing);
+    expect(find.text('封面'), findsNothing);
   });
 
   testWidgets(
@@ -215,7 +605,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final handle = find.byKey(const ValueKey('playlist-item-101-drag-handle'));
+      final handle =
+          find.byKey(const ValueKey('playlist-item-101-drag-handle'));
       final target = find.byKey(const ValueKey('playlist-group-2-slot-1'));
 
       expect(handle, findsOneWidget);
@@ -346,8 +737,10 @@ void main() {
         find.byKey(const ValueKey('playlist-track-row-title-desktop-10')),
         findsOneWidget,
       );
-      expect(find.byKey(const ValueKey('playlist-track-row-note-desktop')), findsOneWidget);
-      expect(find.byKey(const ValueKey('playlist-track-row-note-mobile')), findsNothing);
+      expect(find.byKey(const ValueKey('playlist-track-row-note-desktop')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('playlist-track-row-note-mobile')),
+          findsNothing);
       expect(find.text('desktop note'), findsOneWidget);
 
       final titleWidth = tester
@@ -363,7 +756,8 @@ void main() {
       expect(noteText.maxLines, 3);
 
       final noteLeft = tester
-          .getTopLeft(find.byKey(const ValueKey('playlist-track-row-note-desktop')))
+          .getTopLeft(
+              find.byKey(const ValueKey('playlist-track-row-note-desktop')))
           .dx;
       expect(noteLeft, lessThan(600));
     },
@@ -405,8 +799,10 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.byKey(const ValueKey('playlist-track-row-note-mobile')), findsOneWidget);
-      expect(find.byKey(const ValueKey('playlist-track-row-note-desktop')), findsNothing);
+      expect(find.byKey(const ValueKey('playlist-track-row-note-mobile')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('playlist-track-row-note-desktop')),
+          findsNothing);
       expect(find.text('mobile note'), findsOneWidget);
 
       final noteText = tester.widget<Text>(
@@ -696,7 +1092,9 @@ class _EditableFakeApiClient extends ApiClient {
     _detail = PlaylistDetailData(
       playlist: _detail.playlist,
       groups: [
-        for (var groupIndex = 0; groupIndex < _detail.groups.length; groupIndex++)
+        for (var groupIndex = 0;
+            groupIndex < _detail.groups.length;
+            groupIndex++)
           PlaylistGroup(
             id: _detail.groups[groupIndex].id,
             playlistId: _detail.groups[groupIndex].playlistId,
@@ -711,28 +1109,30 @@ class _EditableFakeApiClient extends ApiClient {
                   itemIndex++)
                 PlaylistItem(
                   id: itemsById[groups[groupIndex].itemIds[itemIndex]]!.id,
-                  playlistId:
-                      itemsById[groups[groupIndex].itemIds[itemIndex]]!.playlistId,
-                  trackId: itemsById[groups[groupIndex].itemIds[itemIndex]]!.trackId,
+                  playlistId: itemsById[groups[groupIndex].itemIds[itemIndex]]!
+                      .playlistId,
+                  trackId:
+                      itemsById[groups[groupIndex].itemIds[itemIndex]]!.trackId,
                   groupId: groups[groupIndex].id,
                   position: itemIndex,
                   note: itemsById[groups[groupIndex].itemIds[itemIndex]]!.note,
-                  coverMode:
-                      itemsById[groups[groupIndex].itemIds[itemIndex]]!.coverMode,
-                  libraryCoverId: itemsById[
-                          groups[groupIndex].itemIds[itemIndex]]!
-                      .libraryCoverId,
+                  coverMode: itemsById[groups[groupIndex].itemIds[itemIndex]]!
+                      .coverMode,
+                  libraryCoverId:
+                      itemsById[groups[groupIndex].itemIds[itemIndex]]!
+                          .libraryCoverId,
                   cachedCoverUrl:
                       itemsById[groups[groupIndex].itemIds[itemIndex]]!
                           .cachedCoverUrl,
                   customCoverPath:
                       itemsById[groups[groupIndex].itemIds[itemIndex]]!
                           .customCoverPath,
-                  createdAt:
-                      itemsById[groups[groupIndex].itemIds[itemIndex]]!.createdAt,
-                  updatedAt:
-                      itemsById[groups[groupIndex].itemIds[itemIndex]]!.updatedAt,
-                  track: itemsById[groups[groupIndex].itemIds[itemIndex]]!.track,
+                  createdAt: itemsById[groups[groupIndex].itemIds[itemIndex]]!
+                      .createdAt,
+                  updatedAt: itemsById[groups[groupIndex].itemIds[itemIndex]]!
+                      .updatedAt,
+                  track:
+                      itemsById[groups[groupIndex].itemIds[itemIndex]]!.track,
                 ),
             ],
           ),

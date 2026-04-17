@@ -11,6 +11,8 @@ import '../services/playlist_repository.dart';
 import '../theme/app_theme.dart';
 import '../utils/responsive.dart';
 import '../widgets/playlist_detail/group_title_dialog.dart';
+import '../widgets/playlist_detail/playlist_cover_grid.dart';
+import '../widgets/playlist_detail/playlist_display_mode_switch.dart';
 import '../widgets/playlist_detail/playlist_edit_bar.dart';
 import '../widgets/playlist_detail/playlist_group_section.dart';
 import '../widgets/playlist_detail/playlist_hero.dart';
@@ -53,7 +55,10 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   bool _isEditMode = false;
   bool _isLoading = false; // Prevents concurrent _loadPlaylistAndTracks calls
   bool _isPersistingOrder = false;
+  bool _showCoverTitles = true;
   int? _draggingItemId;
+  int? _selectedItemId;
+  PlaylistDisplayMode _displayMode = PlaylistDisplayMode.list;
 
   late final ApiClient _client;
   PlaylistDetailData? _detail;
@@ -115,6 +120,10 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
       setState(() {
         _playlist = detail.playlist;
         _detail = detail;
+        _selectedItemId = _resolvedSelectedItemId(
+          items: detail.groups.expand((group) => group.items).toList(),
+          preferredItemId: _selectedItemId,
+        );
         _loading = false;
         _isLoading = false;
       });
@@ -175,7 +184,52 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   void _toggleEditMode() {
     setState(() {
       _isEditMode = !_isEditMode;
+      if (_isEditMode) {
+        _displayMode = PlaylistDisplayMode.list;
+      }
     });
+  }
+
+  void _setDisplayMode(PlaylistDisplayMode mode) {
+    setState(() {
+      _displayMode = mode;
+      if (mode == PlaylistDisplayMode.cover) {
+        _selectedItemId = _resolvedSelectedItemId(
+          items: _items,
+          preferredItemId: _selectedItemId,
+        );
+      }
+    });
+  }
+
+  void _selectItem(PlaylistItem item) {
+    setState(() {
+      _selectedItemId = item.id;
+    });
+  }
+
+  int? _resolvedSelectedItemId({
+    required List<PlaylistItem> items,
+    int? preferredItemId,
+  }) {
+    if (items.isEmpty) return null;
+
+    if (preferredItemId != null &&
+        items.any((item) => item.id == preferredItemId)) {
+      return preferredItemId;
+    }
+
+    final currentPlayingTrackId = widget.currentPlayingTrackId;
+    if (currentPlayingTrackId != null) {
+      final currentItem = items
+          .where((item) => item.track.id == currentPlayingTrackId)
+          .firstOrNull;
+      if (currentItem != null) {
+        return currentItem.id;
+      }
+    }
+
+    return items.first.id;
   }
 
   Future<void> _createGroup() async {
@@ -572,8 +626,8 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
             showDragHandle: _isEditMode,
             dragHandle: _isEditMode ? _buildDragHandle(item) : null,
             desktopTitleWidth: desktopTitleWidth,
-            isCurrentlyPlaying:
-                widget.currentPlayingTrackId == item.track.id && widget.isPlaying,
+            isCurrentlyPlaying: widget.currentPlayingTrackId == item.track.id &&
+                widget.isPlaying,
           ),
         ),
       );
@@ -584,10 +638,207 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     return children;
   }
 
+  Widget _buildDesktopDisplayModeSwitch() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(32, 16, 32, 0),
+      child: Row(
+        children: [
+          PlaylistDisplayModeSwitch(
+            value: _displayMode,
+            onChanged: _setDisplayMode,
+          ),
+          if (_displayMode == PlaylistDisplayMode.cover) ...[
+            const SizedBox(width: 20),
+            Container(
+              key: const ValueKey('playlist-cover-title-control'),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.02),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.06),
+                ),
+              ),
+              child: InkWell(
+                key: const ValueKey('playlist-cover-title-toggle'),
+                onTap: () {
+                  setState(() {
+                    _showCoverTitles = !_showCoverTitles;
+                  });
+                },
+                borderRadius: BorderRadius.circular(999),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _showCoverTitles
+                            ? Icons.subtitles_outlined
+                            : Icons.subtitles_off_outlined,
+                        size: 14,
+                        color: _showCoverTitles
+                            ? AppTheme.textPrimary.withValues(alpha: 0.88)
+                            : AppTheme.textMuted,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '显示标题',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: _showCoverTitles
+                                  ? AppTheme.textPrimary.withValues(alpha: 0.88)
+                                  : AppTheme.textMuted,
+                              fontSize: 11,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildListModeContent(double? desktopTitleWidth) {
+    return SliverList(
+      delegate: SliverChildListDelegate([
+        for (final group in _detail?.groups ?? const [])
+          Padding(
+            padding: const EdgeInsets.only(bottom: 24),
+            child: PlaylistGroupSection(
+              title: group.title,
+              children: _buildGroupChildren(
+                group,
+                desktopTitleWidth: desktopTitleWidth,
+              ),
+            ),
+          ),
+      ]),
+    );
+  }
+
+  Widget _buildContentSliver({
+    required bool mobile,
+    required double? desktopTitleWidth,
+  }) {
+    if (!mobile && _displayMode == PlaylistDisplayMode.cover) {
+      return SliverToBoxAdapter(
+        child: _buildCoverModeContent(),
+      );
+    }
+
+    return _buildListModeContent(desktopTitleWidth);
+  }
+
+  Widget _buildContentState({
+    required BuildContext context,
+    required bool mobile,
+    required double? desktopTitleWidth,
+  }) {
+    if (_loading) {
+      return const SliverFillRemaining(
+        child: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_error != null) {
+      return SliverFillRemaining(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_error!, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: _loadPlaylistAndTracks,
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_items.isEmpty) {
+      return SliverFillRemaining(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.music_note,
+                  size: 64,
+                  color: AppTheme.textMuted.withValues(alpha: 0.5),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No tracks in this playlist',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: AppTheme.textMuted,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SliverPadding(
+      padding: EdgeInsets.symmetric(
+        horizontal: mobile ? 8 : 32,
+        vertical: 16,
+      ),
+      sliver: _buildContentSliver(
+        mobile: mobile,
+        desktopTitleWidth: desktopTitleWidth,
+      ),
+    );
+  }
+
+  Widget _buildCoverModeContent() {
+    return Column(
+      key: const ValueKey('playlist-cover-grid'),
+      children: [
+        for (final group in _detail?.groups ?? const <PlaylistGroup>[])
+          Padding(
+            padding: const EdgeInsets.only(bottom: 24),
+            child: PlaylistGroupSection(
+              title: group.title,
+              children: [
+                PlaylistCoverGrid(
+                  items: group.items,
+                  selectedItemId: _selectedItemId,
+                  baseUrl: widget._effectiveBaseUrl,
+                  showTitles: _showCoverTitles,
+                  onSelect: _selectItem,
+                  onPlay: (item) {
+                    _selectItem(item);
+                    _playItem(item);
+                  },
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final desktopTitleWidth =
-        isMobile(context) ? null : _desktopTitleColumnWidth(context);
+    final mobile = isMobile(context);
+    final desktopTitleWidth = mobile ? null : _desktopTitleColumnWidth(context);
 
     if (_playlist == null && !_loading && _error == null) {
       return Scaffold(
@@ -646,80 +897,19 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                           onEdit: _toggleEditMode,
                         ),
                       ),
-                    if (_loading)
-                      const SliverFillRemaining(
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    else if (_error != null)
-                      SliverFillRemaining(
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(_error!, textAlign: TextAlign.center),
-                                const SizedBox(height: 16),
-                                FilledButton(
-                                  onPressed: _loadPlaylistAndTracks,
-                                  child: const Text('Retry'),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      )
-                    else if (_items.isEmpty)
-                      SliverFillRemaining(
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.music_note,
-                                  size: 64,
-                                  color:
-                                      AppTheme.textMuted.withValues(alpha: 0.5),
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'No tracks in this playlist',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyLarge
-                                      ?.copyWith(
-                                        color: AppTheme.textMuted,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      )
-                    else
-                      SliverPadding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: isMobile(context) ? 8 : 32,
-                          vertical: 16,
-                        ),
-                        sliver: SliverList(
-                          delegate: SliverChildListDelegate([
-                            for (final group in _detail?.groups ?? const [])
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 24),
-                                child: PlaylistGroupSection(
-                                  title: group.title,
-                                  children: _buildGroupChildren(
-                                    group,
-                                    desktopTitleWidth: desktopTitleWidth,
-                                  ),
-                                ),
-                              ),
-                          ]),
-                        ),
+                    if (!mobile &&
+                        !_loading &&
+                        _error == null &&
+                        _items.isNotEmpty &&
+                        !_isEditMode)
+                      SliverToBoxAdapter(
+                        child: _buildDesktopDisplayModeSwitch(),
                       ),
+                    _buildContentState(
+                      context: context,
+                      mobile: mobile,
+                      desktopTitleWidth: desktopTitleWidth,
+                    ),
                   ],
                 ),
               ),
