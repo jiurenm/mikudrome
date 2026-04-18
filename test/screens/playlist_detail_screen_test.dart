@@ -758,6 +758,316 @@ void main() {
     },
   );
 
+  testWidgets(
+    'PlaylistDetailScreen reveals group quick actions on desktop hover and keeps delete hidden for system group',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: _EditableFakeApiClient(_buildThreeGroupDetail()),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('playlist-group-2-rename-button')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('playlist-group-1-rename-button')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('playlist-group-1-more-button')),
+        findsNothing,
+      );
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(gesture.removePointer);
+      await gesture.addPointer();
+      await gesture.moveTo(
+        tester.getCenter(find.byKey(const ValueKey('playlist-group-header-1'))),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('playlist-group-1-rename-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('playlist-group-1-drag-handle')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('playlist-group-1-more-button')),
+        findsNothing,
+      );
+
+      await gesture.moveTo(
+        tester.getCenter(find.byKey(const ValueKey('playlist-group-header-2'))),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('playlist-group-2-rename-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('playlist-group-2-more-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('playlist-group-2-drag-handle')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('playlist-group-2-more-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('playlist-group-1-more-button')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'PlaylistDetailScreen renames system group from quick actions',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final client = _EditableFakeApiClient(_buildThreeGroupDetail());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: client,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(gesture.removePointer);
+      await gesture.addPointer();
+      await gesture.moveTo(
+        tester.getCenter(find.byKey(const ValueKey('playlist-group-header-1'))),
+      );
+      await tester.pumpAndSettle();
+
+      await tester
+          .tap(find.byKey(const ValueKey('playlist-group-1-rename-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Rename Group'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'Loose Tracks');
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(client.renamedGroups, [
+        (playlistId: 7, groupId: 1, title: 'Loose Tracks'),
+      ]);
+      expect(find.text('Loose Tracks'), findsOneWidget);
+      expect(find.text('Ungrouped'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'PlaylistDetailScreen renames normal groups from quick actions',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final client = _EditableFakeApiClient(_buildThreeGroupDetail());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: client,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(gesture.removePointer);
+      await gesture.addPointer();
+      await gesture.moveTo(
+        tester.getCenter(find.byKey(const ValueKey('playlist-group-header-2'))),
+      );
+      await tester.pumpAndSettle();
+
+      await tester
+          .tap(find.byKey(const ValueKey('playlist-group-2-rename-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Rename Group'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'Act II');
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(client.renamedGroups, [
+        (playlistId: 7, groupId: 2, title: 'Act II'),
+      ]);
+      expect(find.text('Act II'), findsOneWidget);
+      expect(find.text('Act 2'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'PlaylistDetailScreen confirms deleting normal groups and moves items to Ungrouped',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final client = _EditableFakeApiClient(_buildThreeGroupDetail());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: client,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(gesture.removePointer);
+      await gesture.addPointer();
+      await gesture.moveTo(
+        tester.getCenter(find.byKey(const ValueKey('playlist-group-header-2'))),
+      );
+      await tester.pumpAndSettle();
+
+      await tester
+          .tap(find.byKey(const ValueKey('playlist-group-2-more-button')));
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.byKey(const ValueKey('playlist-group-2-delete-action')));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Delete group'), findsOneWidget);
+      expect(find.textContaining('Act 2'), findsAtLeastNWidgets(1));
+      expect(find.text('Tracks in this group will move to Ungrouped.'),
+          findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+      await tester.pumpAndSettle();
+
+      expect(client.deletedGroups, [
+        (playlistId: 7, groupId: 2),
+      ]);
+      expect(find.text('Act 2'), findsNothing);
+      expect(find.text('Track C'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'PlaylistDetailScreen drags normal groups with grouped reorder payload order',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final client = _EditableFakeApiClient(_buildThreeGroupDetail());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: client,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(gesture.removePointer);
+      await gesture.addPointer();
+      await gesture.moveTo(
+        tester.getCenter(find.byKey(const ValueKey('playlist-group-header-3'))),
+      );
+      await tester.pumpAndSettle();
+
+      final handle = find.byKey(const ValueKey('playlist-group-3-drag-handle'));
+      final target = find.byKey(const ValueKey('playlist-group-drop-slot-1'));
+
+      expect(handle, findsOneWidget);
+      expect(target, findsOneWidget);
+
+      final start = tester.getCenter(handle);
+      final end = tester.getCenter(target);
+      final drag = await tester.startGesture(start);
+      await tester.pump();
+      await drag.moveTo(end);
+      await tester.pump();
+      await drag.up();
+      await tester.pumpAndSettle();
+
+      expect(client.reorderRequests, hasLength(1));
+      expect(client.reorderRequests.single.map((group) => group.id).toList(),
+          [1, 3, 2]);
+      expect(find.text('Finale'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'PlaylistDetailScreen lets system group participate in group reorder',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final client = _EditableFakeApiClient(_buildThreeGroupDetail());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: client,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(gesture.removePointer);
+      await gesture.addPointer();
+      await gesture.moveTo(
+        tester.getCenter(find.byKey(const ValueKey('playlist-group-header-1'))),
+      );
+      await tester.pumpAndSettle();
+
+      final handle = find.byKey(const ValueKey('playlist-group-1-drag-handle'));
+      final target = find.byKey(const ValueKey('playlist-group-drop-slot-2'));
+
+      expect(handle, findsOneWidget);
+      expect(target, findsOneWidget);
+
+      final start = tester.getCenter(handle);
+      final end = tester.getCenter(target);
+      final drag = await tester.startGesture(start);
+      await tester.pump();
+      await drag.moveTo(end);
+      await tester.pump();
+      await drag.up();
+      await tester.pumpAndSettle();
+
+      expect(client.reorderRequests, hasLength(1));
+      expect(
+        client.reorderRequests.single.map((group) => group.id).toList(),
+        [2, 1, 3],
+      );
+    },
+  );
+
   testWidgets('PlaylistTrackRow.track keeps legacy track callers working', (
     tester,
   ) async {
@@ -1251,6 +1561,8 @@ class _EditableFakeApiClient extends ApiClient {
   final List<_UpdatedItemCall> updatedItemRequests = [];
   final List<List<PlaylistGroupReorderInput>> reorderRequests = [];
   final List<List<int>> removedTrackIds = [];
+  final List<({int playlistId, int groupId, String title})> renamedGroups = [];
+  final List<({int playlistId, int groupId})> deletedGroups = [];
 
   @override
   Future<PlaylistDetailData> getPlaylistItems(int id) async => _detail;
@@ -1270,17 +1582,25 @@ class _EditableFakeApiClient extends ApiClient {
     _detail = PlaylistDetailData(
       playlist: _detail.playlist,
       groups: [
-        for (var groupIndex = 0;
-            groupIndex < _detail.groups.length;
-            groupIndex++)
+        for (var groupIndex = 0; groupIndex < groups.length; groupIndex++)
           PlaylistGroup(
-            id: _detail.groups[groupIndex].id,
-            playlistId: _detail.groups[groupIndex].playlistId,
-            title: _detail.groups[groupIndex].title,
+            id: groups[groupIndex].id,
+            playlistId: _detail.groups
+                .firstWhere((group) => group.id == groups[groupIndex].id)
+                .playlistId,
+            title: _detail.groups
+                .firstWhere((group) => group.id == groups[groupIndex].id)
+                .title,
             position: groupIndex,
-            isSystem: _detail.groups[groupIndex].isSystem,
-            createdAt: _detail.groups[groupIndex].createdAt,
-            updatedAt: _detail.groups[groupIndex].updatedAt,
+            isSystem: _detail.groups
+                .firstWhere((group) => group.id == groups[groupIndex].id)
+                .isSystem,
+            createdAt: _detail.groups
+                .firstWhere((group) => group.id == groups[groupIndex].id)
+                .createdAt,
+            updatedAt: _detail.groups
+                .firstWhere((group) => group.id == groups[groupIndex].id)
+                .updatedAt,
             items: [
               for (var itemIndex = 0;
                   itemIndex < groups[groupIndex].itemIds.length;
@@ -1333,6 +1653,89 @@ class _EditableFakeApiClient extends ApiClient {
       groups: [..._detail.groups, group],
     );
     return group;
+  }
+
+  @override
+  Future<void> renamePlaylistGroup(
+      int playlistId, int groupId, String title) async {
+    renamedGroups.add((playlistId: playlistId, groupId: groupId, title: title));
+    _detail = PlaylistDetailData(
+      playlist: _detail.playlist,
+      groups: [
+        for (final group in _detail.groups)
+          if (group.id == groupId)
+            PlaylistGroup(
+              id: group.id,
+              playlistId: group.playlistId,
+              title: title,
+              position: group.position,
+              isSystem: group.isSystem,
+              createdAt: group.createdAt,
+              updatedAt: group.updatedAt,
+              items: group.items,
+            )
+          else
+            group,
+      ],
+    );
+  }
+
+  @override
+  Future<void> deletePlaylistGroup(int playlistId, int groupId) async {
+    deletedGroups.add((playlistId: playlistId, groupId: groupId));
+
+    final targetGroup =
+        _detail.groups.firstWhere((group) => group.id == groupId);
+    final ungrouped = _detail.groups.firstWhere((group) => group.isSystem);
+
+    _detail = PlaylistDetailData(
+      playlist: _detail.playlist,
+      groups: [
+        for (final group in _detail.groups)
+          if (group.id == ungrouped.id)
+            PlaylistGroup(
+              id: group.id,
+              playlistId: group.playlistId,
+              title: group.title,
+              position: 0,
+              isSystem: group.isSystem,
+              createdAt: group.createdAt,
+              updatedAt: group.updatedAt,
+              items: [
+                ...group.items,
+                for (final item in targetGroup.items)
+                  PlaylistItem(
+                    id: item.id,
+                    playlistId: item.playlistId,
+                    trackId: item.trackId,
+                    groupId: group.id,
+                    position: group.items.length,
+                    note: item.note,
+                    coverMode: item.coverMode,
+                    libraryCoverId: item.libraryCoverId,
+                    cachedCoverUrl: item.cachedCoverUrl,
+                    customCoverPath: item.customCoverPath,
+                    createdAt: item.createdAt,
+                    updatedAt: item.updatedAt,
+                    track: item.track,
+                  ),
+              ],
+            )
+          else if (group.id != groupId)
+            PlaylistGroup(
+              id: group.id,
+              playlistId: group.playlistId,
+              title: group.title,
+              position: group.position > targetGroup.position
+                  ? group.position - 1
+                  : group.position,
+              isSystem: group.isSystem,
+              createdAt: group.createdAt,
+              updatedAt: group.updatedAt,
+              items: group.items,
+            ),
+      ],
+    );
   }
 
   @override
@@ -1614,6 +2017,88 @@ PlaylistDetailData _buildReorderableDetail() {
               id: 21,
               title: 'Track C',
               audioPath: '/music/c.flac',
+              videoPath: '',
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+PlaylistDetailData _buildThreeGroupDetail() {
+  return const PlaylistDetailData(
+    playlist: Playlist(
+      id: 7,
+      name: 'Group Edit Mix',
+      trackCount: 4,
+    ),
+    groups: [
+      PlaylistGroup(
+        id: 1,
+        playlistId: 7,
+        title: 'Ungrouped',
+        position: 0,
+        isSystem: true,
+        items: [
+          PlaylistItem(
+            id: 101,
+            playlistId: 7,
+            trackId: 11,
+            groupId: 1,
+            position: 0,
+            note: '',
+            coverMode: 'default',
+            track: Track(
+              id: 11,
+              title: 'Track A',
+              audioPath: '/music/a.flac',
+              videoPath: '',
+            ),
+          ),
+        ],
+      ),
+      PlaylistGroup(
+        id: 2,
+        playlistId: 7,
+        title: 'Act 2',
+        position: 1,
+        items: [
+          PlaylistItem(
+            id: 201,
+            playlistId: 7,
+            trackId: 21,
+            groupId: 2,
+            position: 0,
+            note: '',
+            coverMode: 'default',
+            track: Track(
+              id: 21,
+              title: 'Track C',
+              audioPath: '/music/c.flac',
+              videoPath: '',
+            ),
+          ),
+        ],
+      ),
+      PlaylistGroup(
+        id: 3,
+        playlistId: 7,
+        title: 'Finale',
+        position: 2,
+        items: [
+          PlaylistItem(
+            id: 301,
+            playlistId: 7,
+            trackId: 31,
+            groupId: 3,
+            position: 0,
+            note: '',
+            coverMode: 'default',
+            track: Track(
+              id: 31,
+              title: 'Track D',
+              audioPath: '/music/d.flac',
               videoPath: '',
             ),
           ),

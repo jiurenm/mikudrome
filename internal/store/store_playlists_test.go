@@ -506,29 +506,80 @@ func TestPlaylist_ReorderPlaylistWithEmptyCustomGroup(t *testing.T) {
 	}
 }
 
-func TestPlaylist_SystemGroupProtections(t *testing.T) {
+func TestPlaylist_SystemGroupDeleteProtection(t *testing.T) {
 	s := newTestStore(t)
 	pid, _ := s.CreatePlaylist("Mix")
 
 	detail, _, _ := s.GetPlaylistDetail(pid)
 	ungrouped := detail.Groups[0]
 
-	if err := s.RenamePlaylistGroup(ungrouped.ID, "Else"); !errors.Is(err, ErrSystemPlaylistGroup) {
-		t.Fatalf("RenamePlaylistGroup want ErrSystemPlaylistGroup, got %v", err)
-	}
 	if err := s.DeletePlaylistGroup(ungrouped.ID); !errors.Is(err, ErrSystemPlaylistGroup) {
 		t.Fatalf("DeletePlaylistGroup want ErrSystemPlaylistGroup, got %v", err)
 	}
+}
+
+func TestPlaylist_SystemGroupCanBeRenamed(t *testing.T) {
+	s := newTestStore(t)
+	pid, _ := s.CreatePlaylist("Mix")
+
+	detail, _, err := s.GetPlaylistDetail(pid)
+	if err != nil {
+		t.Fatalf("GetPlaylistDetail: %v", err)
+	}
+	ungrouped := detail.Groups[0]
+
+	if err := s.RenamePlaylistGroup(ungrouped.ID, "Loose Tracks"); err != nil {
+		t.Fatalf("RenamePlaylistGroup system group: %v", err)
+	}
+
+	updated, _, err := s.GetPlaylistDetail(pid)
+	if err != nil {
+		t.Fatalf("GetPlaylistDetail after rename: %v", err)
+	}
+	if updated.Groups[0].Title != "Loose Tracks" {
+		t.Fatalf("want renamed system group title, got %q", updated.Groups[0].Title)
+	}
+}
+
+func TestPlaylist_SystemGroupCanBeReordered(t *testing.T) {
+	s := newTestStore(t)
+	pid, _ := s.CreatePlaylist("Mix")
+	t1 := seedTrack(t, s, "A", "/a.flac")
+	t2 := seedTrack(t, s, "B", "/b.flac")
+	_, _ = s.AddTracksToPlaylist(pid, []int64{t1, t2})
 
 	groupID, err := s.CreatePlaylistGroup(pid, "A")
 	if err != nil {
 		t.Fatalf("CreatePlaylistGroup: %v", err)
 	}
+	groupID2, err := s.CreatePlaylistGroup(pid, "B")
+	if err != nil {
+		t.Fatalf("CreatePlaylistGroup 2: %v", err)
+	}
+
+	detail, _, err := s.GetPlaylistDetail(pid)
+	if err != nil {
+		t.Fatalf("GetPlaylistDetail: %v", err)
+	}
+	ungrouped := detail.Groups[0]
+
 	if err := s.ReorderPlaylistItems(pid, []PlaylistGroupOrder{
 		{GroupID: groupID, ItemIDs: nil},
-		{GroupID: ungrouped.ID, ItemIDs: nil},
-	}); !errors.Is(err, ErrSystemPlaylistGroup) {
-		t.Fatalf("ReorderPlaylistItems want ErrSystemPlaylistGroup, got %v", err)
+		{GroupID: ungrouped.ID, ItemIDs: []int64{ungrouped.Items[0].ID, ungrouped.Items[1].ID}},
+		{GroupID: groupID2, ItemIDs: nil},
+	}); err != nil {
+		t.Fatalf("ReorderPlaylistItems with system group move: %v", err)
+	}
+
+	updated, _, err := s.GetPlaylistDetail(pid)
+	if err != nil {
+		t.Fatalf("GetPlaylistDetail after reorder: %v", err)
+	}
+	if len(updated.Groups) != 3 {
+		t.Fatalf("want 3 groups, got %d", len(updated.Groups))
+	}
+	if updated.Groups[0].ID != groupID || updated.Groups[1].ID != ungrouped.ID || updated.Groups[2].ID != groupID2 {
+		t.Fatalf("unexpected group order after reorder: %+v", updated.Groups)
 	}
 }
 

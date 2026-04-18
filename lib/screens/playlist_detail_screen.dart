@@ -57,6 +57,9 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   bool _isPersistingOrder = false;
   bool _showCoverTitles = true;
   int? _draggingItemId;
+  int? _draggingGroupId;
+  int? _hoveredGroupId;
+  int? _activeGroupMenuId;
   int? _selectedItemId;
   PlaylistDisplayMode _displayMode = PlaylistDisplayMode.list;
 
@@ -233,13 +236,144 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   }
 
   Future<void> _createGroup() async {
-    final title = await showDialog<String>(
-      context: context,
-      builder: (context) => const GroupTitleDialog(),
-    );
+    final title = await _showGroupTitleDialog();
     if (title == null || title.trim().isEmpty) return;
     await _client.createPlaylistGroup(widget.playlistId, title.trim());
     await _loadPlaylistAndTracks();
+  }
+
+  Future<String?> _showGroupTitleDialog({
+    String initialTitle = '',
+    String titleText = 'Create Group',
+    String confirmText = 'Create',
+  }) {
+    return showDialog<String>(
+      context: context,
+      builder: (context) => GroupTitleDialog(
+        initialTitle: initialTitle,
+        titleText: titleText,
+        confirmText: confirmText,
+      ),
+    );
+  }
+
+  Future<void> _renameGroup(PlaylistGroup group) async {
+    final title = await _showGroupTitleDialog(
+      initialTitle: group.title,
+      titleText: 'Rename Group',
+      confirmText: 'Save',
+    );
+    if (title == null || title.trim().isEmpty) return;
+    await _client.renamePlaylistGroup(
+        widget.playlistId, group.id, title.trim());
+    await _loadPlaylistAndTracks();
+  }
+
+  Future<void> _deleteGroup(PlaylistGroup group) async {
+    final systemGroup =
+        _detail?.groups.where((candidate) => candidate.isSystem).firstOrNull;
+    final fallbackTitle = systemGroup?.title.trim().isNotEmpty == true
+        ? systemGroup!.title
+        : 'Ungrouped';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete group “${group.title}”?'),
+        content: Text('Tracks in this group will move to $fallbackTitle.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _client.deletePlaylistGroup(widget.playlistId, group.id);
+    await _loadPlaylistAndTracks();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Group deleted')),
+    );
+  }
+
+  Future<void> _moveGroup(PlaylistGroup group, int targetIndex) async {
+    final detail = _detail;
+    if (detail == null || _isPersistingOrder) return;
+
+    final sourceIndex =
+        detail.groups.indexWhere((candidate) => candidate.id == group.id);
+    if (sourceIndex < 0) return;
+
+    var normalizedTargetIndex = targetIndex.clamp(0, detail.groups.length);
+    if (sourceIndex < normalizedTargetIndex) {
+      normalizedTargetIndex -= 1;
+    }
+
+    if (sourceIndex == normalizedTargetIndex) {
+      if (!mounted) return;
+      setState(() {
+        _draggingGroupId = null;
+      });
+      return;
+    }
+
+    final previousGroups = _cloneGroups(detail.groups);
+    final nextGroups = _cloneGroups(detail.groups);
+    final movingGroup = nextGroups.removeAt(sourceIndex);
+    nextGroups.insert(normalizedTargetIndex, movingGroup);
+
+    final normalizedGroups = [
+      for (var groupIndex = 0; groupIndex < nextGroups.length; groupIndex++)
+        _copyGroup(
+          nextGroups[groupIndex],
+          position: groupIndex,
+          items: [
+            for (var itemIndex = 0;
+                itemIndex < nextGroups[groupIndex].items.length;
+                itemIndex++)
+              _copyItem(
+                nextGroups[groupIndex].items[itemIndex],
+                groupId: nextGroups[groupIndex].id,
+                position: itemIndex,
+              ),
+          ],
+        ),
+    ];
+
+    setState(() {
+      _detail = PlaylistDetailData(
+        playlist: detail.playlist,
+        groups: normalizedGroups,
+      );
+      _draggingGroupId = null;
+      _isPersistingOrder = true;
+    });
+
+    try {
+      await _persistGroupedOrder();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _detail = PlaylistDetailData(
+          playlist: detail.playlist,
+          groups: previousGroups,
+        );
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_sanitizeError(e))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isPersistingOrder = false;
+        });
+      }
+    }
   }
 
   Future<void> _editItem(PlaylistItem item) async {
@@ -508,6 +642,102 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     );
   }
 
+  Widget _buildGroupDropSlot(int index) {
+    return DragTarget<_PlaylistGroupDragData>(
+      key: ValueKey('playlist-group-drop-slot-$index'),
+      onWillAcceptWithDetails: (details) => !_isPersistingOrder,
+      onAcceptWithDetails: (details) {
+        final draggedGroup = (_detail?.groups ?? const <PlaylistGroup>[])
+            .where((group) => group.id == details.data.groupId)
+            .firstOrNull;
+        if (draggedGroup == null) return;
+        _moveGroup(draggedGroup, index);
+      },
+      builder: (context, candidateData, rejectedData) {
+        final active = candidateData.isNotEmpty;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          height: active ? 18 : 4,
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          decoration: BoxDecoration(
+            color: active
+                ? AppTheme.mikuGreen.withValues(alpha: 0.18)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+            border: active
+                ? Border.all(
+                    color: AppTheme.mikuGreen.withValues(alpha: 0.75),
+                  )
+                : null,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGroupDragHandle(PlaylistGroup group) {
+    final dragging = _draggingGroupId == group.id;
+    final icon = Semantics(
+      label: 'Drag to reorder groups',
+      child: Icon(
+        Icons.drag_indicator,
+        key: ValueKey('playlist-group-${group.id}-drag-handle'),
+        size: 18,
+        color: dragging || _isPersistingOrder
+            ? AppTheme.textMuted.withValues(alpha: 0.45)
+            : AppTheme.textMuted,
+      ),
+    );
+
+    if (_isPersistingOrder) return icon;
+
+    return Draggable<_PlaylistGroupDragData>(
+      data: _PlaylistGroupDragData(groupId: group.id),
+      onDragStarted: () {
+        setState(() {
+          _draggingGroupId = group.id;
+        });
+      },
+      onDragEnd: (_) {
+        if (!mounted) return;
+        setState(() {
+          _draggingGroupId = null;
+        });
+      },
+      feedback: Material(
+        color: Colors.transparent,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 280),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppTheme.cardBg,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.08),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Text(
+            group.title,
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+        ),
+      ),
+      childWhenDragging: icon,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.grab,
+        child: icon,
+      ),
+    );
+  }
+
   Widget _buildDragHandle(PlaylistItem item) {
     final dragging = _draggingItemId == item.id;
     final icon = Semantics(
@@ -638,6 +868,122 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     return children;
   }
 
+  Widget _buildGroupHeader(PlaylistGroup group, {required bool interactive}) {
+    final isHovered = _hoveredGroupId == group.id;
+    final showQuickActions = interactive &&
+        (isHovered ||
+            _draggingGroupId == group.id ||
+            _activeGroupMenuId == group.id);
+
+    return MouseRegion(
+      key: ValueKey('playlist-group-header-${group.id}'),
+      onEnter: (_) {
+        if (!interactive) return;
+        setState(() {
+          _hoveredGroupId = group.id;
+        });
+      },
+      onExit: (_) {
+        if (!interactive) return;
+        setState(() {
+          if (_hoveredGroupId == group.id) {
+            _hoveredGroupId = null;
+          }
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.symmetric(
+          horizontal: interactive ? 10 : 0,
+          vertical: interactive ? 8 : 0,
+        ),
+        decoration: interactive && (isHovered || _draggingGroupId == group.id)
+            ? BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.02),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppTheme.mikuGreen.withValues(alpha: 0.28),
+                ),
+              )
+            : null,
+        child: Row(
+          children: [
+            if (showQuickActions) ...[
+              _buildGroupDragHandle(group),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: Text(
+                group.title,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            if (showQuickActions) ...[
+              IconButton(
+                key: ValueKey('playlist-group-${group.id}-rename-button'),
+                onPressed: () => _renameGroup(group),
+                tooltip: 'Rename group',
+                visualDensity: VisualDensity.compact,
+                iconSize: 18,
+                icon: const Icon(Icons.edit_outlined),
+              ),
+              if (!group.isSystem)
+                PopupMenuButton<String>(
+                  key: ValueKey('playlist-group-${group.id}-more-button'),
+                  tooltip: 'More actions',
+                  icon: const Icon(Icons.more_horiz, size: 18),
+                  onOpened: () {
+                    setState(() {
+                      _activeGroupMenuId = group.id;
+                    });
+                  },
+                  onCanceled: () {
+                    setState(() {
+                      if (_activeGroupMenuId == group.id) {
+                        _activeGroupMenuId = null;
+                      }
+                    });
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem<String>(
+                      value: 'delete',
+                      onTap: () {
+                        Future<void>.delayed(
+                          Duration.zero,
+                          () => _deleteGroup(group),
+                        );
+                      },
+                      child: Text(
+                        'Delete group',
+                        key: ValueKey(
+                            'playlist-group-${group.id}-delete-action'),
+                      ),
+                    ),
+                  ],
+                  onSelected: (value) {
+                    setState(() {
+                      if (_activeGroupMenuId == group.id) {
+                        _activeGroupMenuId = null;
+                      }
+                    });
+                  },
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  bool _canQuickEditGroups(bool mobile) {
+    return !mobile &&
+        !_isEditMode &&
+        _displayMode == PlaylistDisplayMode.list &&
+        !_loading &&
+        _error == null;
+  }
+
   Widget _buildDesktopDisplayModeSwitch() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(32, 16, 32, 0),
@@ -704,20 +1050,43 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   }
 
   Widget _buildListModeContent(double? desktopTitleWidth) {
-    return SliverList(
-      delegate: SliverChildListDelegate([
-        for (final group in _detail?.groups ?? const [])
-          Padding(
-            padding: const EdgeInsets.only(bottom: 24),
+    final mobile = isMobile(context);
+    final canQuickEditGroups = _canQuickEditGroups(mobile);
+    final groups = _detail?.groups ?? const <PlaylistGroup>[];
+    final children = <Widget>[];
+
+    for (var groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+      if (canQuickEditGroups) {
+        children.add(_buildGroupDropSlot(groupIndex));
+      }
+
+      final group = groups[groupIndex];
+      children.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 24),
+          child: Opacity(
+            opacity: _draggingGroupId == group.id ? 0.55 : 1,
             child: PlaylistGroupSection(
-              title: group.title,
+              header: _buildGroupHeader(
+                group,
+                interactive: canQuickEditGroups,
+              ),
               children: _buildGroupChildren(
                 group,
                 desktopTitleWidth: desktopTitleWidth,
               ),
             ),
           ),
-      ]),
+        ),
+      );
+    }
+
+    if (canQuickEditGroups) {
+      children.add(_buildGroupDropSlot(groups.length));
+    }
+
+    return SliverList(
+      delegate: SliverChildListDelegate(children),
     );
   }
 
@@ -815,7 +1184,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
           Padding(
             padding: const EdgeInsets.only(bottom: 24),
             child: PlaylistGroupSection(
-              title: group.title,
+              header: _buildGroupHeader(group, interactive: false),
               spacing: 16,
               children: [
                 PlaylistCoverGrid(
@@ -928,4 +1297,12 @@ class _PlaylistDragData {
   });
 
   final int itemId;
+}
+
+class _PlaylistGroupDragData {
+  const _PlaylistGroupDragData({
+    required this.groupId,
+  });
+
+  final int groupId;
 }

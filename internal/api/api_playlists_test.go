@@ -468,7 +468,7 @@ func TestPlaylistItemsHTTP_EmptyGroupIncludesItemsArray(t *testing.T) {
 	}
 }
 
-func TestPlaylistGroupsHTTP_RejectsSystemMutationsAndDeletesMoveItems(t *testing.T) {
+func TestPlaylistGroupsHTTP_SystemGroupRenameAllowedDeleteRejectedAndDeletesMoveItems(t *testing.T) {
 	h := newTestHandler(t)
 	trackID := seedTrack(t, h, "GroupedDeleteTrack")
 	playlistID := createTestPlaylist(t, h, "GroupedDelete")
@@ -484,9 +484,14 @@ func TestPlaylistGroupsHTTP_RejectsSystemMutationsAndDeletesMoveItems(t *testing
 	systemGroupID := detail.Groups[0].ID
 	systemGroupIDStr := mustJSON(t, systemGroupID)
 
-	rr = doReq(h, "PATCH", "/api/playlists/"+playlistIDStr+"/groups/"+systemGroupIDStr, `{"title":"Nope"}`)
-	if rr.Code != http.StatusConflict {
-		t.Fatalf("rename system group: expected 409, got %d: %s", rr.Code, rr.Body.String())
+	rr = doReq(h, "PATCH", "/api/playlists/"+playlistIDStr+"/groups/"+systemGroupIDStr, `{"title":"Loose Tracks"}`)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("rename system group: expected 204, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	detail = getPlaylistDetail(t, h, playlistID)
+	if detail.Groups[0].Title != "Loose Tracks" {
+		t.Fatalf("expected renamed system group title Loose Tracks, got %q", detail.Groups[0].Title)
 	}
 
 	rr = doReq(h, "DELETE", "/api/playlists/"+playlistIDStr+"/groups/"+systemGroupIDStr, "")
@@ -545,8 +550,8 @@ func TestPlaylistGroupsHTTP_RejectsSystemMutationsAndDeletesMoveItems(t *testing
 	if len(resp.Groups) != 1 {
 		t.Fatalf("expected 1 remaining group, got %d", len(resp.Groups))
 	}
-	if resp.Groups[0].Title != "Ungrouped" {
-		t.Fatalf("expected remaining group Ungrouped, got %q", resp.Groups[0].Title)
+	if resp.Groups[0].Title != "Loose Tracks" {
+		t.Fatalf("expected remaining group Loose Tracks, got %q", resp.Groups[0].Title)
 	}
 	if len(resp.Groups[0].Items) != 1 || resp.Groups[0].Items[0].Track.ID != trackID {
 		t.Fatalf("expected track %d moved back to Ungrouped", trackID)

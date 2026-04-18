@@ -93,14 +93,14 @@ func (s *Store) ListFavorites() ([]Track, error) {
 
 // Playlist is the metadata envelope for a user-created playlist.
 type Playlist struct {
-	ID             int64   `json:"id"`
-	Name           string  `json:"name"`
-	CoverPath      string  `json:"cover_path,omitempty"`
-	TrackCount     int     `json:"track_count"`
-	CoverTrackIDs  []int64 `json:"cover_track_ids,omitempty"`
-	CoverAlbumIDs  []int64 `json:"cover_album_ids,omitempty"`
-	CreatedAt      int64   `json:"created_at"`
-	UpdatedAt      int64   `json:"updated_at"`
+	ID            int64   `json:"id"`
+	Name          string  `json:"name"`
+	CoverPath     string  `json:"cover_path,omitempty"`
+	TrackCount    int     `json:"track_count"`
+	CoverTrackIDs []int64 `json:"cover_track_ids,omitempty"`
+	CoverAlbumIDs []int64 `json:"cover_album_ids,omitempty"`
+	CreatedAt     int64   `json:"created_at"`
+	UpdatedAt     int64   `json:"updated_at"`
 }
 
 // ErrInvalidName is returned when a playlist name is empty or too long.
@@ -179,7 +179,7 @@ type PlaylistItemUpdate struct {
 	CustomCoverPath *string
 }
 
-// ErrSystemPlaylistGroup is returned when callers try to mutate the system group.
+// ErrSystemPlaylistGroup is returned when callers try to delete the system group.
 var ErrSystemPlaylistGroup = errors.New("system playlist group")
 
 // CreatePlaylist inserts a new playlist and its default Ungrouped group.
@@ -768,20 +768,13 @@ func reorderPlaylistItemsTx(tx *sql.Tx, playlistID int64, order []PlaylistGroupO
 	}
 
 	groupByID := make(map[int64]PlaylistGroup, len(groups))
-	var systemGroupID int64
 	for _, group := range groups {
 		groupByID[group.ID] = group
-		if group.IsSystem {
-			systemGroupID = group.ID
-		}
-	}
-	if len(order) > 0 && order[0].GroupID != systemGroupID {
-		return ErrSystemPlaylistGroup
 	}
 
 	seenGroups := make(map[int64]bool, len(order))
-	for idx, groupOrder := range order {
-		group, ok := groupByID[groupOrder.GroupID]
+	for _, groupOrder := range order {
+		_, ok := groupByID[groupOrder.GroupID]
 		if !ok {
 			return fmt.Errorf("reorder group mismatch: unknown group %d", groupOrder.GroupID)
 		}
@@ -789,9 +782,6 @@ func reorderPlaylistItemsTx(tx *sql.Tx, playlistID int64, order []PlaylistGroupO
 			return fmt.Errorf("reorder group mismatch: duplicate group %d", groupOrder.GroupID)
 		}
 		seenGroups[groupOrder.GroupID] = true
-		if group.IsSystem && idx != 0 {
-			return ErrSystemPlaylistGroup
-		}
 	}
 
 	rows, err := tx.Query(`SELECT id FROM playlist_items WHERE playlist_id = ?`, playlistID)
@@ -923,7 +913,7 @@ func (s *Store) CreatePlaylistGroup(playlistID int64, title string) (int64, erro
 	return groupID, nil
 }
 
-// RenamePlaylistGroup renames a non-system group.
+// RenamePlaylistGroup renames a playlist group, including the system group.
 func (s *Store) RenamePlaylistGroup(groupID int64, title string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -934,9 +924,6 @@ func (s *Store) RenamePlaylistGroup(groupID int64, title string) error {
 	group, err := getPlaylistGroupTx(tx, groupID)
 	if err != nil {
 		return err
-	}
-	if group.IsSystem {
-		return ErrSystemPlaylistGroup
 	}
 	n, err := normalizeName(title)
 	if err != nil {

@@ -4,9 +4,15 @@ class GroupTitleDialog extends StatefulWidget {
   const GroupTitleDialog({
     super.key,
     this.initialTitle = '',
+    this.titleText = 'Create Group',
+    this.confirmText = 'Create',
+    this.fieldLabelText = 'Title',
   });
 
   final String initialTitle;
+  final String titleText;
+  final String confirmText;
+  final String fieldLabelText;
 
   @override
   State<GroupTitleDialog> createState() => _GroupTitleDialogState();
@@ -36,12 +42,12 @@ class _GroupTitleDialogState extends State<GroupTitleDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Create Group'),
+      title: Text(widget.titleText),
       content: TextField(
         controller: _controller,
         autofocus: true,
-        decoration: const InputDecoration(
-          labelText: 'Title',
+        decoration: InputDecoration(
+          labelText: widget.fieldLabelText,
         ),
         onSubmitted: (_) => _submit(),
       ),
@@ -52,7 +58,7 @@ class _GroupTitleDialogState extends State<GroupTitleDialog> {
         ),
         FilledButton(
           onPressed: _submit,
-          child: const Text('Create'),
+          child: Text(widget.confirmText),
         ),
       ],
     );
