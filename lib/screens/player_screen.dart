@@ -18,6 +18,7 @@ import '../widgets/favorite_button.dart';
 import '../widgets/player/asset_slider_thumb_shape.dart';
 import '../widgets/player_screen_parts.dart';
 import 'library_home_screen.dart';
+import 'player_playback_policy.dart';
 
 typedef PlayerTogglePlayback = Future<void> Function();
 typedef PlayerSeekToFraction = Future<void> Function(double value);
@@ -99,6 +100,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Timer? _fullscreenChromeTimer;
   late final WebMediaSessionService _mediaSession;
   final _mediaSessionBinding = MediaSessionHandlerBinding();
+  final _completionGate = PlaybackCompletionGate();
 
   ApiClient get _api => ApiClient(baseUrl: widget.baseUrl);
   Track get _track => widget.track;
@@ -117,7 +119,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   bool get _isVideoMode => widget.playbackMode == PlaybackMode.video;
-  bool get _canUseVideoMode => _track.hasVideo;
   bool get _canSwitchMode => _track.hasVideo && _track.hasAudio;
   String get _mediaUrl {
     if (_isVideoMode && _track.videoStreamOverrideUrl != null) {
@@ -127,12 +128,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ? _api.streamVideoUrl(_track.id)
         : _api.streamAudioUrl(_track.id);
   }
+
   String get _albumCoverUrl => _coverUrlForTrack(_track);
 
   String _coverUrlForTrack(Track track) {
     if (track.coverOverrideUrl != null) return track.coverOverrideUrl!;
-    return track.albumId > 0 ? _api.albumCoverUrl(track.albumId.toString()) : '';
+    return track.albumId > 0
+        ? _api.albumCoverUrl(track.albumId.toString())
+        : '';
   }
+
   Duration get _position => _controller?.value.position ?? Duration.zero;
   Duration get _duration => _controller?.value.duration ?? Duration.zero;
   bool get _isPlaying => _controller?.value.isPlaying ?? false;
@@ -239,6 +244,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _initializeController() async {
+    _completionGate.reset();
     final previous = _controller;
     _controller = null;
 
@@ -255,7 +261,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
       });
     }
 
-    final controller = VideoPlayerController.networkUrl(Uri.parse(_mediaUrl));
+    final controller = VideoPlayerController.networkUrl(
+      Uri.parse(_mediaUrl),
+      videoPlayerOptions: VideoPlayerOptions(
+        allowBackgroundPlayback: true,
+      ),
+    );
     _controller = controller;
 
     try {
@@ -265,7 +276,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
       await controller.play();
       // Seek to saved position if resuming from a restored session
       final seekTo = _pendingSeekProgress;
-      if (seekTo != null && seekTo > 0 && controller.value.duration > Duration.zero) {
+      if (seekTo != null &&
+          seekTo > 0 &&
+          controller.value.duration > Duration.zero) {
         _pendingSeekProgress = null;
         final target = controller.value.duration * seekTo;
         await controller.seekTo(target);
@@ -360,21 +373,32 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (!mounted || _controller != controller) return;
       final value = controller.value;
       if (!value.isInitialized) return;
-      if (value.position >= value.duration &&
-          !value.isPlaying &&
-          value.duration > Duration.zero) {
-        if (widget.playbackOrderMode == PlaybackOrderMode.singleLoop ||
-            (widget.playbackOrderMode == PlaybackOrderMode.listLoop &&
-                !_hasNext)) {
-          await controller.seekTo(Duration.zero);
-          if (!mounted || _controller != controller) return;
-          await controller.play();
-          _emitPlaybackState();
-          return;
-        }
-        if (_hasNext) {
-          widget.onNext();
-          return;
+      final reachedEnd = didPlaybackReachEnd(
+        isCompleted: value.isCompleted,
+        isPlaying: value.isPlaying,
+        position: value.position,
+        duration: value.duration,
+      );
+      final completionCommand = _completionGate.take(
+        reachedEnd: reachedEnd,
+        command: resolvePlaybackCompletionCommand(
+          orderMode: widget.playbackOrderMode,
+          hasNext: _hasNext,
+        ),
+      );
+      if (completionCommand != null) {
+        switch (completionCommand) {
+          case PlaybackCompletionCommand.restartTrack:
+            await controller.seekTo(Duration.zero);
+            if (!mounted || _controller != controller) return;
+            await controller.play();
+            _emitPlaybackState();
+            return;
+          case PlaybackCompletionCommand.playNext:
+            widget.onNext();
+            return;
+          case PlaybackCompletionCommand.none:
+            break;
         }
       }
       final nextActiveIndex =
@@ -566,7 +590,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget build(BuildContext context) {
     final accentColor = VocalThemeProvider.of(context);
     final width = MediaQuery.sizeOf(context).width;
-    final queueVisible = !isMobile(context) && _showQueue && width >= (_isVideoMode ? 1280 : 1440);
+    final queueVisible = !isMobile(context) &&
+        _showQueue &&
+        width >= (_isVideoMode ? 1280 : 1440);
     final queuePanelWidth = _isVideoMode ? 320.0 : 280.0;
 
     if (isMobile(context) && !_isFullscreen) {
@@ -585,7 +611,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
             child: Stack(
               children: [
                 Positioned.fill(
-                  child: Center(child: _buildVideoArea(context, isFullscreen: true)),
+                  child: Center(
+                      child: _buildVideoArea(context, isFullscreen: true)),
                 ),
                 AnimatedPositioned(
                   duration: const Duration(milliseconds: 180),
@@ -922,9 +949,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                             ? Image.network(
                                                 _albumCoverUrl,
                                                 fit: BoxFit.cover,
-                                                errorBuilder:
-                                                    (_, __, ___) =>
-                                                        _audioPlaceholder(),
+                                                errorBuilder: (_, __, ___) =>
+                                                    _audioPlaceholder(),
                                               )
                                             : _audioPlaceholder(),
                               ),
@@ -973,8 +999,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               activeTrackColor: accentColor,
                               inactiveTrackColor: Colors.grey.shade800,
                               thumbColor: accentColor,
-                              overlayColor:
-                                  accentColor.withValues(alpha: 0.15),
+                              overlayColor: accentColor.withValues(alpha: 0.15),
                               trackHeight: 3,
                               thumbShape: const AssetSliderThumbShape(
                                 image: AssetImage('lib/assets/thumb.png'),
@@ -988,11 +1013,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             ),
                           ),
                           Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                             child: Row(
-                              mainAxisAlignment:
-                                  MainAxisAlignment.spaceBetween,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
                                   _formatDuration(position),
@@ -1024,10 +1047,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               baseColor: AppTheme.textMuted,
                               accentColor: accentColor),
                           IconButton(
-                            icon:
-                                const Icon(Icons.skip_previous, size: 32),
-                            onPressed:
-                                _hasPrevious ? widget.onPrevious : null,
+                            icon: const Icon(Icons.skip_previous, size: 32),
+                            onPressed: _hasPrevious ? widget.onPrevious : null,
                           ),
                           IconButton(
                             icon: Icon(
@@ -1055,15 +1076,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       ),
                     ),
                     // Lyrics toggle + lyrics area
-                    if (_hasTimedLyrics ||
-                        _track.lyrics.trim().isNotEmpty) ...[
+                    if (_hasTimedLyrics || _track.lyrics.trim().isNotEmpty) ...[
                       const SizedBox(height: 4),
                       GestureDetector(
-                        onTap: () =>
-                            setState(() => _showLyrics = !_showLyrics),
+                        onTap: () => setState(() => _showLyrics = !_showLyrics),
                         child: Padding(
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 4),
+                          padding: const EdgeInsets.symmetric(vertical: 4),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -1091,14 +1109,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       if (_showLyrics)
                         Expanded(
                           child: Padding(
-                            padding:
-                                const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                             child: LyricsSection(
                               lyrics: _track.lyrics,
                               timedLyrics: _timedLyrics,
-                              activeIndex: _hasTimedLyrics
-                                  ? _activeLyricIndex
-                                  : -1,
+                              activeIndex:
+                                  _hasTimedLyrics ? _activeLyricIndex : -1,
                             ),
                           ),
                         ),
@@ -1206,7 +1222,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ),
       );
 
-  Widget _buildPlaybackOrderButton({required Color baseColor, required Color accentColor}) {
+  Widget _buildPlaybackOrderButton(
+      {required Color baseColor, required Color accentColor}) {
     final isActive = widget.playbackOrderMode != PlaybackOrderMode.sequential;
     return IconButton(
       onPressed: widget.onCyclePlaybackOrderMode,
@@ -1342,7 +1359,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         size: 26,
                       ),
                       const SizedBox(width: 4),
-                      _buildPlaybackOrderButton(baseColor: AppTheme.textMuted, accentColor: accentColor),
+                      _buildPlaybackOrderButton(
+                          baseColor: AppTheme.textMuted,
+                          accentColor: accentColor),
                       if (!_isVideoMode)
                         IconButton(
                           onPressed: () {
@@ -1355,9 +1374,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 ? Icons.visibility
                                 : Icons.visibility_off,
                             size: 26,
-                            color: _showLyrics
-                                ? accentColor
-                                : AppTheme.textMuted,
+                            color:
+                                _showLyrics ? accentColor : AppTheme.textMuted,
                           ),
                           tooltip: 'Lyrics',
                           style: IconButton.styleFrom(
@@ -1371,9 +1389,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               ? Icons.queue_music
                               : Icons.queue_music_outlined,
                           size: 26,
-                          color: _showQueue
-                              ? accentColor
-                              : AppTheme.textMuted,
+                          color: _showQueue ? accentColor : AppTheme.textMuted,
                         ),
                         tooltip: 'Queue',
                         style: IconButton.styleFrom(
@@ -1500,7 +1516,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 icon: const Icon(Icons.skip_next, color: Colors.white),
               ),
               const SizedBox(width: 12),
-              _buildPlaybackOrderButton(baseColor: Colors.white70, accentColor: accentColor),
+              _buildPlaybackOrderButton(
+                  baseColor: Colors.white70, accentColor: accentColor),
             ],
           ),
         ],
