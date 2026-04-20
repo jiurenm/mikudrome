@@ -544,14 +544,15 @@ func lookupTag(tags map[string]string, keys ...string) string {
 			}
 		}
 	}
-	for tagKey, tagValue := range tags {
-		normalizedKey := strings.ToLower(strings.TrimSpace(tagKey))
-		for _, key := range keys {
-			if normalizedKey == strings.ToLower(key) {
-				tagValue = strings.TrimSpace(tagValue)
-				if tagValue != "" {
-					return tagValue
-				}
+	for _, key := range keys {
+		normalizedKey := strings.ToLower(strings.TrimSpace(key))
+		for tagKey, tagValue := range tags {
+			if strings.ToLower(strings.TrimSpace(tagKey)) != normalizedKey {
+				continue
+			}
+			tagValue = strings.TrimSpace(tagValue)
+			if tagValue != "" {
+				return tagValue
 			}
 		}
 	}

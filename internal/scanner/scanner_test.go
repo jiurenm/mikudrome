@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -19,15 +20,38 @@ func TestRunFFprobeRequestsTask1Aliases(t *testing.T) {
 
 	ffprobePath := filepath.Join(tmpDir, "ffprobe")
 	script := `#!/bin/sh
-args="$*"
+format_tags=""
+while [ "$#" -gt 0 ]; do
+	if [ "$1" = "-show_entries" ]; then
+		shift
+		case "$1" in
+			format_tags=*)
+				format_tags=${1#format_tags=}
+				;;
+		esac
+	fi
+	shift
+done
+if [ -z "$format_tags" ]; then
+	echo "missing format_tags entry" >&2
+	exit 9
+fi
+OLD_IFS=$IFS
+IFS=,
+set -- $format_tags
+IFS=$OLD_IFS
 for required in title INAM inam artist IART iart album IPRD iprd album_artist albumartist TPE2 tpe2 track ITRK itrk disc TPOS tpos IPRT iprt date year ICRD icrd lyrics LYRICS comment; do
-	case "$args" in
-		*"format_tags="*"$required"*) ;;
-		*)
-			echo "missing tag $required" >&2
-			exit 9
-			;;
-	esac
+	found=0
+	for token in "$@"; do
+		if [ "$token" = "$required" ]; then
+			found=1
+			break
+		fi
+	done
+	if [ "$found" -ne 1 ]; then
+		echo "missing tag $required" >&2
+		exit 9
+	fi
 done
 printf '%s\n' '{"streams":[{"codec_name":"pcm_s16le","bits_per_sample":16}],"format":{"duration":"1.0","tags":{"INAM":"alias title","TPOS":"3/4","year":"2014"}}}'
 `
@@ -54,6 +78,28 @@ printf '%s\n' '{"streams":[{"codec_name":"pcm_s16le","bits_per_sample":16}],"for
 	}
 	if got := tags["year"]; got != "2014" {
 		t.Fatalf("year = %q, want %q", got, "2014")
+	}
+}
+
+func TestLookupTagPrefersRequestedAliasOrderDuringCaseInsensitiveFallback(t *testing.T) {
+	keys := []string{"album_artist", "albumartist", "TPE2"}
+	preferredValue := "preferred alias"
+	lowerPriorityValue := "lower priority alias"
+
+	seen := map[string]bool{}
+	for range 512 {
+		tags := map[string]string{
+			"AlbumArtist": preferredValue,
+			"tpe2":        lowerPriorityValue,
+		}
+		seen[lookupTag(tags, keys...)] = true
+	}
+
+	if seen[lowerPriorityValue] {
+		t.Fatalf("lookupTag returned lower-priority alias during case-insensitive fallback: %v", mapsKeys(seen))
+	}
+	if !seen[preferredValue] {
+		t.Fatalf("lookupTag never returned preferred alias: %v", mapsKeys(seen))
 	}
 }
 
@@ -287,4 +333,13 @@ func stubScannerSeams() func() {
 		metadataReader = origMetadataReader
 		videoThumbFinder = origVideoThumbFinder
 	}
+}
+
+func mapsKeys(values map[string]bool) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	return keys
 }
