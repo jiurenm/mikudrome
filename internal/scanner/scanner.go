@@ -32,6 +32,12 @@ var ThumbExts = []string{".jpg", ".jpeg", ".png", ".webp"}
 // extracted_cover.jpg is written when we extract from a track's embedded art.
 var CoverNames = []string{"Cover.jpg", "cover.jpg", "Jacket.jpg", "jacket.jpg", "folder.jpg", "Folder.jpg", "extracted_cover.jpg", "extracted_cover.png"}
 
+var (
+	ffprobeRunner    = runFFprobe
+	metadataReader   = readMetadata
+	videoThumbFinder = findOrExtractVideoThumb
+)
+
 // scanJob represents a file to be processed.
 type scanJob struct {
 	audioPath string
@@ -224,7 +230,7 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 	videoPath := findVideoForBase(dir, base)
 	videoThumbPath := ""
 	if videoPath != "" {
-		videoThumbPath = findOrExtractVideoThumb(videoPath)
+		videoThumbPath = videoThumbFinder(videoPath)
 	}
 
 	title := fallbackTitle
@@ -249,42 +255,29 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 	comment := ""
 
 	// Use ffprobe to read all metadata in one call
-	ffprobeDur, ffprobeFormat, ffprobeTags := runFFprobe(audioPath)
+	ffprobeDur, ffprobeFormat, ffprobeTags := ffprobeRunner(audioPath)
 
 	if ffprobeTags != nil {
-		// Read metadata from ffprobe tags
-		if t, ok := ffprobeTags["title"]; ok && t != "" {
+		if t := lookupTag(ffprobeTags, "title", "INAM"); t != "" {
 			title = t
 		}
-		if a, ok := ffprobeTags["artist"]; ok && a != "" {
-			artists = strings.TrimSpace(a)
+		if a := lookupTag(ffprobeTags, "artist", "IART"); a != "" {
+			artists = a
 		}
-		if aa, ok := ffprobeTags["album_artist"]; ok && aa != "" {
-			albumProducer = strings.TrimSpace(aa)
-		} else if aa, ok := ffprobeTags["albumartist"]; ok && aa != "" {
-			albumProducer = strings.TrimSpace(aa)
+		if aa := lookupTag(ffprobeTags, "album_artist", "albumartist", "TPE2"); aa != "" {
+			albumProducer = aa
 		}
-		if album, ok := ffprobeTags["album"]; ok && album != "" {
-			albumTitleFromMeta = strings.TrimSpace(album)
+		if album := lookupTag(ffprobeTags, "album", "IPRD"); album != "" {
+			albumTitleFromMeta = album
 		}
-		if dateStr, ok := ffprobeTags["date"]; ok && dateStr != "" {
-			if y, err := strconv.Atoi(dateStr); err == nil && y > 0 {
-				year = y
-			}
+		if y := parseYearTag(lookupTag(ffprobeTags, "date", "year", "ICRD")); y > 0 {
+			year = y
 		}
-		if trackStr, ok := ffprobeTags["track"]; ok && trackStr != "" {
-			// Track might be "5" or "5/12"
-			parts := strings.Split(trackStr, "/")
-			if n, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil && n > 0 {
-				trackNumber = n
-			}
+		if n := parseCountTag(lookupTag(ffprobeTags, "track", "ITRK")); n > 0 {
+			trackNumber = n
 		}
-		if discStr, ok := ffprobeTags["disc"]; ok && discStr != "" {
-			// Disc might be "1" or "1/2"
-			parts := strings.Split(discStr, "/")
-			if d, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil && d > 0 {
-				discNumber = d
-			}
+		if d := parseCountTag(lookupTag(ffprobeTags, "disc", "TPOS", "IPRT")); d > 0 {
+			discNumber = d
 		}
 		// Read extended metadata fields
 		if c, ok := ffprobeTags["composer"]; ok && c != "" {
@@ -311,8 +304,8 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 		if src, ok := ffprobeTags["source"]; ok && src != "" {
 			source = strings.TrimSpace(src)
 		}
-		if lyr, ok := ffprobeTags["lyrics"]; ok && lyr != "" {
-			lyrics = strings.TrimSpace(lyr)
+		if lyr := lookupTag(ffprobeTags, "lyrics", "LYRICS"); lyr != "" {
+			lyrics = lyr
 		}
 		if cmt, ok := ffprobeTags["comment"]; ok && cmt != "" {
 			comment = strings.TrimSpace(cmt)
@@ -327,7 +320,7 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 
 	// Fallback to tag library if ffprobe failed
 	if title == fallbackTitle || albumTitleFromMeta == "" {
-		if m, err := readMetadata(audioPath); err == nil {
+		if m, err := metadataReader(audioPath); err == nil {
 			if title == fallbackTitle {
 				if t := m.Title(); t != "" {
 					title = t
@@ -537,6 +530,65 @@ func runFFprobe(path string) (duration int, formatLabel string, tags map[string]
 	// Return tags
 	tags = probe.Format.Tags
 	return duration, formatLabel, tags
+}
+
+func lookupTag(tags map[string]string, keys ...string) string {
+	if len(tags) == 0 {
+		return ""
+	}
+	for _, key := range keys {
+		if value, ok := tags[key]; ok {
+			value = strings.TrimSpace(value)
+			if value != "" {
+				return value
+			}
+		}
+	}
+	for tagKey, tagValue := range tags {
+		normalizedKey := strings.ToLower(strings.TrimSpace(tagKey))
+		for _, key := range keys {
+			if normalizedKey == strings.ToLower(key) {
+				tagValue = strings.TrimSpace(tagValue)
+				if tagValue != "" {
+					return tagValue
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func parseCountTag(value string) int {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	parts := strings.Split(value, "/")
+	if len(parts) == 0 {
+		return 0
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return n
+}
+
+func parseYearTag(value string) int {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	if len(value) >= 4 {
+		if y, err := strconv.Atoi(value[:4]); err == nil && y > 0 {
+			return y
+		}
+	}
+	y, err := strconv.Atoi(value)
+	if err != nil || y <= 0 {
+		return 0
+	}
+	return y
 }
 
 // getFLACDuration reads FLAC STREAMINFO to get duration. Returns 0 on failure. Used when ffprobe is unavailable.
@@ -808,7 +860,7 @@ func videoConsistencyCheck(s *store.Store, fileInfos map[string]scanJob) {
 		base := strings.TrimSuffix(t.AudioPath, filepath.Ext(t.AudioPath))
 		videoPath := findVideoForBase(dir, base)
 		if videoPath != "" {
-			thumbPath := findOrExtractVideoThumb(videoPath)
+			thumbPath := videoThumbFinder(videoPath)
 			if err := s.UpdateTrackVideo(t.ID, videoPath, thumbPath); err != nil {
 				log.Printf("scan: video check - error updating video for track %d: %v", t.ID, err)
 			} else {
@@ -870,8 +922,8 @@ func scanStandaloneMVs(mediaRoot string, s *store.Store) {
 		}
 		title := strings.TrimSuffix(filepath.Base(path), ext)
 
-		duration, _, _ := runFFprobe(path)
-		thumbPath := findOrExtractVideoThumb(path)
+		duration, _, _ := ffprobeRunner(path)
+		thumbPath := videoThumbFinder(path)
 
 		_, upsertErr := s.UpsertVideo(store.Video{
 			Title:           title,
