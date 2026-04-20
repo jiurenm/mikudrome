@@ -181,6 +181,16 @@ func TestProcessFileUsesWAVTagAliases(t *testing.T) {
 				}
 				return fakeMetadata{}, nil
 			}
+			embeddedPictureReader = func(path string) (*tag.Picture, error) {
+				if path != audioPath {
+					t.Fatalf("embeddedPictureReader path = %q, want %q", path, audioPath)
+				}
+				return nil, errors.New("no embedded art expected in alias test")
+			}
+			wavCoverExtractor = func(gotAudioPath, gotAlbumDir string) string {
+				t.Fatalf("wavCoverExtractor should not be called in alias test; got audioPath=%q albumDir=%q", gotAudioPath, gotAlbumDir)
+				return ""
+			}
 			videoThumbFinder = func(path string) string {
 				if path != videoPath {
 					t.Fatalf("video thumb path = %q, want %q", path, videoPath)
@@ -307,6 +317,16 @@ func TestProcessFileUsesPlannedAliasAlternates(t *testing.T) {
 				}
 				return fakeMetadata{}, nil
 			}
+			embeddedPictureReader = func(path string) (*tag.Picture, error) {
+				if path != audioPath {
+					t.Fatalf("embeddedPictureReader path = %q, want %q", path, audioPath)
+				}
+				return nil, errors.New("no embedded art expected in alias test")
+			}
+			wavCoverExtractor = func(gotAudioPath, gotAlbumDir string) string {
+				t.Fatalf("wavCoverExtractor should not be called in alias test; got audioPath=%q albumDir=%q", gotAudioPath, gotAlbumDir)
+				return ""
+			}
 			videoThumbFinder = func(path string) string {
 				t.Fatalf("videoThumbFinder should not be called, got %q", path)
 				return ""
@@ -371,6 +391,75 @@ func TestExtractCoverFromTrackFallsBackForWAV(t *testing.T) {
 	want := filepath.Join(albumDir, "extracted_cover.png")
 	if got != want {
 		t.Fatalf("cover path = %q, want %q", got, want)
+	}
+}
+
+func TestProcessFileRefreshesStaleCrossFormatExtractedCoverForWAV(t *testing.T) {
+	tmpDir := t.TempDir()
+	restoreSeams := stubScannerSeams()
+	defer restoreSeams()
+
+	albumDir := filepath.Join(tmpDir, "artist-folder", "album-folder")
+	if err := os.MkdirAll(albumDir, 0o755); err != nil {
+		t.Fatalf("mkdir album dir: %v", err)
+	}
+	audioPath := filepath.Join(albumDir, "coverless.wav")
+	if err := os.WriteFile(audioPath, []byte("RIFF"), 0o644); err != nil {
+		t.Fatalf("write audio file: %v", err)
+	}
+
+	staleJPGPath := filepath.Join(albumDir, "extracted_cover.jpg")
+	if err := os.WriteFile(staleJPGPath, []byte("stale-jpg"), 0o644); err != nil {
+		t.Fatalf("seed stale jpg: %v", err)
+	}
+
+	ffprobeRunner = func(path string) (int, string, map[string]string) {
+		if path != audioPath {
+			t.Fatalf("ffprobe path = %q, want %q", path, audioPath)
+		}
+		return 0, "", nil
+	}
+	metadataReader = func(path string) (tag.Metadata, error) {
+		if path != audioPath {
+			t.Fatalf("metadataReader path = %q, want %q", path, audioPath)
+		}
+		return fakeMetadata{}, nil
+	}
+	embeddedPictureReader = func(path string) (*tag.Picture, error) {
+		if path != audioPath {
+			t.Fatalf("embeddedPictureReader path = %q, want %q", path, audioPath)
+		}
+		return nil, nil
+	}
+	wavCoverExtractor = func(gotAudioPath, gotAlbumDir string) string {
+		if gotAudioPath != audioPath {
+			t.Fatalf("wavCoverExtractor audioPath = %q, want %q", gotAudioPath, audioPath)
+		}
+		if gotAlbumDir != albumDir {
+			t.Fatalf("wavCoverExtractor albumDir = %q, want %q", gotAlbumDir, albumDir)
+		}
+		outPath := filepath.Join(albumDir, "extracted_cover.png")
+		if err := os.WriteFile(outPath, []byte("fresh-png"), 0o644); err != nil {
+			t.Fatalf("write refreshed png: %v", err)
+		}
+		return outPath
+	}
+	videoThumbFinder = func(path string) string {
+		t.Fatalf("videoThumbFinder should not be called, got %q", path)
+		return ""
+	}
+
+	result := processFile(scanJob{audioPath: audioPath}, tmpDir)
+
+	wantCoverPath := filepath.Join(albumDir, "extracted_cover.png")
+	if result.album.CoverPath != wantCoverPath {
+		t.Fatalf("cover path = %q, want %q", result.album.CoverPath, wantCoverPath)
+	}
+	if _, err := os.Stat(staleJPGPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected stale jpg to be removed, stat err = %v", err)
+	}
+	if _, err := os.Stat(wantCoverPath); err != nil {
+		t.Fatalf("expected refreshed png to exist: %v", err)
 	}
 }
 
@@ -681,18 +770,18 @@ type fakeMetadata struct {
 	picture *tag.Picture
 }
 
-func (m fakeMetadata) Format() tag.Format              { return tag.UnknownFormat }
-func (m fakeMetadata) FileType() tag.FileType         { return tag.UnknownFileType }
-func (m fakeMetadata) Title() string                  { return "" }
-func (m fakeMetadata) Album() string                  { return "" }
-func (m fakeMetadata) Artist() string                 { return "" }
-func (m fakeMetadata) AlbumArtist() string            { return "" }
-func (m fakeMetadata) Composer() string               { return "" }
-func (m fakeMetadata) Year() int                      { return 0 }
-func (m fakeMetadata) Genre() string                  { return "" }
-func (m fakeMetadata) Track() (int, int)              { return 0, 0 }
-func (m fakeMetadata) Disc() (int, int)               { return 0, 0 }
-func (m fakeMetadata) Picture() *tag.Picture          { return m.picture }
-func (m fakeMetadata) Lyrics() string                 { return "" }
-func (m fakeMetadata) Comment() string                { return "" }
-func (m fakeMetadata) Raw() map[string]interface{}    { return nil }
+func (m fakeMetadata) Format() tag.Format          { return tag.UnknownFormat }
+func (m fakeMetadata) FileType() tag.FileType      { return tag.UnknownFileType }
+func (m fakeMetadata) Title() string               { return "" }
+func (m fakeMetadata) Album() string               { return "" }
+func (m fakeMetadata) Artist() string              { return "" }
+func (m fakeMetadata) AlbumArtist() string         { return "" }
+func (m fakeMetadata) Composer() string            { return "" }
+func (m fakeMetadata) Year() int                   { return 0 }
+func (m fakeMetadata) Genre() string               { return "" }
+func (m fakeMetadata) Track() (int, int)           { return 0, 0 }
+func (m fakeMetadata) Disc() (int, int)            { return 0, 0 }
+func (m fakeMetadata) Picture() *tag.Picture       { return m.picture }
+func (m fakeMetadata) Lyrics() string              { return "" }
+func (m fakeMetadata) Comment() string             { return "" }
+func (m fakeMetadata) Raw() map[string]interface{} { return nil }

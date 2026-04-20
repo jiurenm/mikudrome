@@ -394,6 +394,9 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 		}
 
 		coverPath = findCoverInDir(albumDir)
+		if shouldRefreshWAVExtractedCover(audioPath, coverPath) {
+			coverPath = refreshWAVExtractedCover(audioPath, albumDir, coverPath)
+		}
 		if coverPath == "" {
 			coverPath = extractCoverFromTrack(audioPath, albumDir)
 		}
@@ -736,6 +739,38 @@ func writeExtractedCover(albumDir string, pic *tag.Picture) string {
 	return outPath
 }
 
+func shouldRefreshWAVExtractedCover(audioPath, coverPath string) bool {
+	if !strings.EqualFold(filepath.Ext(audioPath), ".wav") {
+		return false
+	}
+	base := filepath.Base(coverPath)
+	return base == "extracted_cover.jpg" || base == "extracted_cover.png"
+}
+
+func removeExtractedCoverOutputs(albumDir string) {
+	_ = os.Remove(filepath.Join(albumDir, "extracted_cover.jpg"))
+	_ = os.Remove(filepath.Join(albumDir, "extracted_cover.png"))
+}
+
+func refreshWAVExtractedCover(audioPath, albumDir, existingCoverPath string) string {
+	pic, err := embeddedPictureReader(audioPath)
+	if err != nil {
+		return existingCoverPath
+	}
+	if pic != nil && len(pic.Data) > 0 {
+		removeExtractedCoverOutputs(albumDir)
+		if outPath := writeExtractedCover(albumDir, pic); outPath != "" {
+			return outPath
+		}
+		return existingCoverPath
+	}
+	removeExtractedCoverOutputs(albumDir)
+	if outPath := wavCoverExtractor(audioPath, albumDir); outPath != "" {
+		return outPath
+	}
+	return ""
+}
+
 // extractCoverFromTrack reads embedded picture from the audio file and writes to albumDir/extracted_cover.<ext>.
 // Returns the path to the written file, or "" on failure.
 func extractCoverFromTrack(audioPath, albumDir string) string {
@@ -747,6 +782,7 @@ func extractCoverFromTrack(audioPath, albumDir string) string {
 		return writeExtractedCover(albumDir, pic)
 	}
 	if strings.EqualFold(filepath.Ext(audioPath), ".wav") {
+		removeExtractedCoverOutputs(albumDir)
 		return wavCoverExtractor(audioPath, albumDir)
 	}
 	return ""
@@ -764,10 +800,12 @@ func extractCoverFromWAV(audioPath, albumDir string) string {
 		outPath,
 	)
 	if err := cmd.Run(); err != nil {
+		log.Printf("scan: ffmpeg cover extraction failed for %s: %v", audioPath, err)
 		_ = os.Remove(outPath)
 		return ""
 	}
 	if _, err := os.Stat(outPath); err != nil {
+		log.Printf("scan: ffmpeg cover extraction missing output for %s: %v", audioPath, err)
 		_ = os.Remove(outPath)
 		return ""
 	}
