@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,8 +30,16 @@ var VideoExts = map[string]bool{
 var ThumbExts = []string{".jpg", ".jpeg", ".png", ".webp"}
 
 // CoverNames preferred filenames for album cover image (same dir as tracks).
-// extracted_cover.jpg is written when we extract from a track's embedded art.
+// extracted_cover.jpg or extracted_cover.png may be written when we extract art from a track.
 var CoverNames = []string{"Cover.jpg", "cover.jpg", "Jacket.jpg", "jacket.jpg", "folder.jpg", "Folder.jpg", "extracted_cover.jpg", "extracted_cover.png"}
+
+var (
+	ffprobeRunner         = runFFprobe
+	metadataReader        = readMetadata
+	videoThumbFinder      = findOrExtractVideoThumb
+	embeddedPictureReader = readEmbeddedPicture
+	wavCoverExtractor     = extractCoverFromWAV
+)
 
 // scanJob represents a file to be processed.
 type scanJob struct {
@@ -55,6 +64,61 @@ type scanStats struct {
 	updated int
 	deleted int
 	failed  int
+}
+
+type albumCoverCoordinator struct {
+	mu     sync.Mutex
+	albums map[string]*albumCoverState
+}
+
+type albumCoverState struct {
+	cond      *sync.Cond
+	running   bool
+	done      bool
+	coverPath string
+}
+
+func newAlbumCoverCoordinator() *albumCoverCoordinator {
+	return &albumCoverCoordinator{
+		albums: make(map[string]*albumCoverState),
+	}
+}
+
+func (c *albumCoverCoordinator) resolve(albumDir string, resolve func() string) string {
+	if c == nil || albumDir == "" {
+		return resolve()
+	}
+
+	albumDir = filepath.Clean(albumDir)
+
+	c.mu.Lock()
+	state := c.albums[albumDir]
+	if state == nil {
+		state = &albumCoverState{}
+		state.cond = sync.NewCond(&c.mu)
+		c.albums[albumDir] = state
+	}
+	for state.running && !state.done {
+		state.cond.Wait()
+	}
+	if state.done {
+		coverPath := state.coverPath
+		c.mu.Unlock()
+		return coverPath
+	}
+	state.running = true
+	c.mu.Unlock()
+
+	coverPath := resolve()
+
+	c.mu.Lock()
+	state.coverPath = coverPath
+	state.done = true
+	state.running = false
+	state.cond.Broadcast()
+	c.mu.Unlock()
+
+	return coverPath
 }
 
 // Scan walks mediaRoot, finds audio files, and for each audio reads metadata (title, track#, disc#, album, producer, vocal),
@@ -141,6 +205,7 @@ func Scan(mediaRoot string, s *store.Store, workers, batchSize int) error {
 		if abs, err := filepath.Abs(mediaRootAbs); err == nil {
 			mediaRootAbs = abs
 		}
+		albumCovers := newAlbumCoverCoordinator()
 
 		jobs := make(chan scanJob, workers*2)
 		results := make(chan scanResult, workers*2)
@@ -150,7 +215,7 @@ func Scan(mediaRoot string, s *store.Store, workers, batchSize int) error {
 		for range workers {
 			wg.Go(func() {
 				for job := range jobs {
-					result := processFile(job, mediaRootAbs)
+					result := processFileWithAlbumCoverCoordinator(job, mediaRootAbs, albumCovers)
 					results <- result
 				}
 			})
@@ -213,6 +278,10 @@ func Scan(mediaRoot string, s *store.Store, workers, batchSize int) error {
 
 // processFile processes a single audio file and returns the result.
 func processFile(job scanJob, mediaRoot string) scanResult {
+	return processFileWithAlbumCoverCoordinator(job, mediaRoot, nil)
+}
+
+func processFileWithAlbumCoverCoordinator(job scanJob, mediaRoot string, albumCovers *albumCoverCoordinator) scanResult {
 	audioPath := job.audioPath
 	dir := filepath.Dir(audioPath)
 	dirAbs, _ := filepath.Abs(dir)
@@ -224,7 +293,7 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 	videoPath := findVideoForBase(dir, base)
 	videoThumbPath := ""
 	if videoPath != "" {
-		videoThumbPath = findOrExtractVideoThumb(videoPath)
+		videoThumbPath = videoThumbFinder(videoPath)
 	}
 
 	title := fallbackTitle
@@ -249,42 +318,29 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 	comment := ""
 
 	// Use ffprobe to read all metadata in one call
-	ffprobeDur, ffprobeFormat, ffprobeTags := runFFprobe(audioPath)
+	ffprobeDur, ffprobeFormat, ffprobeTags := ffprobeRunner(audioPath)
 
 	if ffprobeTags != nil {
-		// Read metadata from ffprobe tags
-		if t, ok := ffprobeTags["title"]; ok && t != "" {
+		if t := lookupTag(ffprobeTags, "title", "INAM"); t != "" {
 			title = t
 		}
-		if a, ok := ffprobeTags["artist"]; ok && a != "" {
-			artists = strings.TrimSpace(a)
+		if a := lookupTag(ffprobeTags, "artist", "IART"); a != "" {
+			artists = a
 		}
-		if aa, ok := ffprobeTags["album_artist"]; ok && aa != "" {
-			albumProducer = strings.TrimSpace(aa)
-		} else if aa, ok := ffprobeTags["albumartist"]; ok && aa != "" {
-			albumProducer = strings.TrimSpace(aa)
+		if aa := lookupTag(ffprobeTags, "album_artist", "albumartist", "TPE2"); aa != "" {
+			albumProducer = aa
 		}
-		if album, ok := ffprobeTags["album"]; ok && album != "" {
-			albumTitleFromMeta = strings.TrimSpace(album)
+		if album := lookupTag(ffprobeTags, "album", "IPRD"); album != "" {
+			albumTitleFromMeta = album
 		}
-		if dateStr, ok := ffprobeTags["date"]; ok && dateStr != "" {
-			if y, err := strconv.Atoi(dateStr); err == nil && y > 0 {
-				year = y
-			}
+		if y := parseYearTag(lookupTag(ffprobeTags, "date", "year", "ICRD")); y > 0 {
+			year = y
 		}
-		if trackStr, ok := ffprobeTags["track"]; ok && trackStr != "" {
-			// Track might be "5" or "5/12"
-			parts := strings.Split(trackStr, "/")
-			if n, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil && n > 0 {
-				trackNumber = n
-			}
+		if n := parseCountTag(lookupTag(ffprobeTags, "track", "ITRK")); n > 0 {
+			trackNumber = n
 		}
-		if discStr, ok := ffprobeTags["disc"]; ok && discStr != "" {
-			// Disc might be "1" or "1/2"
-			parts := strings.Split(discStr, "/")
-			if d, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil && d > 0 {
-				discNumber = d
-			}
+		if d := parseCountTag(lookupTag(ffprobeTags, "disc", "TPOS", "IPRT")); d > 0 {
+			discNumber = d
 		}
 		// Read extended metadata fields
 		if c, ok := ffprobeTags["composer"]; ok && c != "" {
@@ -311,8 +367,8 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 		if src, ok := ffprobeTags["source"]; ok && src != "" {
 			source = strings.TrimSpace(src)
 		}
-		if lyr, ok := ffprobeTags["lyrics"]; ok && lyr != "" {
-			lyrics = strings.TrimSpace(lyr)
+		if lyr := lookupTag(ffprobeTags, "lyrics", "LYRICS"); lyr != "" {
+			lyrics = lyr
 		}
 		if cmt, ok := ffprobeTags["comment"]; ok && cmt != "" {
 			comment = strings.TrimSpace(cmt)
@@ -327,7 +383,7 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 
 	// Fallback to tag library if ffprobe failed
 	if title == fallbackTitle || albumTitleFromMeta == "" {
-		if m, err := readMetadata(audioPath); err == nil {
+		if m, err := metadataReader(audioPath); err == nil {
 			if title == fallbackTitle {
 				if t := m.Title(); t != "" {
 					title = t
@@ -398,10 +454,7 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 			albumTitle = filepath.Base(albumDir)
 		}
 
-		coverPath = findCoverInDir(albumDir)
-		if coverPath == "" {
-			coverPath = extractCoverFromTrack(audioPath, albumDir)
-		}
+		coverPath = resolveAlbumCover(audioPath, albumDir, albumCovers)
 		avatarPath = findArtistAvatar(artistDir)
 	}
 
@@ -441,6 +494,78 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 		},
 		err: nil,
 	}
+}
+
+func resolveAlbumCover(_ string, albumDir string, albumCovers *albumCoverCoordinator) string {
+	resolve := func() string {
+		return resolveDeterministicAlbumCover(albumDir)
+	}
+	if albumCovers == nil {
+		return resolve()
+	}
+	return albumCovers.resolve(albumDir, resolve)
+}
+
+func resolveDeterministicAlbumCover(albumDir string) string {
+	coverPath := findCoverInDir(albumDir)
+	if coverPath != "" && !isExtractedCoverPath(coverPath) {
+		return coverPath
+	}
+
+	audioTracks := findAudioTracksInAlbum(albumDir)
+	if len(audioTracks) == 0 {
+		return coverPath
+	}
+
+	wavFallbackTrack := ""
+	hadWAVReadError := false
+	for _, audioPath := range audioTracks {
+		pic, err := embeddedPictureReader(audioPath)
+		if err != nil {
+			if strings.EqualFold(filepath.Ext(audioPath), ".wav") {
+				hadWAVReadError = true
+			}
+			continue
+		}
+		if pic == nil || len(pic.Data) == 0 {
+			if wavFallbackTrack == "" && strings.EqualFold(filepath.Ext(audioPath), ".wav") {
+				wavFallbackTrack = audioPath
+			}
+			continue
+		}
+		if outPath := writeExtractedCover(albumDir, pic); outPath != "" {
+			removeStaleExtractedCoverOutputs(albumDir, outPath)
+			return outPath
+		}
+		return coverPath
+	}
+
+	if hadWAVReadError {
+		return coverPath
+	}
+
+	if wavFallbackTrack != "" {
+		if outPath := wavCoverExtractor(wavFallbackTrack, albumDir); outPath != "" {
+			removeStaleExtractedCoverOutputs(albumDir, outPath)
+			return outPath
+		}
+	}
+	return coverPath
+}
+
+func findAudioTracksInAlbum(albumDir string) []string {
+	var audioTracks []string
+	_ = filepath.Walk(albumDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil || info.IsDir() {
+			return nil
+		}
+		if AudioExts[strings.ToLower(filepath.Ext(path))] {
+			audioTracks = append(audioTracks, path)
+		}
+		return nil
+	})
+	sort.Strings(audioTracks)
+	return audioTracks
 }
 
 // collectResults collects results from workers and writes to database in batches.
@@ -484,7 +609,7 @@ func runFFprobe(path string) (duration int, formatLabel string, tags map[string]
 		"-select_streams", "a:0",
 		"-show_entries", "stream=codec_name,bits_per_sample",
 		"-show_entries", "format=duration,bit_rate",
-		"-show_entries", "format_tags=title,artist,album,album_artist,albumartist,date,track,disc,composer,lyricist,arranger,vocal,voice_manipulator,illustrator,movie,source,lyrics,comment",
+		"-show_entries", "format_tags=title,INAM,inam,artist,IART,iart,album,IPRD,iprd,album_artist,albumartist,TPE2,tpe2,date,year,ICRD,icrd,track,ITRK,itrk,disc,TPOS,tpos,IPRT,iprt,composer,lyricist,arranger,vocal,voice_manipulator,illustrator,movie,source,lyrics,LYRICS,comment",
 		"-of", "json",
 		path,
 	)
@@ -537,6 +662,64 @@ func runFFprobe(path string) (duration int, formatLabel string, tags map[string]
 	// Return tags
 	tags = probe.Format.Tags
 	return duration, formatLabel, tags
+}
+
+func lookupTag(tags map[string]string, keys ...string) string {
+	if len(tags) == 0 {
+		return ""
+	}
+	for _, key := range keys {
+		if value, ok := tags[key]; ok {
+			value = strings.TrimSpace(value)
+			if value != "" {
+				return value
+			}
+		}
+		normalizedKey := strings.ToLower(strings.TrimSpace(key))
+		for tagKey, tagValue := range tags {
+			if strings.ToLower(strings.TrimSpace(tagKey)) != normalizedKey {
+				continue
+			}
+			tagValue = strings.TrimSpace(tagValue)
+			if tagValue != "" {
+				return tagValue
+			}
+		}
+	}
+	return ""
+}
+
+func parseCountTag(value string) int {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	parts := strings.Split(value, "/")
+	if len(parts) == 0 {
+		return 0
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return n
+}
+
+func parseYearTag(value string) int {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	if len(value) >= 4 {
+		if y, err := strconv.Atoi(value[:4]); err == nil && y > 0 {
+			return y
+		}
+	}
+	y, err := strconv.Atoi(value)
+	if err != nil || y <= 0 {
+		return 0
+	}
+	return y
 }
 
 // getFLACDuration reads FLAC STREAMINFO to get duration. Returns 0 on failure. Used when ffprobe is unavailable.
@@ -657,31 +840,116 @@ func readMetadata(path string) (tag.Metadata, error) {
 	return tag.ReadFrom(f)
 }
 
-// extractCoverFromTrack reads embedded picture from the audio file and writes to albumDir/extracted_cover.jpg.
-// Returns the path to the written file, or "" on failure.
-func extractCoverFromTrack(audioPath, albumDir string) string {
-	f, err := os.Open(audioPath)
+func readEmbeddedPicture(path string) (*tag.Picture, error) {
+	m, err := metadataReader(path)
 	if err != nil {
-		return ""
+		return nil, err
 	}
-	defer f.Close()
-	m, err := tag.ReadFrom(f)
-	if err != nil {
-		return ""
-	}
-	pic := m.Picture()
+	return m.Picture(), nil
+}
+
+func writeExtractedCover(albumDir string, pic *tag.Picture) string {
 	if pic == nil || len(pic.Data) == 0 {
 		return ""
 	}
-	ext := "jpg"
-	if pic.Ext != "" {
-		ext = pic.Ext
-	}
-	if ext != "jpg" && ext != "jpeg" && ext != "png" {
+	ext := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(pic.Ext), "."))
+	switch ext {
+	case "", "jpg", "jpeg":
+		ext = "jpg"
+	case "png":
+	default:
 		ext = "jpg"
 	}
 	outPath := filepath.Join(albumDir, "extracted_cover."+ext)
-	if err := os.WriteFile(outPath, pic.Data, 0644); err != nil {
+	tmpFile, err := os.CreateTemp(albumDir, "extracted_cover-*."+ext+".tmp")
+	if err != nil {
+		return ""
+	}
+	tmpPath := tmpFile.Name()
+	if _, err := tmpFile.Write(pic.Data); err != nil {
+		tmpFile.Close()
+		_ = os.Remove(tmpPath)
+		return ""
+	}
+	if err := tmpFile.Chmod(0o644); err != nil {
+		tmpFile.Close()
+		_ = os.Remove(tmpPath)
+		return ""
+	}
+	if err := tmpFile.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return ""
+	}
+	if err := os.Rename(tmpPath, outPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return ""
+	}
+	return outPath
+}
+
+func shouldRefreshWAVExtractedCover(audioPath, coverPath string) bool {
+	if !strings.EqualFold(filepath.Ext(audioPath), ".wav") {
+		return false
+	}
+	return isExtractedCoverPath(coverPath)
+}
+
+func isExtractedCoverPath(coverPath string) bool {
+	base := filepath.Base(coverPath)
+	return base == "extracted_cover.jpg" || base == "extracted_cover.png"
+}
+
+func removeExtractedCoverOutputs(albumDir string) {
+	_ = os.Remove(filepath.Join(albumDir, "extracted_cover.jpg"))
+	_ = os.Remove(filepath.Join(albumDir, "extracted_cover.png"))
+}
+
+func removeStaleExtractedCoverOutputs(albumDir, keepPath string) {
+	for _, name := range []string{"extracted_cover.jpg", "extracted_cover.png"} {
+		path := filepath.Join(albumDir, name)
+		if path == keepPath {
+			continue
+		}
+		_ = os.Remove(path)
+	}
+}
+
+// extractCoverFromTrack reads embedded picture from the audio file and writes to albumDir/extracted_cover.<ext>.
+// Returns the path to the written file, or "" on failure.
+func extractCoverFromTrack(audioPath, albumDir string) string {
+	pic, err := embeddedPictureReader(audioPath)
+	if err != nil {
+		return ""
+	}
+	if pic != nil && len(pic.Data) > 0 {
+		return writeExtractedCover(albumDir, pic)
+	}
+	if strings.EqualFold(filepath.Ext(audioPath), ".wav") {
+		removeExtractedCoverOutputs(albumDir)
+		return wavCoverExtractor(audioPath, albumDir)
+	}
+	return ""
+}
+
+func extractCoverFromWAV(audioPath, albumDir string) string {
+	outPath := filepath.Join(albumDir, "extracted_cover.png")
+	_ = os.Remove(outPath)
+	cmd := exec.Command("ffmpeg",
+		"-y",
+		"-i", audioPath,
+		"-an",
+		"-c:v", "png",
+		"-frames:v", "1",
+		outPath,
+	)
+	if err := cmd.Run(); err != nil {
+		log.Printf("scan: ffmpeg cover extraction failed for %s: %v", audioPath, err)
+		_ = os.Remove(outPath)
+		return ""
+	}
+	if _, err := os.Stat(outPath); err != nil {
+		log.Printf("scan: ffmpeg cover extraction missing output for %s: %v", audioPath, err)
+		_ = os.Remove(outPath)
 		return ""
 	}
 	return outPath
@@ -808,7 +1076,7 @@ func videoConsistencyCheck(s *store.Store, fileInfos map[string]scanJob) {
 		base := strings.TrimSuffix(t.AudioPath, filepath.Ext(t.AudioPath))
 		videoPath := findVideoForBase(dir, base)
 		if videoPath != "" {
-			thumbPath := findOrExtractVideoThumb(videoPath)
+			thumbPath := videoThumbFinder(videoPath)
 			if err := s.UpdateTrackVideo(t.ID, videoPath, thumbPath); err != nil {
 				log.Printf("scan: video check - error updating video for track %d: %v", t.ID, err)
 			} else {
@@ -870,8 +1138,8 @@ func scanStandaloneMVs(mediaRoot string, s *store.Store) {
 		}
 		title := strings.TrimSuffix(filepath.Base(path), ext)
 
-		duration, _, _ := runFFprobe(path)
-		thumbPath := findOrExtractVideoThumb(path)
+		duration, _, _ := ffprobeRunner(path)
+		thumbPath := videoThumbFinder(path)
 
 		_, upsertErr := s.UpsertVideo(store.Video{
 			Title:           title,
