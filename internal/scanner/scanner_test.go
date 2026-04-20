@@ -369,6 +369,47 @@ func TestExtractCoverFromTrackFallsBackForWAV(t *testing.T) {
 	}
 }
 
+func TestExtractCoverFromTrackDoesNotFallBackWhenEmbeddedArtWriteFails(t *testing.T) {
+	baseDir := t.TempDir()
+	albumDir := filepath.Join(baseDir, "missing-album-dir")
+	audioPath := filepath.Join(baseDir, "art-present.wav")
+	if err := os.WriteFile(audioPath, []byte("RIFF"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	restorePictureReader := embeddedPictureReader
+	restoreWAVFallback := wavCoverExtractor
+	t.Cleanup(func() {
+		embeddedPictureReader = restorePictureReader
+		wavCoverExtractor = restoreWAVFallback
+	})
+
+	embeddedPictureReader = func(gotPath string) (*tag.Picture, error) {
+		if gotPath != audioPath {
+			t.Fatalf("audio path = %q, want %q", gotPath, audioPath)
+		}
+		return &tag.Picture{
+			Ext:  "png",
+			Data: []byte("png"),
+		}, nil
+	}
+	wavFallbackCalled := false
+	wavCoverExtractor = func(gotAudioPath, gotAlbumDir string) string {
+		wavFallbackCalled = true
+		t.Fatalf("wav fallback should not be called when embedded art exists; got audioPath=%q albumDir=%q", gotAudioPath, gotAlbumDir)
+		return ""
+	}
+
+	got := extractCoverFromTrack(audioPath, albumDir)
+
+	if got != "" {
+		t.Fatalf("cover path = %q, want empty path after embedded art write failure", got)
+	}
+	if wavFallbackCalled {
+		t.Fatal("wav fallback was called")
+	}
+}
+
 func stubScannerSeams() func() {
 	origFFprobeRunner := ffprobeRunner
 	origMetadataReader := metadataReader
