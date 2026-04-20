@@ -119,12 +119,18 @@ class _LyricsSectionState extends State<LyricsSection> {
         widget.timedLyrics.isEmpty) {
       return 0;
     }
-    const approxLineHeight = 76.0;
-    final target = (index * approxLineHeight)
-        .clamp(
-          _scrollController.position.minScrollExtent,
-          _scrollController.position.maxScrollExtent,
-        )
+    final position = _scrollController.position;
+    final minScrollExtent = position.minScrollExtent;
+    final maxScrollExtent = position.maxScrollExtent;
+    final maxIndex = widget.timedLyrics.length - 1;
+    if (maxIndex <= 0) return minScrollExtent;
+
+    // Estimate by list progress instead of a fixed line height so large
+    // jumps, such as after a tab resumes, do not overshoot to the bottom.
+    final progress = index / maxIndex;
+    final target = (minScrollExtent +
+            (maxScrollExtent - minScrollExtent) * progress)
+        .clamp(minScrollExtent, maxScrollExtent)
         .toDouble();
     return target;
   }

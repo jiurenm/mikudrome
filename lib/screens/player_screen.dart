@@ -361,9 +361,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
       onPause: () =>
           _handleMediaSessionPlaybackAction(action: PlaybackAction.pause),
       onPrevious: () async {
+        _syncMediaSessionMetadataForPendingTrack(_targetPreviousTrack());
         widget.onPrevious();
       },
       onNext: () async {
+        _syncMediaSessionMetadataForPendingTrack(_targetNextTrack());
         widget.onNext();
       },
       onSeekTo: _canSeekInMediaSession
@@ -396,12 +398,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _syncMediaSessionMetadata() {
-    _mediaSession.setMetadata(
-      title: _track.title,
-      artist: _track.vocalLine,
-      album: widget.contextLabel,
-      artworkUrl: _albumCoverUrl.isEmpty ? null : _albumCoverUrl,
-    );
+    _syncMediaSessionMetadataForTrack(_track);
   }
 
   void _syncMediaSessionPlaybackState() {
@@ -413,6 +410,62 @@ class _PlayerScreenState extends State<PlayerScreen> {
       durationMs: durationMs,
       playbackRate: 1.0,
     );
+  }
+
+  void _syncMediaSessionMetadataForPendingTrack(Track? track) {
+    if (track == null) {
+      return;
+    }
+    _syncMediaSessionMetadataForTrack(track);
+  }
+
+  void _syncMediaSessionMetadataForTrack(Track track) {
+    final artworkUrl = _coverUrlForTrack(track);
+    _mediaSession.setMetadata(
+      title: track.title,
+      artist: track.vocalLine,
+      album: widget.contextLabel,
+      artworkUrl: artworkUrl.isEmpty ? null : artworkUrl,
+    );
+  }
+
+  Track? _targetPreviousTrack() {
+    if (widget.queue.isEmpty) {
+      return null;
+    }
+    final previousIndex = switch (widget.playbackOrderMode) {
+      PlaybackOrderMode.listLoop => widget.currentIndex > 0
+          ? widget.currentIndex - 1
+          : (widget.queue.length > 1 ? widget.queue.length - 1 : null),
+      PlaybackOrderMode.sequential ||
+      PlaybackOrderMode.singleLoop =>
+        widget.currentIndex > 0 ? widget.currentIndex - 1 : null,
+    };
+    if (previousIndex == null) {
+      return null;
+    }
+    return widget.queue[previousIndex];
+  }
+
+  Track? _targetNextTrack() {
+    if (widget.queue.isEmpty) {
+      return null;
+    }
+    final nextIndex = switch (widget.playbackOrderMode) {
+      PlaybackOrderMode.listLoop =>
+        widget.currentIndex < widget.queue.length - 1
+            ? widget.currentIndex + 1
+            : (widget.queue.length > 1 ? 0 : null),
+      PlaybackOrderMode.sequential ||
+      PlaybackOrderMode.singleLoop =>
+        widget.currentIndex < widget.queue.length - 1
+            ? widget.currentIndex + 1
+            : null,
+    };
+    if (nextIndex == null) {
+      return null;
+    }
+    return widget.queue[nextIndex];
   }
 
   void _attachControllerListener(VideoPlayerController controller) {
@@ -494,6 +547,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           unawaited(_restartWebAudioTrack());
           return;
         case PlaybackCompletionCommand.playNext:
+          _syncMediaSessionMetadataForPendingTrack(_targetNextTrack());
           widget.onNext();
           return;
         case PlaybackCompletionCommand.none:

@@ -11,6 +11,7 @@ class _FakeWebMediaSessionService implements WebMediaSessionService {
   WebMediaSessionVoidHandler? previousHandler;
   WebMediaSessionVoidHandler? nextHandler;
   WebMediaSessionSeekHandler? seekToHandler;
+  String? metadataTitle;
   String? metadataArtist;
 
   @override
@@ -38,6 +39,7 @@ class _FakeWebMediaSessionService implements WebMediaSessionService {
     String? album,
     String? artworkUrl,
   }) {
+    metadataTitle = title;
     metadataArtist = artist;
   }
 
@@ -281,6 +283,35 @@ void main() {
 
         await mediaSession.nextHandler!();
         expect(nextCount, 2);
+      },
+    );
+
+    testWidgets(
+      'next handler updates media session metadata immediately',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1920, 1080));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        final mediaSession = _FakeWebMediaSessionService();
+        final queue = [_track(1), _track(2)];
+        var nextCount = 0;
+
+        await tester.pumpWidget(
+          _buildPlayer(
+            mediaSession: mediaSession,
+            queue: queue,
+            currentIndex: 0,
+            onPrevious: () {},
+            onNext: () => nextCount++,
+          ),
+        );
+
+        expect(mediaSession.metadataTitle, queue.first.title);
+
+        await mediaSession.nextHandler!();
+
+        expect(nextCount, 1);
+        expect(mediaSession.metadataTitle, queue[1].title);
       },
     );
   });

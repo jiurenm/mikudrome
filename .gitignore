@@ -42,3 +42,5 @@ web/.dart_tool/
 
 media
 .worktrees/
+.superpowers
+docs/superpowers
