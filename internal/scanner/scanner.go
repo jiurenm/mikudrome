@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -63,6 +64,61 @@ type scanStats struct {
 	updated int
 	deleted int
 	failed  int
+}
+
+type albumCoverCoordinator struct {
+	mu     sync.Mutex
+	albums map[string]*albumCoverState
+}
+
+type albumCoverState struct {
+	cond      *sync.Cond
+	running   bool
+	done      bool
+	coverPath string
+}
+
+func newAlbumCoverCoordinator() *albumCoverCoordinator {
+	return &albumCoverCoordinator{
+		albums: make(map[string]*albumCoverState),
+	}
+}
+
+func (c *albumCoverCoordinator) resolve(albumDir string, resolve func() string) string {
+	if c == nil || albumDir == "" {
+		return resolve()
+	}
+
+	albumDir = filepath.Clean(albumDir)
+
+	c.mu.Lock()
+	state := c.albums[albumDir]
+	if state == nil {
+		state = &albumCoverState{}
+		state.cond = sync.NewCond(&c.mu)
+		c.albums[albumDir] = state
+	}
+	for state.running && !state.done {
+		state.cond.Wait()
+	}
+	if state.done {
+		coverPath := state.coverPath
+		c.mu.Unlock()
+		return coverPath
+	}
+	state.running = true
+	c.mu.Unlock()
+
+	coverPath := resolve()
+
+	c.mu.Lock()
+	state.coverPath = coverPath
+	state.done = true
+	state.running = false
+	state.cond.Broadcast()
+	c.mu.Unlock()
+
+	return coverPath
 }
 
 // Scan walks mediaRoot, finds audio files, and for each audio reads metadata (title, track#, disc#, album, producer, vocal),
@@ -149,6 +205,7 @@ func Scan(mediaRoot string, s *store.Store, workers, batchSize int) error {
 		if abs, err := filepath.Abs(mediaRootAbs); err == nil {
 			mediaRootAbs = abs
 		}
+		albumCovers := newAlbumCoverCoordinator()
 
 		jobs := make(chan scanJob, workers*2)
 		results := make(chan scanResult, workers*2)
@@ -158,7 +215,7 @@ func Scan(mediaRoot string, s *store.Store, workers, batchSize int) error {
 		for range workers {
 			wg.Go(func() {
 				for job := range jobs {
-					result := processFile(job, mediaRootAbs)
+					result := processFileWithAlbumCoverCoordinator(job, mediaRootAbs, albumCovers)
 					results <- result
 				}
 			})
@@ -221,6 +278,10 @@ func Scan(mediaRoot string, s *store.Store, workers, batchSize int) error {
 
 // processFile processes a single audio file and returns the result.
 func processFile(job scanJob, mediaRoot string) scanResult {
+	return processFileWithAlbumCoverCoordinator(job, mediaRoot, nil)
+}
+
+func processFileWithAlbumCoverCoordinator(job scanJob, mediaRoot string, albumCovers *albumCoverCoordinator) scanResult {
 	audioPath := job.audioPath
 	dir := filepath.Dir(audioPath)
 	dirAbs, _ := filepath.Abs(dir)
@@ -393,16 +454,7 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 			albumTitle = filepath.Base(albumDir)
 		}
 
-		coverPath = findCoverInDir(albumDir)
-		if shouldRefreshWAVExtractedCover(audioPath, coverPath) {
-			var refreshAttempted bool
-			coverPath, refreshAttempted = refreshWAVExtractedCover(audioPath, albumDir, coverPath)
-			if !refreshAttempted && coverPath == "" {
-				coverPath = extractCoverFromTrack(audioPath, albumDir)
-			}
-		} else if coverPath == "" {
-			coverPath = extractCoverFromTrack(audioPath, albumDir)
-		}
+		coverPath = resolveAlbumCover(audioPath, albumDir, albumCovers)
 		avatarPath = findArtistAvatar(artistDir)
 	}
 
@@ -442,6 +494,81 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 		},
 		err: nil,
 	}
+}
+
+func resolveAlbumCover(audioPath, albumDir string, albumCovers *albumCoverCoordinator) string {
+	if !strings.EqualFold(filepath.Ext(audioPath), ".wav") {
+		coverPath := findCoverInDir(albumDir)
+		if coverPath == "" {
+			return extractCoverFromTrack(audioPath, albumDir)
+		}
+		return coverPath
+	}
+
+	resolve := func() string {
+		return resolveWAVAlbumCover(audioPath, albumDir)
+	}
+	if albumCovers == nil {
+		return resolve()
+	}
+	return albumCovers.resolve(albumDir, resolve)
+}
+
+func resolveWAVAlbumCover(_ string, albumDir string) string {
+	coverPath := findCoverInDir(albumDir)
+	if coverPath != "" && !isExtractedCoverPath(coverPath) {
+		return coverPath
+	}
+	return resolveDeterministicWAVAlbumExtractedCover(albumDir, coverPath)
+}
+
+func resolveDeterministicWAVAlbumExtractedCover(albumDir, existingCoverPath string) string {
+	wavTracks := findWAVTracksInAlbum(albumDir)
+	if len(wavTracks) == 0 {
+		return existingCoverPath
+	}
+
+	hadReadError := false
+	for _, audioPath := range wavTracks {
+		pic, err := embeddedPictureReader(audioPath)
+		if err != nil {
+			hadReadError = true
+			continue
+		}
+		if pic == nil || len(pic.Data) == 0 {
+			continue
+		}
+		if outPath := writeExtractedCover(albumDir, pic); outPath != "" {
+			removeStaleExtractedCoverOutputs(albumDir, outPath)
+			return outPath
+		}
+		return existingCoverPath
+	}
+
+	if hadReadError {
+		return existingCoverPath
+	}
+
+	if outPath := wavCoverExtractor(wavTracks[0], albumDir); outPath != "" {
+		removeStaleExtractedCoverOutputs(albumDir, outPath)
+		return outPath
+	}
+	return existingCoverPath
+}
+
+func findWAVTracksInAlbum(albumDir string) []string {
+	var wavTracks []string
+	_ = filepath.Walk(albumDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil || info.IsDir() {
+			return nil
+		}
+		if strings.EqualFold(filepath.Ext(path), ".wav") {
+			wavTracks = append(wavTracks, path)
+		}
+		return nil
+	})
+	sort.Strings(wavTracks)
+	return wavTracks
 }
 
 // collectResults collects results from workers and writes to database in batches.
@@ -767,6 +894,10 @@ func shouldRefreshWAVExtractedCover(audioPath, coverPath string) bool {
 	if !strings.EqualFold(filepath.Ext(audioPath), ".wav") {
 		return false
 	}
+	return isExtractedCoverPath(coverPath)
+}
+
+func isExtractedCoverPath(coverPath string) bool {
 	base := filepath.Base(coverPath)
 	return base == "extracted_cover.jpg" || base == "extracted_cover.png"
 }
@@ -784,25 +915,6 @@ func removeStaleExtractedCoverOutputs(albumDir, keepPath string) {
 		}
 		_ = os.Remove(path)
 	}
-}
-
-func refreshWAVExtractedCover(audioPath, albumDir, existingCoverPath string) (string, bool) {
-	pic, err := embeddedPictureReader(audioPath)
-	if err != nil {
-		return existingCoverPath, true
-	}
-	if pic != nil && len(pic.Data) > 0 {
-		if outPath := writeExtractedCover(albumDir, pic); outPath != "" {
-			removeStaleExtractedCoverOutputs(albumDir, outPath)
-			return outPath, true
-		}
-		return existingCoverPath, true
-	}
-	if outPath := wavCoverExtractor(audioPath, albumDir); outPath != "" {
-		removeStaleExtractedCoverOutputs(albumDir, outPath)
-		return outPath, true
-	}
-	return existingCoverPath, true
 }
 
 // extractCoverFromTrack reads embedded picture from the audio file and writes to albumDir/extracted_cover.<ext>.
