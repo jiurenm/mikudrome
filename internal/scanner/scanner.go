@@ -496,17 +496,9 @@ func processFileWithAlbumCoverCoordinator(job scanJob, mediaRoot string, albumCo
 	}
 }
 
-func resolveAlbumCover(audioPath, albumDir string, albumCovers *albumCoverCoordinator) string {
-	if !strings.EqualFold(filepath.Ext(audioPath), ".wav") {
-		coverPath := findCoverInDir(albumDir)
-		if coverPath == "" {
-			return extractCoverFromTrack(audioPath, albumDir)
-		}
-		return coverPath
-	}
-
+func resolveAlbumCover(_ string, albumDir string, albumCovers *albumCoverCoordinator) string {
 	resolve := func() string {
-		return resolveWAVAlbumCover(audioPath, albumDir)
+		return resolveDeterministicAlbumCover(albumDir)
 	}
 	if albumCovers == nil {
 		return resolve()
@@ -514,61 +506,64 @@ func resolveAlbumCover(audioPath, albumDir string, albumCovers *albumCoverCoordi
 	return albumCovers.resolve(albumDir, resolve)
 }
 
-func resolveWAVAlbumCover(_ string, albumDir string) string {
+func resolveDeterministicAlbumCover(albumDir string) string {
 	coverPath := findCoverInDir(albumDir)
 	if coverPath != "" && !isExtractedCoverPath(coverPath) {
 		return coverPath
 	}
-	return resolveDeterministicWAVAlbumExtractedCover(albumDir, coverPath)
-}
 
-func resolveDeterministicWAVAlbumExtractedCover(albumDir, existingCoverPath string) string {
-	wavTracks := findWAVTracksInAlbum(albumDir)
-	if len(wavTracks) == 0 {
-		return existingCoverPath
+	audioTracks := findAudioTracksInAlbum(albumDir)
+	if len(audioTracks) == 0 {
+		return coverPath
 	}
 
+	wavFallbackTrack := ""
 	hadReadError := false
-	for _, audioPath := range wavTracks {
+	for _, audioPath := range audioTracks {
 		pic, err := embeddedPictureReader(audioPath)
 		if err != nil {
 			hadReadError = true
 			continue
 		}
 		if pic == nil || len(pic.Data) == 0 {
+			if wavFallbackTrack == "" && strings.EqualFold(filepath.Ext(audioPath), ".wav") {
+				wavFallbackTrack = audioPath
+			}
 			continue
 		}
 		if outPath := writeExtractedCover(albumDir, pic); outPath != "" {
 			removeStaleExtractedCoverOutputs(albumDir, outPath)
 			return outPath
 		}
-		return existingCoverPath
+		return coverPath
 	}
 
 	if hadReadError {
-		return existingCoverPath
+		return coverPath
 	}
 
-	if outPath := wavCoverExtractor(wavTracks[0], albumDir); outPath != "" {
-		removeStaleExtractedCoverOutputs(albumDir, outPath)
-		return outPath
+	if wavFallbackTrack != "" {
+		if outPath := wavCoverExtractor(wavFallbackTrack, albumDir); outPath != "" {
+			removeStaleExtractedCoverOutputs(albumDir, outPath)
+			return outPath
+		}
 	}
-	return existingCoverPath
+	return coverPath
 }
 
-func findWAVTracksInAlbum(albumDir string) []string {
-	var wavTracks []string
+func findAudioTracksInAlbum(albumDir string) []string {
+	var audioTracks []string
 	_ = filepath.Walk(albumDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info == nil || info.IsDir() {
 			return nil
 		}
-		if strings.EqualFold(filepath.Ext(path), ".wav") {
-			wavTracks = append(wavTracks, path)
+		if AudioExts[strings.ToLower(filepath.Ext(path))] {
+			audioTracks = append(audioTracks, path)
 		}
 		return nil
 	})
-	sort.Strings(wavTracks)
-	return wavTracks
+	sort.Strings(audioTracks)
+	return audioTracks
 }
 
 // collectResults collects results from workers and writes to database in batches.
