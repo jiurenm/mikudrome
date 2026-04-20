@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
@@ -5,7 +7,6 @@ import '../api/api.dart';
 import '../models/track.dart';
 import '../models/video.dart';
 import '../services/playback_storage.dart';
-import '../theme/app_theme.dart';
 import '../theme/vocal_theme.dart';
 import '../widgets/now_playing_bar.dart';
 import '../widgets/player/pip_mini_player.dart';
@@ -25,6 +26,7 @@ import '../utils/responsive.dart';
 import '../widgets/mobile_player_sheet.dart';
 import '../widgets/mobile_more_screen.dart';
 import '../services/playlist_repository.dart';
+import '../services/web_audio_playback_controller.dart';
 import 'playlists_screen.dart';
 import 'playlist_detail_screen.dart';
 import 'favorites_screen.dart';
@@ -62,6 +64,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   PlaybackOrderMode _playbackOrderMode = PlaybackOrderMode.sequential;
   PlayerTogglePlayback _playerTogglePlayback = _noopTogglePlayback;
   PlayerSeekToFraction _playerSeekToFraction = _noopSeekToFraction;
+  late final WebAudioPlaybackController _webAudioPlaybackController;
 
   bool _restoredNotStarted = false;
   double? _resumeProgress;
@@ -70,6 +73,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   @override
   void initState() {
     super.initState();
+    _webAudioPlaybackController = WebAudioPlaybackController();
     _restorePlaybackState();
     PlaylistRepository.instance.initialize(ApiClient());
   }
@@ -93,9 +97,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
             saved.index < saved.queue.length
         ? saved.queue[saved.index]
         : null;
-    final elapsed = track != null
-        ? (track.durationSeconds * saved.progress).round()
-        : 0;
+    final elapsed =
+        track != null ? (track.durationSeconds * saved.progress).round() : 0;
     setState(() {
       _playerQueue = saved.queue;
       _playerIndex = saved.index;
@@ -207,6 +210,32 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   PlaybackMode _defaultModeForTrack(Track track) =>
       track.hasVideo ? PlaybackMode.video : PlaybackMode.audio;
 
+  bool get _canUseSharedWebAudio =>
+      _playbackMode == PlaybackMode.audio &&
+      _webAudioPlaybackController.isAvailable;
+
+  Future<void> _activateSharedWebAudioTrack(
+    Track track, {
+    double? progress,
+    bool autoplay = true,
+  }) async {
+    if (!_webAudioPlaybackController.isAvailable) {
+      return;
+    }
+    final initialPosition =
+        progress != null && progress > 0 && track.durationSeconds > 0
+            ? Duration(
+                milliseconds: (track.durationSeconds * 1000 * progress).round(),
+              )
+            : Duration.zero;
+    await _webAudioPlaybackController.activateTrack(
+      track: track,
+      url: ApiClient().streamAudioUrl(track.id),
+      initialPosition: initialPosition,
+      autoplay: autoplay,
+    );
+  }
+
   PlaybackMode _nextModeForTrack(Track track) {
     if (_playbackMode == PlaybackMode.video && !track.hasVideo) {
       return PlaybackMode.audio;
@@ -233,6 +262,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _resumeProgress = null;
     });
     _savePlaybackState();
+    if (_playbackMode == PlaybackMode.audio) {
+      unawaited(_activateSharedWebAudioTrack(selectedTrack));
+    }
   }
 
   void _selectPlayerTrack(int index, {bool showPlayer = true}) {
@@ -245,6 +277,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _isPlaying = true;
     });
     _savePlaybackState();
+    if (_canUseSharedWebAudio) {
+      unawaited(_activateSharedWebAudioTrack(nextTrack));
+    }
   }
 
   void _cyclePlaybackOrderMode() {
@@ -264,7 +299,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       PlaybackOrderMode.listLoop => _playerIndex > 0
           ? _playerIndex - 1
           : (_playerQueue.length > 1 ? _playerQueue.length - 1 : null),
-      PlaybackOrderMode.sequential || PlaybackOrderMode.singleLoop =>
+      PlaybackOrderMode.sequential ||
+      PlaybackOrderMode.singleLoop =>
         _playerIndex > 0 ? _playerIndex - 1 : null,
     };
     if (nextIndex == null) return;
@@ -275,6 +311,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _isPlaying = true;
     });
     _savePlaybackState();
+    if (_canUseSharedWebAudio) {
+      unawaited(_activateSharedWebAudioTrack(nextTrack));
+    }
   }
 
   void _playNext() {
@@ -283,7 +322,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       PlaybackOrderMode.listLoop => _playerIndex < _playerQueue.length - 1
           ? _playerIndex + 1
           : (_playerQueue.length > 1 ? 0 : null),
-      PlaybackOrderMode.sequential || PlaybackOrderMode.singleLoop =>
+      PlaybackOrderMode.sequential ||
+      PlaybackOrderMode.singleLoop =>
         _playerIndex < _playerQueue.length - 1 ? _playerIndex + 1 : null,
     };
     if (nextIndex == null) return;
@@ -294,6 +334,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _isPlaying = true;
     });
     _savePlaybackState();
+    if (_canUseSharedWebAudio) {
+      unawaited(_activateSharedWebAudioTrack(nextTrack));
+    }
   }
 
   Future<void> _togglePlayback() async {
@@ -322,6 +365,14 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _playbackMode = mode;
       _isPlaying = true;
     });
+    if (mode == PlaybackMode.audio && _webAudioPlaybackController.isAvailable) {
+      unawaited(
+        _activateSharedWebAudioTrack(
+          currentTrack,
+          progress: _playbackProgress,
+        ),
+      );
+    }
   }
 
   void _openCurrentPlayer() {
@@ -439,7 +490,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         track: syntheticTrack,
         queue: [syntheticTrack],
         index: 0,
-        contextLabel: 'MV Gallery / ${composer.isNotEmpty ? composer : video.title}',
+        contextLabel:
+            'MV Gallery / ${composer.isNotEmpty ? composer : video.title}',
       );
     }
   }
@@ -569,7 +621,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
                   playbackOrderMode: _playbackOrderMode,
                   onCyclePlaybackOrderMode: _cyclePlaybackOrderMode,
                   onPlaybackStateChanged: _updatePlaybackUi,
-                  onControlsReady: ({required togglePlayback, required seekToFraction}) {
+                  onControlsReady: (
+                      {required togglePlayback, required seekToFraction}) {
                     _registerPlayerControls(
                         togglePlayback: togglePlayback,
                         seekToFraction: seekToFraction);

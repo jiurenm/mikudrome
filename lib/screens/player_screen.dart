@@ -9,6 +9,8 @@ import '../models/track.dart';
 import '../services/lrc_parser.dart';
 import '../services/media_session_action_mapper.dart';
 import '../services/media_session_handler_binding.dart';
+import '../services/web_audio_player.dart';
+import '../services/web_audio_player_contract.dart';
 import '../services/web_media_session.dart';
 import '../services/web_media_session_contract.dart';
 import '../theme/app_theme.dart';
@@ -99,6 +101,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   int _activeLyricIndex = -1;
   Timer? _fullscreenChromeTimer;
   late final WebMediaSessionService _mediaSession;
+  late final WebAudioPlayer _webAudioPlayer;
   final _mediaSessionBinding = MediaSessionHandlerBinding();
   final _completionGate = PlaybackCompletionGate();
 
@@ -119,6 +122,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   bool get _isVideoMode => widget.playbackMode == PlaybackMode.video;
+  bool get _usesWebAudioPlayer => !_isVideoMode && _webAudioPlayer.isAvailable;
   bool get _canSwitchMode => _track.hasVideo && _track.hasAudio;
   String get _mediaUrl {
     if (_isVideoMode && _track.videoStreamOverrideUrl != null) {
@@ -138,9 +142,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
         : '';
   }
 
-  Duration get _position => _controller?.value.position ?? Duration.zero;
-  Duration get _duration => _controller?.value.duration ?? Duration.zero;
-  bool get _isPlaying => _controller?.value.isPlaying ?? false;
+  Duration get _position => _usesWebAudioPlayer
+      ? _webAudioPlayer.value.position
+      : _controller?.value.position ?? Duration.zero;
+  Duration get _duration => _usesWebAudioPlayer
+      ? _webAudioPlayer.value.duration
+      : _controller?.value.duration ?? Duration.zero;
+  bool get _isPlaying => _usesWebAudioPlayer
+      ? _webAudioPlayer.value.isPlaying
+      : _controller?.value.isPlaying ?? false;
   bool get _hasTimedLyrics => _timedLyrics.isNotEmpty;
   bool get _canSeekInMediaSession {
     final injected = widget.mediaSessionCanSeek;
@@ -172,6 +182,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void initState() {
     super.initState();
     _pendingSeekProgress = widget.initialProgress;
+    _webAudioPlayer = createWebAudioPlayer();
+    _webAudioPlayer.addListener(_handleWebAudioPlayerChanged);
     _mediaSession =
         widget.mediaSessionService ?? createWebMediaSessionService();
     _showQueue = !_track.hasVideo;
@@ -181,7 +193,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       seekToFraction: _seekTo,
     );
     if (widget.initializeControllerOnStart) {
-      _initializeController();
+      _initializePlayback();
     } else {
       _bindMediaSessionHandlers();
       _syncMediaSessionMetadata();
@@ -220,7 +232,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         oldWidget.playbackMode != widget.playbackMode ||
         oldWidget.baseUrl != widget.baseUrl;
     if (shouldReinitializeController) {
-      _initializeController();
+      _initializePlayback();
       return;
     }
 
@@ -243,7 +255,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _activeLyricIndex = -1;
   }
 
-  Future<void> _initializeController() async {
+  Future<void> _initializePlayback() async {
     _completionGate.reset();
     final previous = _controller;
     _controller = null;
@@ -253,12 +265,47 @@ class _PlayerScreenState extends State<PlayerScreen> {
       widget.onVideoControllerChanged?.call(null);
       await previous.dispose();
     }
+    if (!_usesWebAudioPlayer && _webAudioPlayer.isAvailable) {
+      await _webAudioPlayer.pause();
+    }
 
     if (mounted) {
       setState(() {
         _isInitializing = true;
         _error = null;
       });
+    }
+
+    if (_usesWebAudioPlayer) {
+      final pendingSeek = _pendingSeekProgress;
+      final initialPosition =
+          pendingSeek != null && pendingSeek > 0 && _track.durationSeconds > 0
+              ? Duration(
+                  milliseconds:
+                      (_track.durationSeconds * 1000 * pendingSeek).round(),
+                )
+              : Duration.zero;
+      _pendingSeekProgress = null;
+
+      await _webAudioPlayer.load(
+        url: _mediaUrl,
+        initialPosition: initialPosition,
+        autoplay: true,
+      );
+      _bindMediaSessionHandlers();
+      _syncMediaSessionMetadata();
+      if (!mounted) {
+        return;
+      }
+      final value = _webAudioPlayer.value;
+      if (value.isInitialized || value.errorDescription != null) {
+        setState(() {
+          _isInitializing = false;
+          _error = value.errorDescription;
+        });
+      }
+      _emitPlaybackState();
+      return;
     }
 
     final controller = VideoPlayerController.networkUrl(
@@ -414,6 +461,56 @@ class _PlayerScreenState extends State<PlayerScreen> {
     controller.addListener(_controllerListener!);
   }
 
+  void _handleWebAudioPlayerChanged() {
+    if (!mounted || !_usesWebAudioPlayer) {
+      return;
+    }
+
+    final value = _webAudioPlayer.value;
+    if (_isInitializing || _error != value.errorDescription) {
+      setState(() {
+        _isInitializing =
+            !(value.isInitialized || value.errorDescription != null);
+        _error = value.errorDescription;
+      });
+    }
+
+    final reachedEnd = didPlaybackReachEnd(
+      isCompleted: value.isCompleted,
+      isPlaying: value.isPlaying,
+      position: value.position,
+      duration: value.duration,
+    );
+    final completionCommand = _completionGate.take(
+      reachedEnd: reachedEnd,
+      command: resolvePlaybackCompletionCommand(
+        orderMode: widget.playbackOrderMode,
+        hasNext: _hasNext,
+      ),
+    );
+    if (completionCommand != null) {
+      switch (completionCommand) {
+        case PlaybackCompletionCommand.restartTrack:
+          unawaited(_restartWebAudioTrack());
+          return;
+        case PlaybackCompletionCommand.playNext:
+          widget.onNext();
+          return;
+        case PlaybackCompletionCommand.none:
+          break;
+      }
+    }
+
+    final nextActiveIndex = findActiveLyricIndex(_timedLyrics, value.position);
+    _emitPlaybackState();
+    if (nextActiveIndex == _activeLyricIndex) {
+      return;
+    }
+    setState(() {
+      _activeLyricIndex = nextActiveIndex;
+    });
+  }
+
   void _detachControllerListener(VideoPlayerController? controller) {
     if (controller != null && _controllerListener != null) {
       controller.removeListener(_controllerListener!);
@@ -439,6 +536,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       durationLabel: '--:--',
     );
     _controller?.dispose();
+    _webAudioPlayer.removeListener(_handleWebAudioPlayerChanged);
     super.dispose();
   }
 
@@ -447,6 +545,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _noopSeekToFraction(double _) async {}
 
   Future<void> _play() async {
+    if (_usesWebAudioPlayer) {
+      await _webAudioPlayer.play();
+      _emitPlaybackState();
+      if (mounted) setState(() {});
+      return;
+    }
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
     await controller.play();
@@ -455,6 +559,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _pause() async {
+    if (_usesWebAudioPlayer) {
+      await _webAudioPlayer.pause();
+      _emitPlaybackState();
+      if (mounted) setState(() {});
+      return;
+    }
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
     await controller.pause();
@@ -471,6 +581,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _seekTo(double value) async {
+    if (_usesWebAudioPlayer) {
+      final target = _duration * value;
+      await _webAudioPlayer.seekTo(target);
+      _emitPlaybackState();
+      return;
+    }
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
     final target = _duration * value;
@@ -522,6 +638,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
         }
       });
     });
+  }
+
+  Future<void> _restartWebAudioTrack() async {
+    await _webAudioPlayer.seekTo(Duration.zero);
+    if (!mounted || !_usesWebAudioPlayer) {
+      return;
+    }
+    await _webAudioPlayer.play();
+    _emitPlaybackState();
   }
 
   void _enterFullscreen() {
