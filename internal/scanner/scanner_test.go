@@ -103,6 +103,19 @@ func TestLookupTagPrefersRequestedAliasOrderDuringCaseInsensitiveFallback(t *tes
 	}
 }
 
+func TestLookupTagPrefersHigherPriorityAliasBeforeLowerPriorityExactMatch(t *testing.T) {
+	tags := map[string]string{
+		"Title": "preferred",
+		"INAM":  "fallback",
+	}
+
+	got := lookupTag(tags, "title", "INAM")
+
+	if got != "preferred" {
+		t.Fatalf("lookupTag returned %q, want %q", got, "preferred")
+	}
+}
+
 func TestProcessFileUsesWAVTagAliases(t *testing.T) {
 	tests := []struct {
 		name string

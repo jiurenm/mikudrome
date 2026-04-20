@@ -543,8 +543,6 @@ func lookupTag(tags map[string]string, keys ...string) string {
 				return value
 			}
 		}
-	}
-	for _, key := range keys {
 		normalizedKey := strings.ToLower(strings.TrimSpace(key))
 		for tagKey, tagValue := range tags {
 			if strings.ToLower(strings.TrimSpace(tagKey)) != normalizedKey {
