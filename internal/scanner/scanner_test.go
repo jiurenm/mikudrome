@@ -20,7 +20,7 @@ func TestRunFFprobeRequestsTask1Aliases(t *testing.T) {
 	ffprobePath := filepath.Join(tmpDir, "ffprobe")
 	script := `#!/bin/sh
 args="$*"
-for required in INAM IART IPRD TPE2 ITRK TPOS IPRT ICRD LYRICS album_artist albumartist date year; do
+for required in title INAM inam artist IART iart album IPRD iprd album_artist albumartist TPE2 tpe2 track ITRK itrk disc TPOS tpos IPRT iprt date year ICRD icrd lyrics LYRICS comment; do
 	case "$args" in
 		*"format_tags="*"$required"*) ;;
 		*)
@@ -169,6 +169,10 @@ func TestProcessFileUsesPlannedAliasAlternates(t *testing.T) {
 	tests := []struct {
 		name            string
 		tags            map[string]string
+		wantTitle       string
+		wantArtists     string
+		wantAlbum       string
+		wantTrack       int
 		wantAlbumArtist string
 		wantYear        int
 		wantDisc        int
@@ -184,6 +188,10 @@ func TestProcessFileUsesPlannedAliasAlternates(t *testing.T) {
 				"date":         "2012-03-14",
 				"TPOS":         "2/3",
 			},
+			wantTitle:       "Tell Your World",
+			wantArtists:     "livetune",
+			wantAlbum:       "Re:Dial",
+			wantTrack:       1,
 			wantAlbumArtist: "kz",
 			wantYear:        2012,
 			wantDisc:        2,
@@ -199,6 +207,10 @@ func TestProcessFileUsesPlannedAliasAlternates(t *testing.T) {
 				"year":        "2011",
 				"disc":        "3/5",
 			},
+			wantTitle:       "Unhappy Refrain",
+			wantArtists:     "wowaka",
+			wantAlbum:       "Unhappy Refrain",
+			wantTrack:       4,
 			wantAlbumArtist: "wowaka",
 			wantYear:        2011,
 			wantDisc:        3,
@@ -238,6 +250,18 @@ func TestProcessFileUsesPlannedAliasAlternates(t *testing.T) {
 
 			result := processFile(scanJob{audioPath: audioPath}, tmpDir)
 
+			if result.track.Title != tc.wantTitle {
+				t.Fatalf("title = %q, want %q", result.track.Title, tc.wantTitle)
+			}
+			if result.track.Artists != tc.wantArtists {
+				t.Fatalf("artists = %q, want %q", result.track.Artists, tc.wantArtists)
+			}
+			if result.album.Title != tc.wantAlbum {
+				t.Fatalf("album title = %q, want %q", result.album.Title, tc.wantAlbum)
+			}
+			if result.track.TrackNumber != tc.wantTrack {
+				t.Fatalf("track number = %d, want %d", result.track.TrackNumber, tc.wantTrack)
+			}
 			if result.album.AlbumArtist != tc.wantAlbumArtist {
 				t.Fatalf("album artist = %q, want %q", result.album.AlbumArtist, tc.wantAlbumArtist)
 			}
