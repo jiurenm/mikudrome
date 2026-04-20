@@ -29,7 +29,7 @@ var VideoExts = map[string]bool{
 var ThumbExts = []string{".jpg", ".jpeg", ".png", ".webp"}
 
 // CoverNames preferred filenames for album cover image (same dir as tracks).
-// extracted_cover.jpg is written when we extract from a track's embedded art.
+// extracted_cover.jpg or extracted_cover.png may be written when we extract art from a track.
 var CoverNames = []string{"Cover.jpg", "cover.jpg", "Jacket.jpg", "jacket.jpg", "folder.jpg", "Folder.jpg", "extracted_cover.jpg", "extracted_cover.png"}
 
 var (
@@ -711,7 +711,7 @@ func readMetadata(path string) (tag.Metadata, error) {
 }
 
 func readEmbeddedPicture(path string) (*tag.Picture, error) {
-	m, err := readMetadata(path)
+	m, err := metadataReader(path)
 	if err != nil {
 		return nil, err
 	}
@@ -736,7 +736,7 @@ func writeExtractedCover(albumDir string, pic *tag.Picture) string {
 	return outPath
 }
 
-// extractCoverFromTrack reads embedded picture from the audio file and writes to albumDir/extracted_cover.jpg.
+// extractCoverFromTrack reads embedded picture from the audio file and writes to albumDir/extracted_cover.<ext>.
 // Returns the path to the written file, or "" on failure.
 func extractCoverFromTrack(audioPath, albumDir string) string {
 	pic, err := embeddedPictureReader(audioPath)
@@ -754,6 +754,7 @@ func extractCoverFromTrack(audioPath, albumDir string) string {
 
 func extractCoverFromWAV(audioPath, albumDir string) string {
 	outPath := filepath.Join(albumDir, "extracted_cover.png")
+	_ = os.Remove(outPath)
 	cmd := exec.Command("ffmpeg",
 		"-y",
 		"-i", audioPath,
@@ -763,9 +764,11 @@ func extractCoverFromWAV(audioPath, albumDir string) string {
 		outPath,
 	)
 	if err := cmd.Run(); err != nil {
+		_ = os.Remove(outPath)
 		return ""
 	}
 	if _, err := os.Stat(outPath); err != nil {
+		_ = os.Remove(outPath)
 		return ""
 	}
 	return outPath

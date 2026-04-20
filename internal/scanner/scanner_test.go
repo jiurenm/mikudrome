@@ -176,8 +176,10 @@ func TestProcessFileUsesWAVTagAliases(t *testing.T) {
 				return 215, "24bit PCM_S24LE", tc.tags
 			}
 			metadataReader = func(path string) (tag.Metadata, error) {
-				t.Fatalf("metadataReader should not be called, got %q", path)
-				return nil, errors.New("unexpected metadata read")
+				if path != audioPath {
+					t.Fatalf("metadataReader path = %q, want %q", path, audioPath)
+				}
+				return fakeMetadata{}, nil
 			}
 			videoThumbFinder = func(path string) string {
 				if path != videoPath {
@@ -300,8 +302,10 @@ func TestProcessFileUsesPlannedAliasAlternates(t *testing.T) {
 				return 123, "16bit PCM_S16LE", tc.tags
 			}
 			metadataReader = func(path string) (tag.Metadata, error) {
-				t.Fatalf("metadataReader should not be called, got %q", path)
-				return nil, errors.New("unexpected metadata read")
+				if path != audioPath {
+					t.Fatalf("metadataReader path = %q, want %q", path, audioPath)
+				}
+				return fakeMetadata{}, nil
 			}
 			videoThumbFinder = func(path string) string {
 				t.Fatalf("videoThumbFinder should not be called, got %q", path)
@@ -544,6 +548,74 @@ exit 0
 	}
 }
 
+func TestExtractCoverFromWAVRemovesStaleOutputWhenFFmpegFails(t *testing.T) {
+	albumDir := t.TempDir()
+	audioPath := filepath.Join(albumDir, "coverless.wav")
+	if err := os.WriteFile(audioPath, []byte("RIFF"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ffmpegDir := t.TempDir()
+	outPath := filepath.Join(albumDir, "extracted_cover.png")
+	ffmpegPath := filepath.Join(ffmpegDir, "ffmpeg")
+	script := `#!/bin/sh
+if [ "$1" != "-y" ] || [ "$2" != "-i" ] || [ "$3" != "` + audioPath + `" ]; then
+	exit 9
+fi
+if [ "$4" != "-an" ] || [ "$5" != "-c:v" ] || [ "$6" != "png" ]; then
+	exit 9
+fi
+if [ "$7" != "-frames:v" ] || [ "$8" != "1" ]; then
+	exit 9
+fi
+if [ "$9" != "` + outPath + `" ]; then
+	exit 9
+fi
+printf stale-data > "$9"
+exit 7
+`
+	if err := os.WriteFile(ffmpegPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake ffmpeg: %v", err)
+	}
+	if err := os.WriteFile(outPath, []byte("old-data"), 0o644); err != nil {
+		t.Fatalf("seed stale output: %v", err)
+	}
+
+	origPath := os.Getenv("PATH")
+	t.Setenv("PATH", ffmpegDir+string(os.PathListSeparator)+origPath)
+
+	got := extractCoverFromWAV(audioPath, albumDir)
+
+	if got != "" {
+		t.Fatalf("cover path = %q, want empty path when ffmpeg exits non-zero", got)
+	}
+	if _, err := os.Stat(outPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected stale output to be removed, stat err = %v", err)
+	}
+}
+
+func TestReadEmbeddedPictureUsesMetadataReaderSeam(t *testing.T) {
+	restoreSeams := stubScannerSeams()
+	defer restoreSeams()
+
+	wantPath := filepath.Join(t.TempDir(), "coverless.wav")
+	wantPic := &tag.Picture{Ext: "png", Data: []byte("png")}
+	metadataReader = func(gotPath string) (tag.Metadata, error) {
+		if gotPath != wantPath {
+			t.Fatalf("metadataReader path = %q, want %q", gotPath, wantPath)
+		}
+		return fakeMetadata{picture: wantPic}, nil
+	}
+
+	got, err := readEmbeddedPicture(wantPath)
+	if err != nil {
+		t.Fatalf("readEmbeddedPicture error = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, wantPic) {
+		t.Fatalf("picture = %#v, want %#v", got, wantPic)
+	}
+}
+
 func TestStubScannerSeamsRestoresAllScannerSeams(t *testing.T) {
 	origFFprobeRunner := ffprobeRunner
 	origMetadataReader := metadataReader
@@ -604,3 +676,23 @@ func mapsKeys(values map[string]bool) []string {
 	slices.Sort(keys)
 	return keys
 }
+
+type fakeMetadata struct {
+	picture *tag.Picture
+}
+
+func (m fakeMetadata) Format() tag.Format              { return tag.UnknownFormat }
+func (m fakeMetadata) FileType() tag.FileType         { return tag.UnknownFileType }
+func (m fakeMetadata) Title() string                  { return "" }
+func (m fakeMetadata) Album() string                  { return "" }
+func (m fakeMetadata) Artist() string                 { return "" }
+func (m fakeMetadata) AlbumArtist() string            { return "" }
+func (m fakeMetadata) Composer() string               { return "" }
+func (m fakeMetadata) Year() int                      { return 0 }
+func (m fakeMetadata) Genre() string                  { return "" }
+func (m fakeMetadata) Track() (int, int)              { return 0, 0 }
+func (m fakeMetadata) Disc() (int, int)               { return 0, 0 }
+func (m fakeMetadata) Picture() *tag.Picture          { return m.picture }
+func (m fakeMetadata) Lyrics() string                 { return "" }
+func (m fakeMetadata) Comment() string                { return "" }
+func (m fakeMetadata) Raw() map[string]interface{}    { return nil }
