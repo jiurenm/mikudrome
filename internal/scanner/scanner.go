@@ -740,10 +740,11 @@ func writeExtractedCover(albumDir string, pic *tag.Picture) string {
 // Returns the path to the written file, or "" on failure.
 func extractCoverFromTrack(audioPath, albumDir string) string {
 	pic, err := embeddedPictureReader(audioPath)
-	if err == nil {
-		if pic != nil && len(pic.Data) > 0 {
-			return writeExtractedCover(albumDir, pic)
-		}
+	if err != nil {
+		return ""
+	}
+	if pic != nil && len(pic.Data) > 0 {
+		return writeExtractedCover(albumDir, pic)
 	}
 	if strings.EqualFold(filepath.Ext(audioPath), ".wav") {
 		return wavCoverExtractor(audioPath, albumDir)
