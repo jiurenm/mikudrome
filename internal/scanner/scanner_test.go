@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -447,14 +448,151 @@ func TestExtractCoverFromTrackDoesNotFallBackWhenEmbeddedArtWriteFails(t *testin
 	}
 }
 
+func TestExtractCoverFromWAVUsesFFmpegFromPATHAndRequiresOutputFile(t *testing.T) {
+	albumDir := t.TempDir()
+	audioPath := filepath.Join(albumDir, "coverless.wav")
+	if err := os.WriteFile(audioPath, []byte("RIFF"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ffmpegDir := t.TempDir()
+	outPath := filepath.Join(albumDir, "extracted_cover.png")
+	ffmpegPath := filepath.Join(ffmpegDir, "ffmpeg")
+	script := `#!/bin/sh
+if [ "$1" != "-y" ]; then
+	echo "arg1=$1" >&2
+	exit 9
+fi
+if [ "$2" != "-i" ]; then
+	echo "arg2=$2" >&2
+	exit 9
+fi
+if [ "$3" != "` + audioPath + `" ]; then
+	echo "input=$3" >&2
+	exit 9
+fi
+if [ "$4" != "-an" ]; then
+	echo "arg4=$4" >&2
+	exit 9
+fi
+if [ "$5" != "-c:v" ] || [ "$6" != "png" ]; then
+	echo "codec=$5,$6" >&2
+	exit 9
+fi
+if [ "$7" != "-frames:v" ] || [ "$8" != "1" ]; then
+	echo "frames=$7,$8" >&2
+	exit 9
+fi
+if [ "$9" != "` + outPath + `" ]; then
+	echo "output=$9" >&2
+	exit 9
+fi
+printf png-data > "$9"
+`
+	if err := os.WriteFile(ffmpegPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake ffmpeg: %v", err)
+	}
+
+	origPath := os.Getenv("PATH")
+	t.Setenv("PATH", ffmpegDir+string(os.PathListSeparator)+origPath)
+
+	got := extractCoverFromWAV(audioPath, albumDir)
+
+	if got != outPath {
+		t.Fatalf("cover path = %q, want %q", got, outPath)
+	}
+	if _, err := os.Stat(outPath); err != nil {
+		t.Fatalf("expected extracted cover to exist after ffmpeg run: %v", err)
+	}
+}
+
+func TestExtractCoverFromWAVReturnsEmptyWhenFFmpegDoesNotCreateOutput(t *testing.T) {
+	albumDir := t.TempDir()
+	audioPath := filepath.Join(albumDir, "coverless.wav")
+	if err := os.WriteFile(audioPath, []byte("RIFF"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ffmpegDir := t.TempDir()
+	ffmpegPath := filepath.Join(ffmpegDir, "ffmpeg")
+	script := `#!/bin/sh
+if [ "$1" != "-y" ] || [ "$2" != "-i" ] || [ "$3" != "` + audioPath + `" ]; then
+	exit 9
+fi
+if [ "$4" != "-an" ] || [ "$5" != "-c:v" ] || [ "$6" != "png" ]; then
+	exit 9
+fi
+if [ "$7" != "-frames:v" ] || [ "$8" != "1" ]; then
+	exit 9
+fi
+if [ "$9" != "` + filepath.Join(albumDir, "extracted_cover.png") + `" ]; then
+	exit 9
+fi
+exit 0
+`
+	if err := os.WriteFile(ffmpegPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake ffmpeg: %v", err)
+	}
+
+	origPath := os.Getenv("PATH")
+	t.Setenv("PATH", ffmpegDir+string(os.PathListSeparator)+origPath)
+
+	got := extractCoverFromWAV(audioPath, albumDir)
+
+	if got != "" {
+		t.Fatalf("cover path = %q, want empty path when ffmpeg does not create output", got)
+	}
+}
+
+func TestStubScannerSeamsRestoresAllScannerSeams(t *testing.T) {
+	origFFprobeRunner := ffprobeRunner
+	origMetadataReader := metadataReader
+	origVideoThumbFinder := videoThumbFinder
+	origEmbeddedPictureReader := embeddedPictureReader
+	origWAVCoverExtractor := wavCoverExtractor
+
+	restoreSeams := stubScannerSeams()
+
+	ffprobeRunner = func(string) (int, string, map[string]string) { return 1, "changed", nil }
+	metadataReader = func(string) (tag.Metadata, error) { return nil, errors.New("changed") }
+	videoThumbFinder = func(string) string { return "changed" }
+	embeddedPictureReader = func(string) (*tag.Picture, error) { return &tag.Picture{Ext: "png", Data: []byte("changed")}, nil }
+	wavCoverExtractor = func(string, string) string { return "changed" }
+
+	restoreSeams()
+
+	if ffprobeRunner == nil || metadataReader == nil || videoThumbFinder == nil || embeddedPictureReader == nil || wavCoverExtractor == nil {
+		t.Fatal("expected all seams to be restored to non-nil functions")
+	}
+	if reflect.ValueOf(ffprobeRunner).Pointer() != reflect.ValueOf(origFFprobeRunner).Pointer() {
+		t.Fatal("ffprobeRunner was not restored")
+	}
+	if reflect.ValueOf(metadataReader).Pointer() != reflect.ValueOf(origMetadataReader).Pointer() {
+		t.Fatal("metadataReader was not restored")
+	}
+	if reflect.ValueOf(videoThumbFinder).Pointer() != reflect.ValueOf(origVideoThumbFinder).Pointer() {
+		t.Fatal("videoThumbFinder was not restored")
+	}
+	if reflect.ValueOf(embeddedPictureReader).Pointer() != reflect.ValueOf(origEmbeddedPictureReader).Pointer() {
+		t.Fatal("embeddedPictureReader was not restored")
+	}
+	if reflect.ValueOf(wavCoverExtractor).Pointer() != reflect.ValueOf(origWAVCoverExtractor).Pointer() {
+		t.Fatal("wavCoverExtractor was not restored")
+	}
+}
+
 func stubScannerSeams() func() {
 	origFFprobeRunner := ffprobeRunner
 	origMetadataReader := metadataReader
 	origVideoThumbFinder := videoThumbFinder
+	origEmbeddedPictureReader := embeddedPictureReader
+	origWAVCoverExtractor := wavCoverExtractor
 	return func() {
 		ffprobeRunner = origFFprobeRunner
 		metadataReader = origMetadataReader
 		videoThumbFinder = origVideoThumbFinder
+		embeddedPictureReader = origEmbeddedPictureReader
+		wavCoverExtractor = origWAVCoverExtractor
 	}
 }
 
