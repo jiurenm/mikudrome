@@ -33,9 +33,11 @@ var ThumbExts = []string{".jpg", ".jpeg", ".png", ".webp"}
 var CoverNames = []string{"Cover.jpg", "cover.jpg", "Jacket.jpg", "jacket.jpg", "folder.jpg", "Folder.jpg", "extracted_cover.jpg", "extracted_cover.png"}
 
 var (
-	ffprobeRunner    = runFFprobe
-	metadataReader   = readMetadata
-	videoThumbFinder = findOrExtractVideoThumb
+	ffprobeRunner         = runFFprobe
+	metadataReader        = readMetadata
+	videoThumbFinder      = findOrExtractVideoThumb
+	embeddedPictureReader = readEmbeddedPicture
+	wavCoverExtractor     = extractCoverFromWAV
 )
 
 // scanJob represents a file to be processed.
@@ -708,19 +710,15 @@ func readMetadata(path string) (tag.Metadata, error) {
 	return tag.ReadFrom(f)
 }
 
-// extractCoverFromTrack reads embedded picture from the audio file and writes to albumDir/extracted_cover.jpg.
-// Returns the path to the written file, or "" on failure.
-func extractCoverFromTrack(audioPath, albumDir string) string {
-	f, err := os.Open(audioPath)
+func readEmbeddedPicture(path string) (*tag.Picture, error) {
+	m, err := readMetadata(path)
 	if err != nil {
-		return ""
+		return nil, err
 	}
-	defer f.Close()
-	m, err := tag.ReadFrom(f)
-	if err != nil {
-		return ""
-	}
-	pic := m.Picture()
+	return m.Picture(), nil
+}
+
+func writeExtractedCover(albumDir string, pic *tag.Picture) string {
 	if pic == nil || len(pic.Data) == 0 {
 		return ""
 	}
@@ -732,7 +730,41 @@ func extractCoverFromTrack(audioPath, albumDir string) string {
 		ext = "jpg"
 	}
 	outPath := filepath.Join(albumDir, "extracted_cover."+ext)
-	if err := os.WriteFile(outPath, pic.Data, 0644); err != nil {
+	if err := os.WriteFile(outPath, pic.Data, 0o644); err != nil {
+		return ""
+	}
+	return outPath
+}
+
+// extractCoverFromTrack reads embedded picture from the audio file and writes to albumDir/extracted_cover.jpg.
+// Returns the path to the written file, or "" on failure.
+func extractCoverFromTrack(audioPath, albumDir string) string {
+	pic, err := embeddedPictureReader(audioPath)
+	if err == nil {
+		if outPath := writeExtractedCover(albumDir, pic); outPath != "" {
+			return outPath
+		}
+	}
+	if strings.EqualFold(filepath.Ext(audioPath), ".wav") {
+		return wavCoverExtractor(audioPath, albumDir)
+	}
+	return ""
+}
+
+func extractCoverFromWAV(audioPath, albumDir string) string {
+	outPath := filepath.Join(albumDir, "extracted_cover.png")
+	cmd := exec.Command("ffmpeg",
+		"-y",
+		"-i", audioPath,
+		"-an",
+		"-c:v", "png",
+		"-frames:v", "1",
+		outPath,
+	)
+	if err := cmd.Run(); err != nil {
+		return ""
+	}
+	if _, err := os.Stat(outPath); err != nil {
 		return ""
 	}
 	return outPath

@@ -337,6 +337,38 @@ func TestProcessFileUsesPlannedAliasAlternates(t *testing.T) {
 	}
 }
 
+func TestExtractCoverFromTrackFallsBackForWAV(t *testing.T) {
+	albumDir := t.TempDir()
+	audioPath := filepath.Join(albumDir, "coverless.wav")
+	if err := os.WriteFile(audioPath, []byte("RIFF"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	restorePictureReader := embeddedPictureReader
+	restoreWAVFallback := wavCoverExtractor
+	t.Cleanup(func() {
+		embeddedPictureReader = restorePictureReader
+		wavCoverExtractor = restoreWAVFallback
+	})
+
+	embeddedPictureReader = func(string) (*tag.Picture, error) {
+		return nil, nil
+	}
+	wavCoverExtractor = func(audioPath, albumDir string) string {
+		out := filepath.Join(albumDir, "extracted_cover.png")
+		if err := os.WriteFile(out, []byte("png"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+
+	got := extractCoverFromTrack(audioPath, albumDir)
+	want := filepath.Join(albumDir, "extracted_cover.png")
+	if got != want {
+		t.Fatalf("cover path = %q, want %q", got, want)
+	}
+}
+
 func stubScannerSeams() func() {
 	origFFprobeRunner := ffprobeRunner
 	origMetadataReader := metadataReader
