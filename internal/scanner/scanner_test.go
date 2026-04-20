@@ -463,6 +463,162 @@ func TestProcessFileRefreshesStaleCrossFormatExtractedCoverForWAV(t *testing.T) 
 	}
 }
 
+func TestProcessFilePreservesExistingExtractedCoverWhenRefreshReplacementFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	restoreSeams := stubScannerSeams()
+	defer restoreSeams()
+
+	albumDir := filepath.Join(tmpDir, "artist-folder", "album-folder")
+	if err := os.MkdirAll(albumDir, 0o755); err != nil {
+		t.Fatalf("mkdir album dir: %v", err)
+	}
+	audioPath := filepath.Join(albumDir, "coverless.wav")
+	if err := os.WriteFile(audioPath, []byte("RIFF"), 0o644); err != nil {
+		t.Fatalf("write audio file: %v", err)
+	}
+
+	existingCoverPath := filepath.Join(albumDir, "extracted_cover.jpg")
+	existingCoverData := []byte("existing-jpg")
+	if err := os.WriteFile(existingCoverPath, existingCoverData, 0o644); err != nil {
+		t.Fatalf("seed existing extracted cover: %v", err)
+	}
+
+	ffprobeRunner = func(path string) (int, string, map[string]string) {
+		if path != audioPath {
+			t.Fatalf("ffprobe path = %q, want %q", path, audioPath)
+		}
+		return 0, "", nil
+	}
+	metadataReader = func(path string) (tag.Metadata, error) {
+		if path != audioPath {
+			t.Fatalf("metadataReader path = %q, want %q", path, audioPath)
+		}
+		return fakeMetadata{}, nil
+	}
+
+	embeddedReads := 0
+	embeddedPictureReader = func(path string) (*tag.Picture, error) {
+		embeddedReads++
+		if path != audioPath {
+			t.Fatalf("embeddedPictureReader path = %q, want %q", path, audioPath)
+		}
+		return &tag.Picture{Ext: "png", Data: []byte("replacement-png")}, nil
+	}
+	wavFallbackCalls := 0
+	wavCoverExtractor = func(gotAudioPath, gotAlbumDir string) string {
+		wavFallbackCalls++
+		t.Fatalf("wavCoverExtractor should not be called when embedded art exists; got audioPath=%q albumDir=%q", gotAudioPath, gotAlbumDir)
+		return ""
+	}
+	videoThumbFinder = func(path string) string {
+		t.Fatalf("videoThumbFinder should not be called, got %q", path)
+		return ""
+	}
+
+	if err := os.Chmod(albumDir, 0o555); err != nil {
+		t.Fatalf("chmod album dir read-only: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(albumDir, 0o755)
+	})
+
+	result := processFile(scanJob{audioPath: audioPath}, tmpDir)
+
+	if result.album.CoverPath != existingCoverPath {
+		t.Fatalf("cover path = %q, want preserved existing path %q", result.album.CoverPath, existingCoverPath)
+	}
+	if embeddedReads != 1 {
+		t.Fatalf("embeddedPictureReader calls = %d, want %d", embeddedReads, 1)
+	}
+	if wavFallbackCalls != 0 {
+		t.Fatalf("wavCoverExtractor calls = %d, want %d", wavFallbackCalls, 0)
+	}
+	data, err := os.ReadFile(existingCoverPath)
+	if err != nil {
+		t.Fatalf("read existing cover after failed refresh: %v", err)
+	}
+	if string(data) != string(existingCoverData) {
+		t.Fatalf("existing cover data = %q, want %q", string(data), string(existingCoverData))
+	}
+}
+
+func TestProcessFileAvoidsDuplicateRefreshAttemptsWhenWAVRefreshFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	restoreSeams := stubScannerSeams()
+	defer restoreSeams()
+
+	albumDir := filepath.Join(tmpDir, "artist-folder", "album-folder")
+	if err := os.MkdirAll(albumDir, 0o755); err != nil {
+		t.Fatalf("mkdir album dir: %v", err)
+	}
+	audioPath := filepath.Join(albumDir, "coverless.wav")
+	if err := os.WriteFile(audioPath, []byte("RIFF"), 0o644); err != nil {
+		t.Fatalf("write audio file: %v", err)
+	}
+
+	existingCoverPath := filepath.Join(albumDir, "extracted_cover.png")
+	existingCoverData := []byte("existing-png")
+	if err := os.WriteFile(existingCoverPath, existingCoverData, 0o644); err != nil {
+		t.Fatalf("seed existing extracted cover: %v", err)
+	}
+
+	ffprobeRunner = func(path string) (int, string, map[string]string) {
+		if path != audioPath {
+			t.Fatalf("ffprobe path = %q, want %q", path, audioPath)
+		}
+		return 0, "", nil
+	}
+	metadataReader = func(path string) (tag.Metadata, error) {
+		if path != audioPath {
+			t.Fatalf("metadataReader path = %q, want %q", path, audioPath)
+		}
+		return fakeMetadata{}, nil
+	}
+
+	embeddedReads := 0
+	embeddedPictureReader = func(path string) (*tag.Picture, error) {
+		embeddedReads++
+		if path != audioPath {
+			t.Fatalf("embeddedPictureReader path = %q, want %q", path, audioPath)
+		}
+		return nil, nil
+	}
+	wavFallbackCalls := 0
+	wavCoverExtractor = func(gotAudioPath, gotAlbumDir string) string {
+		wavFallbackCalls++
+		if gotAudioPath != audioPath {
+			t.Fatalf("wavCoverExtractor audioPath = %q, want %q", gotAudioPath, audioPath)
+		}
+		if gotAlbumDir != albumDir {
+			t.Fatalf("wavCoverExtractor albumDir = %q, want %q", gotAlbumDir, albumDir)
+		}
+		return ""
+	}
+	videoThumbFinder = func(path string) string {
+		t.Fatalf("videoThumbFinder should not be called, got %q", path)
+		return ""
+	}
+
+	result := processFile(scanJob{audioPath: audioPath}, tmpDir)
+
+	if result.album.CoverPath != existingCoverPath {
+		t.Fatalf("cover path = %q, want preserved existing path %q", result.album.CoverPath, existingCoverPath)
+	}
+	if embeddedReads != 1 {
+		t.Fatalf("embeddedPictureReader calls = %d, want %d", embeddedReads, 1)
+	}
+	if wavFallbackCalls != 1 {
+		t.Fatalf("wavCoverExtractor calls = %d, want %d", wavFallbackCalls, 1)
+	}
+	data, err := os.ReadFile(existingCoverPath)
+	if err != nil {
+		t.Fatalf("read existing cover after failed wav refresh: %v", err)
+	}
+	if string(data) != string(existingCoverData) {
+		t.Fatalf("existing cover data = %q, want %q", string(data), string(existingCoverData))
+	}
+}
+
 func TestExtractCoverFromTrackDoesNotFallBackWhenEmbeddedArtReadFails(t *testing.T) {
 	albumDir := t.TempDir()
 	audioPath := filepath.Join(albumDir, "cover-error.wav")
@@ -538,6 +694,27 @@ func TestExtractCoverFromTrackDoesNotFallBackWhenEmbeddedArtWriteFails(t *testin
 	}
 	if wavFallbackCalled {
 		t.Fatal("wav fallback was called")
+	}
+}
+
+func TestWriteExtractedCoverNormalizesJPEGExtensionToJPG(t *testing.T) {
+	albumDir := t.TempDir()
+
+	got := writeExtractedCover(albumDir, &tag.Picture{
+		Ext:  "jpeg",
+		Data: []byte("jpeg-data"),
+	})
+
+	want := filepath.Join(albumDir, "extracted_cover.jpg")
+	if got != want {
+		t.Fatalf("cover path = %q, want %q", got, want)
+	}
+	data, err := os.ReadFile(want)
+	if err != nil {
+		t.Fatalf("read written jpg: %v", err)
+	}
+	if string(data) != "jpeg-data" {
+		t.Fatalf("cover data = %q, want %q", string(data), "jpeg-data")
 	}
 }
 

@@ -395,9 +395,12 @@ func processFile(job scanJob, mediaRoot string) scanResult {
 
 		coverPath = findCoverInDir(albumDir)
 		if shouldRefreshWAVExtractedCover(audioPath, coverPath) {
-			coverPath = refreshWAVExtractedCover(audioPath, albumDir, coverPath)
-		}
-		if coverPath == "" {
+			var refreshAttempted bool
+			coverPath, refreshAttempted = refreshWAVExtractedCover(audioPath, albumDir, coverPath)
+			if !refreshAttempted && coverPath == "" {
+				coverPath = extractCoverFromTrack(audioPath, albumDir)
+			}
+		} else if coverPath == "" {
 			coverPath = extractCoverFromTrack(audioPath, albumDir)
 		}
 		avatarPath = findArtistAvatar(artistDir)
@@ -725,15 +728,36 @@ func writeExtractedCover(albumDir string, pic *tag.Picture) string {
 	if pic == nil || len(pic.Data) == 0 {
 		return ""
 	}
-	ext := "jpg"
-	if pic.Ext != "" {
-		ext = pic.Ext
-	}
-	if ext != "jpg" && ext != "jpeg" && ext != "png" {
+	ext := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(pic.Ext), "."))
+	switch ext {
+	case "", "jpg", "jpeg":
+		ext = "jpg"
+	case "png":
+	default:
 		ext = "jpg"
 	}
 	outPath := filepath.Join(albumDir, "extracted_cover."+ext)
-	if err := os.WriteFile(outPath, pic.Data, 0o644); err != nil {
+	tmpFile, err := os.CreateTemp(albumDir, "extracted_cover-*."+ext+".tmp")
+	if err != nil {
+		return ""
+	}
+	tmpPath := tmpFile.Name()
+	if _, err := tmpFile.Write(pic.Data); err != nil {
+		tmpFile.Close()
+		_ = os.Remove(tmpPath)
+		return ""
+	}
+	if err := tmpFile.Chmod(0o644); err != nil {
+		tmpFile.Close()
+		_ = os.Remove(tmpPath)
+		return ""
+	}
+	if err := tmpFile.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return ""
+	}
+	if err := os.Rename(tmpPath, outPath); err != nil {
+		_ = os.Remove(tmpPath)
 		return ""
 	}
 	return outPath
@@ -752,23 +776,33 @@ func removeExtractedCoverOutputs(albumDir string) {
 	_ = os.Remove(filepath.Join(albumDir, "extracted_cover.png"))
 }
 
-func refreshWAVExtractedCover(audioPath, albumDir, existingCoverPath string) string {
+func removeStaleExtractedCoverOutputs(albumDir, keepPath string) {
+	for _, name := range []string{"extracted_cover.jpg", "extracted_cover.png"} {
+		path := filepath.Join(albumDir, name)
+		if path == keepPath {
+			continue
+		}
+		_ = os.Remove(path)
+	}
+}
+
+func refreshWAVExtractedCover(audioPath, albumDir, existingCoverPath string) (string, bool) {
 	pic, err := embeddedPictureReader(audioPath)
 	if err != nil {
-		return existingCoverPath
+		return existingCoverPath, true
 	}
 	if pic != nil && len(pic.Data) > 0 {
-		removeExtractedCoverOutputs(albumDir)
 		if outPath := writeExtractedCover(albumDir, pic); outPath != "" {
-			return outPath
+			removeStaleExtractedCoverOutputs(albumDir, outPath)
+			return outPath, true
 		}
-		return existingCoverPath
+		return existingCoverPath, true
 	}
-	removeExtractedCoverOutputs(albumDir)
 	if outPath := wavCoverExtractor(audioPath, albumDir); outPath != "" {
-		return outPath
+		removeStaleExtractedCoverOutputs(albumDir, outPath)
+		return outPath, true
 	}
-	return ""
+	return existingCoverPath, true
 }
 
 // extractCoverFromTrack reads embedded picture from the audio file and writes to albumDir/extracted_cover.<ext>.
