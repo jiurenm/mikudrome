@@ -518,11 +518,13 @@ func resolveDeterministicAlbumCover(albumDir string) string {
 	}
 
 	wavFallbackTrack := ""
-	hadReadError := false
+	hadWAVReadError := false
 	for _, audioPath := range audioTracks {
 		pic, err := embeddedPictureReader(audioPath)
 		if err != nil {
-			hadReadError = true
+			if strings.EqualFold(filepath.Ext(audioPath), ".wav") {
+				hadWAVReadError = true
+			}
 			continue
 		}
 		if pic == nil || len(pic.Data) == 0 {
@@ -538,7 +540,7 @@ func resolveDeterministicAlbumCover(albumDir string) string {
 		return coverPath
 	}
 
-	if hadReadError {
+	if hadWAVReadError {
 		return coverPath
 	}
 
