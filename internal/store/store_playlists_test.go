@@ -108,6 +108,95 @@ func TestFavorites_CascadeOnTrackDelete(t *testing.T) {
 	_ = os.Getenv
 }
 
+func TestBatchInserterFlushUpsertsExistingAlbumWithoutForeignKeyFailure(t *testing.T) {
+	s := newTestStore(t)
+
+	albumID, err := s.UpsertAlbum("Existing Album", "/old-cover.jpg", 0, "")
+	if err != nil {
+		t.Fatalf("UpsertAlbum: %v", err)
+	}
+	if err := s.UpsertTrack("Old Track", "/old.flac", "", "", albumID, 1, 1, "", 0, 0, ""); err != nil {
+		t.Fatalf("UpsertTrack: %v", err)
+	}
+
+	batch, err := s.BeginBatch(1)
+	if err != nil {
+		t.Fatalf("BeginBatch: %v", err)
+	}
+
+	if err := batch.Add(
+		Track{Title: "New Track", AudioPath: "/new.flac", DiscNumber: 1, TrackNumber: 2},
+		Album{Title: "Existing Album", CoverPath: "/new-cover.jpg"},
+		Producer{},
+	); err != nil {
+		t.Fatalf("batch.Add: %v", err)
+	}
+	if err := batch.Close(); err != nil {
+		t.Fatalf("batch.Close: %v", err)
+	}
+
+	var trackCount int
+	if err := s.db.QueryRow(`
+		SELECT COUNT(*)
+		FROM tracks t
+		INNER JOIN albums a ON a.id = t.album_id
+		WHERE a.title = ?
+	`, "Existing Album").Scan(&trackCount); err != nil {
+		t.Fatalf("count album tracks: %v", err)
+	}
+	if trackCount != 2 {
+		t.Fatalf("trackCount = %d, want %d", trackCount, 2)
+	}
+}
+
+func TestBatchInserterFlushUpsertsExistingTrackWithoutDeletingPlaylistItems(t *testing.T) {
+	s := newTestStore(t)
+
+	trackID := seedTrack(t, s, "Track A", "/a.flac")
+	playlistID, err := s.CreatePlaylist("Mix")
+	if err != nil {
+		t.Fatalf("CreatePlaylist: %v", err)
+	}
+	if _, err := s.AddTracksToPlaylist(playlistID, []int64{trackID}); err != nil {
+		t.Fatalf("AddTracksToPlaylist: %v", err)
+	}
+
+	batch, err := s.BeginBatch(1)
+	if err != nil {
+		t.Fatalf("BeginBatch: %v", err)
+	}
+
+	if err := batch.Add(
+		Track{Title: "Track A Updated", AudioPath: "/a.flac", DiscNumber: 1, TrackNumber: 1},
+		Album{Title: "Updated Album", CoverPath: "/updated-cover.jpg"},
+		Producer{},
+	); err != nil {
+		t.Fatalf("batch.Add: %v", err)
+	}
+	if err := batch.Close(); err != nil {
+		t.Fatalf("batch.Close: %v", err)
+	}
+
+	var gotTrackID int64
+	if err := s.db.QueryRow(`SELECT id FROM tracks WHERE audio_path = ?`, "/a.flac").Scan(&gotTrackID); err != nil {
+		t.Fatalf("select updated track id: %v", err)
+	}
+	if gotTrackID != trackID {
+		t.Fatalf("track ID changed from %d to %d", trackID, gotTrackID)
+	}
+
+	detail, ok, err := s.GetPlaylistDetail(playlistID)
+	if err != nil || !ok {
+		t.Fatalf("GetPlaylistDetail ok=%v err=%v", ok, err)
+	}
+	if len(detail.Groups) != 1 || len(detail.Groups[0].Items) != 1 {
+		t.Fatalf("playlist items were not preserved: %+v", detail.Groups)
+	}
+	if detail.Groups[0].Items[0].TrackID != trackID {
+		t.Fatalf("playlist item trackID = %d, want %d", detail.Groups[0].Items[0].TrackID, trackID)
+	}
+}
+
 // --- Task 3: Playlist CRUD ---
 
 func TestPlaylist_CRUD(t *testing.T) {

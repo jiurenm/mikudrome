@@ -73,6 +73,7 @@ class Sidebar extends StatelessWidget {
         _navIconOnly(ShellRoute.playlists, Icons.queue_music),
         _navIconOnly(ShellRoute.favorites, Icons.favorite_border),
         _navIconOnly(ShellRoute.localMv, Icons.movie_outlined),
+        _navIconOnly(ShellRoute.more, Icons.more_horiz),
       ],
     );
   }
@@ -121,6 +122,7 @@ class Sidebar extends StatelessWidget {
           _navItem(ShellRoute.playlists, Icons.queue_music, 'Playlists'),
           _navItem(ShellRoute.favorites, Icons.favorite_border, 'Favorite Tracks'),
           _navItem(ShellRoute.localMv, Icons.movie_outlined, 'Local MV Gallery'),
+          _navItem(ShellRoute.more, Icons.more_horiz, 'More'),
         ],
       ),
     );

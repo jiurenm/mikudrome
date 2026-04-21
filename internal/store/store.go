@@ -16,7 +16,7 @@ type Producer struct {
 	Name       string `json:"name"`
 	TrackCount int    `json:"track_count"`
 	AlbumCount int    `json:"album_count"`
-	AvatarPath string `json:"avatar_path,omitempty"` // artist.jpg in P主 folder
+	AvatarPath string `json:"avatar_path,omitempty"` // supported artist image in P主 folder
 }
 
 // Vocalist aggregates a unique vocalist name with track and album counts.
@@ -1069,17 +1069,22 @@ func (b *BatchInserter) Flush() error {
 			if b.producers[i].Name != "" {
 				pid = b.producerCache[b.producers[i].Name]
 			}
-			result, err := b.tx.Exec(`INSERT OR REPLACE INTO albums (title, cover_path, producer_id, dir_mtime, album_artist) VALUES (?, ?, ?, ?, ?)`,
-				a.Title, a.CoverPath, pid, 0, a.AlbumArtist)
+			_, err := b.tx.Exec(`
+				INSERT INTO albums (title, cover_path, producer_id, dir_mtime, album_artist)
+				VALUES (?, ?, ?, ?, ?)
+				ON CONFLICT(title) DO UPDATE SET
+					cover_path = excluded.cover_path,
+					producer_id = excluded.producer_id,
+					dir_mtime = excluded.dir_mtime,
+					album_artist = excluded.album_artist
+			`, a.Title, a.CoverPath, pid, 0, a.AlbumArtist)
 			if err != nil {
 				return err
 			}
-			id, _ := result.LastInsertId()
-			if id == 0 {
-				err = b.tx.QueryRow(`SELECT id FROM albums WHERE title = ?`, a.Title).Scan(&id)
-				if err != nil {
-					return err
-				}
+			var id int64
+			err = b.tx.QueryRow(`SELECT id FROM albums WHERE title = ?`, a.Title).Scan(&id)
+			if err != nil {
+				return err
 			}
 			b.albumCache[a.Title] = id
 		}
@@ -1088,12 +1093,34 @@ func (b *BatchInserter) Flush() error {
 	// Batch insert tracks
 	for i, t := range b.tracks {
 		albumID := b.albumCache[b.albums[i].Title]
-
-		_, err := b.tx.Exec(`INSERT OR REPLACE INTO tracks
+		_, err := b.tx.Exec(`INSERT INTO tracks
 			(title, audio_path, video_path, video_thumb_path, album_id, disc_number, track_number,
 			 artists, year, duration_seconds, format, composer, lyricist, arranger, vocal,
 			 voice_manipulator, illustrator, movie, source, lyrics, comment, file_mtime, file_size)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(audio_path) DO UPDATE SET
+				title = excluded.title,
+				video_path = excluded.video_path,
+				video_thumb_path = excluded.video_thumb_path,
+				album_id = excluded.album_id,
+				disc_number = excluded.disc_number,
+				track_number = excluded.track_number,
+				artists = excluded.artists,
+				year = excluded.year,
+				duration_seconds = excluded.duration_seconds,
+				format = excluded.format,
+				composer = excluded.composer,
+				lyricist = excluded.lyricist,
+				arranger = excluded.arranger,
+				vocal = excluded.vocal,
+				voice_manipulator = excluded.voice_manipulator,
+				illustrator = excluded.illustrator,
+				movie = excluded.movie,
+				source = excluded.source,
+				lyrics = excluded.lyrics,
+				comment = excluded.comment,
+				file_mtime = excluded.file_mtime,
+				file_size = excluded.file_size`,
 			t.Title, t.AudioPath, t.VideoPath, t.VideoThumbPath, albumID, t.DiscNumber, t.TrackNumber,
 			t.Artists, t.Year, t.DurationSeconds, t.Format, t.Composer, t.Lyricist, t.Arranger, t.Vocal,
 			t.VoiceManipulator, t.Illustrator, t.Movie, t.Source, t.Lyrics, t.Comment, t.FileMtime, t.FileSize)

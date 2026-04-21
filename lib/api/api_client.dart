@@ -208,7 +208,7 @@ class ApiClient {
   String albumCoverUrl(String albumId) =>
       _url(ApiEndpoints.albumCover(albumId));
 
-  /// Full URL for producer avatar (artist.jpg in P主 folder). 404 if not set.
+  /// Full URL for producer avatar (supported artist image in P主 folder). 404 if not set.
   String producerAvatarUrl(int producerId) =>
       _url(ApiEndpoints.producerAvatar(producerId));
 
