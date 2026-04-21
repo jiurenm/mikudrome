@@ -154,3 +154,73 @@ func TestStoreNewDoesNotRebackfillScannedColumnsOnReopen(t *testing.T) {
 		t.Fatalf("scanned columns after reopen = (%q, %q), want (%q, %q)", composerScanned, lyricistScanned, "", "manual override")
 	}
 }
+
+func TestListTrackMetadataPrefersManualComposerAndLyricist(t *testing.T) {
+	st := newTestStore(t)
+
+	_, err := st.db.Exec(`
+		INSERT INTO producers (id, name) VALUES (1, 'kz');
+		INSERT INTO albums (id, title, cover_path, producer_id, album_artist)
+		VALUES (1, 'Album', '/cover.png', 1, 'kz');
+		INSERT INTO tracks (
+			id, title, audio_path, album_id, disc_number, track_number,
+			composer, composer_scanned, lyricist, lyricist_scanned,
+			arranger, vocal, voice_manipulator, illustrator, movie, source
+		) VALUES (
+			1, 'Track', '/tmp/track.flac', 1, 1, 3,
+			'manual composer', 'scan composer', '', 'scan lyricist',
+			'', 'Teto', '', '', '', ''
+		);
+	`)
+	if err != nil {
+		t.Fatalf("seed metadata row: %v", err)
+	}
+
+	rows, err := st.ListTrackMetadata()
+	if err != nil {
+		t.Fatalf("list metadata: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows = %d, want 1", len(rows))
+	}
+	if rows[0].Composer != "manual composer" || rows[0].ComposerSource != "manual" {
+		t.Fatalf("composer = %q (%s)", rows[0].Composer, rows[0].ComposerSource)
+	}
+	if rows[0].Lyricist != "scan lyricist" || rows[0].LyricistSource != "scanned" {
+		t.Fatalf("lyricist = %q (%s)", rows[0].Lyricist, rows[0].LyricistSource)
+	}
+}
+
+func TestUpdateTrackMetadataOnlyTouchesRequestedFields(t *testing.T) {
+	st := newTestStore(t)
+
+	_, err := st.db.Exec(`
+		INSERT INTO tracks (
+			id, title, audio_path, composer, composer_scanned, lyricist, lyricist_scanned, arranger, vocal
+		) VALUES (
+			1, 'Track', '/tmp/track.flac', 'manual', 'scan', 'manual lyric', 'scan lyric', 'old arranger', 'old vocal'
+		);
+	`)
+	if err != nil {
+		t.Fatalf("seed track: %v", err)
+	}
+
+	arranger := "new arranger"
+	patch := TrackMetadataPatch{
+		Arranger: &arranger,
+	}
+	if err := st.UpdateTrackMetadata(1, patch); err != nil {
+		t.Fatalf("update track metadata: %v", err)
+	}
+
+	row, ok, err := st.GetTrackMetadataByID(1)
+	if err != nil || !ok {
+		t.Fatalf("get updated metadata: ok=%v err=%v", ok, err)
+	}
+	if row.Arranger != "new arranger" {
+		t.Fatalf("arranger = %q, want %q", row.Arranger, "new arranger")
+	}
+	if row.Composer != "manual" || row.ComposerSource != "manual" {
+		t.Fatalf("composer changed unexpectedly: %q (%s)", row.Composer, row.ComposerSource)
+	}
+}
