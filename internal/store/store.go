@@ -54,6 +54,8 @@ type Track struct {
 	// Extended metadata fields
 	Composer          string `json:"composer,omitempty"`           // 作曲
 	Lyricist          string `json:"lyricist,omitempty"`           // 作词
+	ComposerScanned   string `json:"-"`                            // Internal scanned fallback for composer
+	LyricistScanned   string `json:"-"`                            // Internal scanned fallback for lyricist
 	Arranger          string `json:"arranger,omitempty"`           // 编曲
 	Vocal             string `json:"vocal,omitempty"`              // Vocal（如 "初音ミク"）
 	VoiceManipulator  string `json:"voice_manipulator,omitempty"`  // 调教
@@ -1409,9 +1411,9 @@ func (b *BatchInserter) Flush() error {
 		albumID := b.albumCache[b.albums[i].Title]
 		_, err := b.tx.Exec(`INSERT INTO tracks
 			(title, audio_path, video_path, video_thumb_path, album_id, disc_number, track_number,
-			 artists, year, duration_seconds, format, composer, lyricist, arranger, vocal,
-			 voice_manipulator, illustrator, movie, source, lyrics, comment, file_mtime, file_size)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 artists, year, duration_seconds, format, composer_scanned, lyricist_scanned,
+			 lyrics, comment, file_mtime, file_size)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(audio_path) DO UPDATE SET
 				title = excluded.title,
 				video_path = excluded.video_path,
@@ -1423,21 +1425,15 @@ func (b *BatchInserter) Flush() error {
 				year = excluded.year,
 				duration_seconds = excluded.duration_seconds,
 				format = excluded.format,
-				composer = excluded.composer,
-				lyricist = excluded.lyricist,
-				arranger = excluded.arranger,
-				vocal = excluded.vocal,
-				voice_manipulator = excluded.voice_manipulator,
-				illustrator = excluded.illustrator,
-				movie = excluded.movie,
-				source = excluded.source,
+				composer_scanned = excluded.composer_scanned,
+				lyricist_scanned = excluded.lyricist_scanned,
 				lyrics = excluded.lyrics,
 				comment = excluded.comment,
 				file_mtime = excluded.file_mtime,
 				file_size = excluded.file_size`,
 			t.Title, t.AudioPath, t.VideoPath, t.VideoThumbPath, albumID, t.DiscNumber, t.TrackNumber,
-			t.Artists, t.Year, t.DurationSeconds, t.Format, t.Composer, t.Lyricist, t.Arranger, t.Vocal,
-			t.VoiceManipulator, t.Illustrator, t.Movie, t.Source, t.Lyrics, t.Comment, t.FileMtime, t.FileSize)
+			t.Artists, t.Year, t.DurationSeconds, t.Format, t.ComposerScanned, t.LyricistScanned,
+			t.Lyrics, t.Comment, t.FileMtime, t.FileSize)
 		if err != nil {
 			return err
 		}
