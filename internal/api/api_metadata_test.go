@@ -102,6 +102,20 @@ func TestTrackMetadataHTTP_PatchUpdatesProvidedFieldsOnly(t *testing.T) {
 	}
 }
 
+func TestTrackMetadataHTTP_PatchRejectsNonPositiveID(t *testing.T) {
+	h := newTestHandler(t)
+
+	for _, path := range []string{
+		"/api/tracks/0/metadata",
+		"/api/tracks/-1/metadata",
+	} {
+		rr := doReq(h, http.MethodPatch, path, `{}`)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("path %s status = %d, want %d", path, rr.Code, http.StatusBadRequest)
+		}
+	}
+}
+
 func seedMetadataTrack(t *testing.T, h *Handler, track store.Track, album store.Album, producer store.Producer) int64 {
 	t.Helper()
 

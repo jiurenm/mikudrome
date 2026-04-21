@@ -408,7 +408,7 @@ func (h *Handler) getTrack(w http.ResponseWriter, _ *http.Request, idStr string)
 
 func (h *Handler) patchTrackMetadata(w http.ResponseWriter, r *http.Request, idStr string) {
 	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
+	if err != nil || id <= 0 {
 		jsonError(w, "invalid id", http.StatusBadRequest)
 		return
 	}
