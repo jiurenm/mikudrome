@@ -58,12 +58,20 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.listTracks(w, r)
 		return
 	}
+	if r.URL.Path == "/api/tracks/metadata" && r.Method == http.MethodGet {
+		h.listTrackMetadata(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/api/tracks/") {
 		trimmed := strings.TrimPrefix(r.URL.Path, "/api/tracks/")
 		parts := strings.SplitN(trimmed, "/", 2)
 		if parts[0] != "" {
 			if len(parts) == 2 && parts[1] == "download-mv" && r.Method == http.MethodPost {
 				h.downloadTrackMV(w, r, parts[0])
+				return
+			}
+			if len(parts) == 2 && parts[1] == "metadata" && r.Method == http.MethodPatch {
+				h.patchTrackMetadata(w, r, parts[0])
 				return
 			}
 			if r.Method == http.MethodGet && len(parts) == 1 {
@@ -370,6 +378,15 @@ func (h *Handler) listTracks(w http.ResponseWriter, _ *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"tracks": tagFavorites(tracks, h.loadFavSet())})
 }
 
+func (h *Handler) listTrackMetadata(w http.ResponseWriter, _ *http.Request) {
+	rows, err := h.store.ListTrackMetadata()
+	if err != nil {
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"tracks": rows})
+}
+
 func (h *Handler) getTrack(w http.ResponseWriter, _ *http.Request, idStr string) {
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -387,6 +404,36 @@ func (h *Handler) getTrack(w http.ResponseWriter, _ *http.Request, idStr string)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(TrackDTO{Track: track, IsFavorite: h.loadFavSet()[track.ID]})
+}
+
+func (h *Handler) patchTrackMetadata(w http.ResponseWriter, r *http.Request, idStr string) {
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		jsonError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var patch store.TrackMetadataPatch
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&patch); err != nil {
+		jsonError(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.store.UpdateTrackMetadata(id, patch); err != nil {
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	}
+	row, ok, err := h.store.GetTrackMetadataByID(id)
+	if err != nil {
+		jsonError(w, "internal", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		jsonError(w, "track not found", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, row)
 }
 
 func (h *Handler) downloadTrackMV(w http.ResponseWriter, r *http.Request, idStr string) {
