@@ -66,6 +66,24 @@ type scanStats struct {
 	failed  int
 }
 
+// ScanOptions controls optional scan behavior.
+type ScanOptions struct {
+	Force      bool
+	OnProgress func(ScanProgress)
+}
+
+// ScanProgress reports scan progress and summary counters.
+type ScanProgress struct {
+	Phase          string
+	TotalFiles     int
+	ProcessedFiles int
+	NewFiles       int
+	UpdatedFiles   int
+	SkippedFiles   int
+	DeletedFiles   int
+	FailedFiles    int
+}
+
 type albumCoverCoordinator struct {
 	mu     sync.Mutex
 	albums map[string]*albumCoverState
@@ -126,6 +144,12 @@ func (c *albumCoverCoordinator) resolve(albumDir string, resolve func() string) 
 // present, otherwise falls back to folder name. If album dir has no cover file, extracts cover from embedded art.
 // Uses incremental scanning with mtime/size comparison and concurrent processing.
 func Scan(mediaRoot string, s *store.Store, workers, batchSize int) error {
+	return ScanWithOptions(mediaRoot, s, workers, batchSize, ScanOptions{})
+}
+
+// ScanWithOptions walks mediaRoot, discovers media files, and optionally forces
+// reprocessing of unchanged files while emitting progress updates.
+func ScanWithOptions(mediaRoot string, s *store.Store, workers, batchSize int, opts ScanOptions) error {
 	startTime := time.Now()
 	log.Println("scan: phase 1/3 - discovering files...")
 
@@ -163,6 +187,7 @@ func Scan(mediaRoot string, s *store.Store, workers, batchSize int) error {
 
 	stats := scanStats{total: len(audioPaths)}
 	if stats.total == 0 {
+		emitScanProgress(opts, "completed", stats, 0)
 		log.Println("scan: no audio files found")
 		return nil
 	}
@@ -175,6 +200,10 @@ func Scan(mediaRoot string, s *store.Store, workers, batchSize int) error {
 			// New file
 			jobsToProcess = append(jobsToProcess, job)
 			stats.new++
+		} else if opts.Force {
+			// Force reprocess unchanged files during a full rescan.
+			jobsToProcess = append(jobsToProcess, job)
+			stats.updated++
 		} else if existing.ModTime != job.modTime || existing.Size != job.size {
 			// Modified file
 			jobsToProcess = append(jobsToProcess, job)
@@ -196,6 +225,7 @@ func Scan(mediaRoot string, s *store.Store, workers, batchSize int) error {
 
 	log.Printf("scan: found %d files (%d new, %d updated, %d skipped, %d deleted)",
 		stats.total, stats.new, stats.updated, stats.skipped, stats.deleted)
+	emitScanProgress(opts, "discovered", stats, 0)
 
 	// Phase 2: Process files with worker pool
 	if len(jobsToProcess) > 0 {
@@ -224,7 +254,9 @@ func Scan(mediaRoot string, s *store.Store, workers, batchSize int) error {
 		// Start result collector
 		collectorDone := make(chan error, 1)
 		go func() {
-			collectorDone <- collectResults(s, results, batchSize, len(jobsToProcess), &stats)
+			collectorDone <- collectResults(s, results, batchSize, len(jobsToProcess), &stats, func(processed int, current scanStats) {
+				emitScanProgress(opts, "processing", current, processed)
+			})
 		}()
 
 		// Send jobs to workers
@@ -255,6 +287,7 @@ func Scan(mediaRoot string, s *store.Store, workers, batchSize int) error {
 		if err := s.CleanOrphanedProducers(); err != nil {
 			log.Printf("scan: error cleaning orphaned producers: %v", err)
 		}
+		emitScanProgress(opts, "deleting", stats, len(jobsToProcess))
 	}
 
 	// Phase 4: Video consistency check
@@ -272,6 +305,7 @@ func Scan(mediaRoot string, s *store.Store, workers, batchSize int) error {
 	duration := time.Since(startTime)
 	log.Printf("scan: completed in %s (new=%d updated=%d skipped=%d deleted=%d failed=%d)",
 		duration.Round(time.Second), stats.new, stats.updated, stats.skipped, stats.deleted, stats.failed)
+	emitScanProgress(opts, "completed", stats, stats.total)
 
 	return nil
 }
@@ -518,12 +552,11 @@ func resolveDeterministicAlbumCover(albumDir string) string {
 	}
 
 	wavFallbackTrack := ""
-	hadWAVReadError := false
 	for _, audioPath := range audioTracks {
 		pic, err := embeddedPictureReader(audioPath)
 		if err != nil {
-			if strings.EqualFold(filepath.Ext(audioPath), ".wav") {
-				hadWAVReadError = true
+			if wavFallbackTrack == "" && strings.EqualFold(filepath.Ext(audioPath), ".wav") {
+				wavFallbackTrack = audioPath
 			}
 			continue
 		}
@@ -537,10 +570,6 @@ func resolveDeterministicAlbumCover(albumDir string) string {
 			removeStaleExtractedCoverOutputs(albumDir, outPath)
 			return outPath
 		}
-		return coverPath
-	}
-
-	if hadWAVReadError {
 		return coverPath
 	}
 
@@ -569,7 +598,7 @@ func findAudioTracksInAlbum(albumDir string) []string {
 }
 
 // collectResults collects results from workers and writes to database in batches.
-func collectResults(s *store.Store, results <-chan scanResult, batchSize, totalJobs int, stats *scanStats) error {
+func collectResults(s *store.Store, results <-chan scanResult, batchSize, totalJobs int, stats *scanStats, onProcessed func(processed int, stats scanStats)) error {
 	batch, err := s.BeginBatch(batchSize)
 	if err != nil {
 		return err
@@ -583,13 +612,23 @@ func collectResults(s *store.Store, results <-chan scanResult, batchSize, totalJ
 		if result.err != nil {
 			log.Printf("scan: error processing %s: %v", result.track.AudioPath, result.err)
 			stats.failed++
+			if onProcessed != nil {
+				onProcessed(processed, *stats)
+			}
 			continue
 		}
 
 		if err := batch.Add(result.track, result.album, result.producer); err != nil {
 			log.Printf("scan: error adding to batch: %v", err)
 			stats.failed++
+			if onProcessed != nil {
+				onProcessed(processed, *stats)
+			}
 			continue
+		}
+
+		if onProcessed != nil {
+			onProcessed(processed, *stats)
 		}
 
 		// Log progress every 5 seconds
@@ -600,6 +639,22 @@ func collectResults(s *store.Store, results <-chan scanResult, batchSize, totalJ
 	}
 
 	return nil
+}
+
+func emitScanProgress(opts ScanOptions, phase string, stats scanStats, processed int) {
+	if opts.OnProgress == nil {
+		return
+	}
+	opts.OnProgress(ScanProgress{
+		Phase:          phase,
+		TotalFiles:     stats.total,
+		ProcessedFiles: processed,
+		NewFiles:       stats.new,
+		UpdatedFiles:   stats.updated,
+		SkippedFiles:   stats.skipped,
+		DeletedFiles:   stats.deleted,
+		FailedFiles:    stats.failed,
+	})
 }
 
 // runFFprobe runs ffprobe once and returns all metadata including duration, format, and tags.

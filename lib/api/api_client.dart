@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 import '../models/album.dart';
+import '../models/library_task_status.dart';
 import '../models/producer.dart';
 import '../models/playlist.dart';
 import '../models/playlist_detail_data.dart';
@@ -219,6 +220,30 @@ class ApiClient {
 
   /// URL to download DB backup. Backend: GET /api/db/backup
   String get dbBackupUrl => _url(ApiEndpoints.dbBackup);
+
+  // --- Library tasks ---
+
+  Future<LibraryTaskStatus> startLibraryRescan() async {
+    final res = await http.post(Uri.parse(_url(ApiEndpoints.libraryRescan)));
+    if (res.statusCode != 202) {
+      throw ApiException('Failed to start library rescan', res.statusCode);
+    }
+    return LibraryTaskStatus.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<LibraryTaskStatus> getLibraryRescanStatus() async {
+    final res = await http.get(
+      Uri.parse(_url(ApiEndpoints.libraryRescanStatus)),
+    );
+    if (res.statusCode != 200) {
+      throw ApiException('Failed to load library rescan status', res.statusCode);
+    }
+    return LibraryTaskStatus.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    );
+  }
 
   // --- Favorites ---
 

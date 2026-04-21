@@ -6,10 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/mikudrome/mikudrome/internal/api"
 	"github.com/mikudrome/mikudrome/internal/config"
-	"github.com/mikudrome/mikudrome/internal/scanner"
+	"github.com/mikudrome/mikudrome/internal/library"
 	"github.com/mikudrome/mikudrome/internal/store"
 	"github.com/mikudrome/mikudrome/internal/watcher"
 )
@@ -60,6 +61,8 @@ func main() {
 	}
 	defer st.Close()
 
+	libraryTasks := library.NewTaskManager(cfg.MediaRoot, st, cfg.ScanWorkers, cfg.ScanBatchSize)
+
 	// Setup playlist cover directory.
 	if p := os.Getenv("PLAYLIST_COVER_DIR"); p != "" {
 		cfg.PlaylistCoverDir = p
@@ -74,8 +77,19 @@ func main() {
 	// Start media scanning in background
 	go func() {
 		log.Println("starting background media scan...")
-		if err := scanner.Scan(cfg.MediaRoot, st, cfg.ScanWorkers, cfg.ScanBatchSize); err != nil {
-			log.Printf("scan warning: %v", err)
+		if _, started := libraryTasks.StartFullRescan(); !started {
+			log.Println("initial scan already running")
+		}
+
+		for {
+			status := libraryTasks.GetStatus()
+			if status.Status != library.StatusRunning {
+				if status.Status == library.StatusFailed && status.LastError != "" {
+					log.Printf("scan warning: %s", status.LastError)
+				}
+				break
+			}
+			time.Sleep(250 * time.Millisecond)
 		}
 		log.Println("initial scan completed")
 
@@ -85,7 +99,7 @@ func main() {
 			return
 		}
 
-		w, err := watcher.New(cfg.MediaRoot, st, cfg.ScanWorkers, cfg.ScanBatchSize)
+		w, err := watcher.New(cfg.MediaRoot, st, cfg.ScanWorkers, cfg.ScanBatchSize, libraryTasks)
 		if err != nil {
 			log.Printf("watcher: failed to create: %v", err)
 			return
@@ -101,7 +115,7 @@ func main() {
 		select {}
 	}()
 
-	handler := api.New(st, cfg.MediaRoot, cfg.WebRoot, cfg.YtDlpProxy, cfg.PlaylistCoverDir)
+	handler := api.New(st, cfg.MediaRoot, cfg.WebRoot, cfg.YtDlpProxy, cfg.PlaylistCoverDir, libraryTasks)
 	log.Printf("listening on %s", cfg.HTTPAddr)
 	if err := http.ListenAndServe(cfg.HTTPAddr, handler); err != nil {
 		log.Fatal(err)

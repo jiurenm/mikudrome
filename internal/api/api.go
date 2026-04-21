@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mikudrome/mikudrome/internal/library"
 	"github.com/mikudrome/mikudrome/internal/scanner"
 	"github.com/mikudrome/mikudrome/internal/store"
 )
@@ -22,16 +23,18 @@ type Handler struct {
 	webRoot          string
 	ytdlpProxy       string
 	playlistCoverDir string
+	libraryTasks     *library.TaskManager
 }
 
 // New returns an HTTP handler for the API.
-func New(s *store.Store, mediaRoot, webRoot, ytdlpProxy, playlistCoverDir string) *Handler {
+func New(s *store.Store, mediaRoot, webRoot, ytdlpProxy, playlistCoverDir string, libraryTasks *library.TaskManager) *Handler {
 	return &Handler{
 		store:            s,
 		mediaRoot:        mediaRoot,
 		webRoot:          webRoot,
 		ytdlpProxy:       ytdlpProxy,
 		playlistCoverDir: playlistCoverDir,
+		libraryTasks:     libraryTasks,
 	}
 }
 
@@ -41,6 +44,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	addCORSHeaders(w, r)
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.URL.Path == "/api/library/rescan" && r.Method == http.MethodPost {
+		h.startLibraryRescan(w, r)
+		return
+	}
+	if r.URL.Path == "/api/library/rescan-status" && r.Method == http.MethodGet {
+		h.getLibraryRescanStatus(w, r)
 		return
 	}
 	if r.URL.Path == "/api/tracks" && r.Method == http.MethodGet {
@@ -330,6 +341,23 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	// Serve Flutter web static files; fallback to index.html for SPA routing
 	h.serveWeb(w, r)
+}
+
+func (h *Handler) startLibraryRescan(w http.ResponseWriter, _ *http.Request) {
+	if h.libraryTasks == nil {
+		jsonError(w, "library rescan unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	status, _ := h.libraryTasks.StartFullRescan()
+	writeJSON(w, http.StatusAccepted, status)
+}
+
+func (h *Handler) getLibraryRescanStatus(w http.ResponseWriter, _ *http.Request) {
+	if h.libraryTasks == nil {
+		jsonError(w, "library rescan unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	writeJSON(w, http.StatusOK, h.libraryTasks.GetStatus())
 }
 
 func (h *Handler) listTracks(w http.ResponseWriter, _ *http.Request) {

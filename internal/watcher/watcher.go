@@ -9,26 +9,31 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/mikudrome/mikudrome/internal/library"
 	"github.com/mikudrome/mikudrome/internal/scanner"
 	"github.com/mikudrome/mikudrome/internal/store"
 )
 
 // Watcher monitors media directory for file changes and triggers incremental scans.
 type Watcher struct {
-	mediaRoot string
-	store     *store.Store
-	watcher   *fsnotify.Watcher
-	workers   int
-	batchSize int
+	mediaRoot    string
+	store        *store.Store
+	watcher      *fsnotify.Watcher
+	workers      int
+	batchSize    int
+	libraryTasks *library.TaskManager
+	scanRunner   func(string, *store.Store, int, int) error
 
 	// Debouncing
-	mu            sync.Mutex
-	pendingEvents map[string]time.Time
-	debounceTimer *time.Timer
+	mu                  sync.Mutex
+	pendingEvents       map[string]time.Time
+	debounceTimer       *time.Timer
+	pendingFollowupScan bool
+	followupWatcher     bool
 }
 
 // New creates a new file system watcher.
-func New(mediaRoot string, store *store.Store, workers, batchSize int) (*Watcher, error) {
+func New(mediaRoot string, store *store.Store, workers, batchSize int, libraryTasks *library.TaskManager) (*Watcher, error) {
 	fsWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -40,6 +45,8 @@ func New(mediaRoot string, store *store.Store, workers, batchSize int) (*Watcher
 		watcher:       fsWatcher,
 		workers:       workers,
 		batchSize:     batchSize,
+		libraryTasks:  libraryTasks,
+		scanRunner:    scanner.Scan,
 		pendingEvents: make(map[string]time.Time),
 	}
 
@@ -137,10 +144,74 @@ func (w *Watcher) triggerScan() {
 		return
 	}
 
+	if w.libraryTasks != nil && w.libraryTasks.IsRunning() {
+		log.Printf("watcher: queueing incremental follow-up scan (%d events) until full rescan completes", eventCount)
+		w.queueFollowupScan()
+		return
+	}
+
 	log.Printf("watcher: triggering incremental scan (%d events)", eventCount)
 
-	if err := scanner.Scan(w.mediaRoot, w.store, w.workers, w.batchSize); err != nil {
+	if err := w.scanRunner(w.mediaRoot, w.store, w.workers, w.batchSize); err != nil {
 		log.Printf("watcher: scan error: %v", err)
+	}
+}
+
+func (w *Watcher) queueFollowupScan() {
+	w.mu.Lock()
+	w.pendingFollowupScan = true
+	if w.followupWatcher {
+		w.mu.Unlock()
+		return
+	}
+	w.followupWatcher = true
+	w.mu.Unlock()
+
+	go w.awaitFullRescanCompletion()
+}
+
+func (w *Watcher) awaitFullRescanCompletion() {
+	for {
+		for w.libraryTasks != nil && w.libraryTasks.IsRunning() {
+			time.Sleep(200 * time.Millisecond)
+		}
+
+		w.mu.Lock()
+		shouldRun := w.pendingFollowupScan
+		if !shouldRun {
+			w.followupWatcher = false
+			w.mu.Unlock()
+			return
+		}
+		w.pendingFollowupScan = false
+		w.mu.Unlock()
+
+		if w.libraryTasks != nil && w.libraryTasks.IsRunning() {
+			w.mu.Lock()
+			w.pendingFollowupScan = true
+			w.mu.Unlock()
+			continue
+		}
+
+		runFollowup := func() {
+			log.Printf("watcher: running queued incremental scan after full rescan")
+			if err := w.scanRunner(w.mediaRoot, w.store, w.workers, w.batchSize); err != nil {
+				log.Printf("watcher: queued scan error: %v", err)
+			}
+		}
+		if w.libraryTasks != nil {
+			w.libraryTasks.RunWhenIdle(runFollowup)
+		} else {
+			runFollowup()
+		}
+
+		w.mu.Lock()
+		if !w.pendingFollowupScan {
+			w.followupWatcher = false
+			w.mu.Unlock()
+			return
+		}
+		w.mu.Unlock()
 	}
 }
 

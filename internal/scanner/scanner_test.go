@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/dhowden/tag"
+	"github.com/mikudrome/mikudrome/internal/store"
 )
 
 func TestRunFFprobeRequestsTask1Aliases(t *testing.T) {
@@ -186,10 +187,15 @@ func TestProcessFileUsesWAVTagAliases(t *testing.T) {
 				if path != audioPath {
 					t.Fatalf("embeddedPictureReader path = %q, want %q", path, audioPath)
 				}
-				return nil, errors.New("no embedded art expected in alias test")
+				return nil, nil
 			}
 			wavCoverExtractor = func(gotAudioPath, gotAlbumDir string) string {
-				t.Fatalf("wavCoverExtractor should not be called in alias test; got audioPath=%q albumDir=%q", gotAudioPath, gotAlbumDir)
+				if gotAudioPath != audioPath {
+					t.Fatalf("wavCoverExtractor audioPath = %q, want %q", gotAudioPath, audioPath)
+				}
+				if gotAlbumDir != audioDir {
+					t.Fatalf("wavCoverExtractor albumDir = %q, want %q", gotAlbumDir, audioDir)
+				}
 				return ""
 			}
 			videoThumbFinder = func(path string) string {
@@ -322,10 +328,15 @@ func TestProcessFileUsesPlannedAliasAlternates(t *testing.T) {
 				if path != audioPath {
 					t.Fatalf("embeddedPictureReader path = %q, want %q", path, audioPath)
 				}
-				return nil, errors.New("no embedded art expected in alias test")
+				return nil, nil
 			}
 			wavCoverExtractor = func(gotAudioPath, gotAlbumDir string) string {
-				t.Fatalf("wavCoverExtractor should not be called in alias test; got audioPath=%q albumDir=%q", gotAudioPath, gotAlbumDir)
+				if gotAudioPath != audioPath {
+					t.Fatalf("wavCoverExtractor audioPath = %q, want %q", gotAudioPath, audioPath)
+				}
+				if gotAlbumDir != audioDir {
+					t.Fatalf("wavCoverExtractor albumDir = %q, want %q", gotAlbumDir, audioDir)
+				}
 				return ""
 			}
 			videoThumbFinder = func(path string) string {
@@ -1114,6 +1125,104 @@ func TestProcessFileWithAlbumCoverCoordinatorAllowsWAVFallbackAfterNonWAVReadErr
 	}
 }
 
+func TestProcessFileWithAlbumCoverCoordinatorAllowsWAVFallbackAfterWAVReadError(t *testing.T) {
+	tmpDir := t.TempDir()
+	restoreSeams := stubScannerSeams()
+	defer restoreSeams()
+
+	albumDir := filepath.Join(tmpDir, "artist-folder", "album-folder")
+	if err := os.MkdirAll(albumDir, 0o755); err != nil {
+		t.Fatalf("mkdir album dir: %v", err)
+	}
+
+	trackPaths := map[string]string{
+		"track-01.wav": filepath.Join(albumDir, "track-01.wav"),
+		"track-02.wav": filepath.Join(albumDir, "track-02.wav"),
+	}
+	for _, audioPath := range trackPaths {
+		if err := os.WriteFile(audioPath, []byte("audio"), 0o644); err != nil {
+			t.Fatalf("write audio file %q: %v", audioPath, err)
+		}
+	}
+
+	ffprobeRunner = func(path string) (int, string, map[string]string) {
+		for _, audioPath := range trackPaths {
+			if path == audioPath {
+				return 0, "", nil
+			}
+		}
+		t.Fatalf("unexpected ffprobe path %q", path)
+		return 0, "", nil
+	}
+	metadataReader = func(path string) (tag.Metadata, error) {
+		for _, audioPath := range trackPaths {
+			if path == audioPath {
+				return fakeMetadata{}, nil
+			}
+		}
+		t.Fatalf("unexpected metadataReader path %q", path)
+		return nil, nil
+	}
+
+	embeddedReads := []string{}
+	embeddedPictureReader = func(path string) (*tag.Picture, error) {
+		embeddedReads = append(embeddedReads, filepath.Base(path))
+		switch filepath.Base(path) {
+		case "track-01.wav", "track-02.wav":
+			return nil, errors.New("wav embedded art read failed")
+		default:
+			t.Fatalf("unexpected embeddedPictureReader path %q", path)
+			return nil, nil
+		}
+	}
+
+	wavFallbackCalls := 0
+	wavCoverExtractor = func(gotAudioPath, gotAlbumDir string) string {
+		wavFallbackCalls++
+		if gotAudioPath != trackPaths["track-01.wav"] {
+			t.Fatalf("wavCoverExtractor audioPath = %q, want %q", gotAudioPath, trackPaths["track-01.wav"])
+		}
+		if gotAlbumDir != albumDir {
+			t.Fatalf("wavCoverExtractor albumDir = %q, want %q", gotAlbumDir, albumDir)
+		}
+
+		outPath := filepath.Join(albumDir, "extracted_cover.png")
+		if err := os.WriteFile(outPath, []byte("wav-read-error-fallback-art"), 0o644); err != nil {
+			t.Fatalf("write wav fallback cover: %v", err)
+		}
+		return outPath
+	}
+	videoThumbFinder = func(path string) string {
+		t.Fatalf("videoThumbFinder should not be called, got %q", path)
+		return ""
+	}
+
+	coordinator := newAlbumCoverCoordinator()
+	firstResult := processFileWithAlbumCoverCoordinator(scanJob{audioPath: trackPaths["track-01.wav"]}, tmpDir, coordinator)
+	secondResult := processFileWithAlbumCoverCoordinator(scanJob{audioPath: trackPaths["track-02.wav"]}, tmpDir, coordinator)
+
+	wantCoverPath := filepath.Join(albumDir, "extracted_cover.png")
+	if firstResult.album.CoverPath != wantCoverPath {
+		t.Fatalf("first wav cover path = %q, want %q", firstResult.album.CoverPath, wantCoverPath)
+	}
+	if secondResult.album.CoverPath != wantCoverPath {
+		t.Fatalf("second wav cover path = %q, want %q", secondResult.album.CoverPath, wantCoverPath)
+	}
+	if wavFallbackCalls != 1 {
+		t.Fatalf("wavCoverExtractor calls = %d, want %d", wavFallbackCalls, 1)
+	}
+	if !reflect.DeepEqual(embeddedReads, []string{"track-01.wav", "track-02.wav"}) {
+		t.Fatalf("embedded reads = %#v, want deterministic album order", embeddedReads)
+	}
+	data, err := os.ReadFile(wantCoverPath)
+	if err != nil {
+		t.Fatalf("read wav fallback cover: %v", err)
+	}
+	if string(data) != "wav-read-error-fallback-art" {
+		t.Fatalf("cover data = %q, want %q", string(data), "wav-read-error-fallback-art")
+	}
+}
+
 func TestExtractCoverFromTrackDoesNotFallBackWhenEmbeddedArtReadFails(t *testing.T) {
 	albumDir := t.TempDir()
 	audioPath := filepath.Join(albumDir, "cover-error.wav")
@@ -1352,6 +1461,286 @@ exit 7
 	}
 	if _, err := os.Stat(outPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected stale output to be removed, stat err = %v", err)
+	}
+}
+
+func TestScanWithOptionsForceReprocessesUnchangedFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	st, err := store.New(filepath.Join(tmpDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+
+	mediaRoot := filepath.Join(tmpDir, "media")
+	albumDir := filepath.Join(mediaRoot, "artist", "album")
+	if err := os.MkdirAll(albumDir, 0o755); err != nil {
+		t.Fatalf("mkdir album dir: %v", err)
+	}
+	audioPath := filepath.Join(albumDir, "track.wav")
+	if err := os.WriteFile(audioPath, []byte("audio"), 0o644); err != nil {
+		t.Fatalf("write audio file: %v", err)
+	}
+
+	restoreSeams := stubScannerSeams()
+	defer restoreSeams()
+
+	ffprobeCalls := 0
+	ffprobeRunner = func(path string) (int, string, map[string]string) {
+		if path != audioPath {
+			t.Fatalf("ffprobe path = %q, want %q", path, audioPath)
+		}
+		ffprobeCalls++
+		return 123, "16bit PCM_S16LE", map[string]string{
+			"title": "Rescan Track",
+			"album": "Rescan Album",
+		}
+	}
+	metadataReader = func(path string) (tag.Metadata, error) {
+		if path != audioPath {
+			t.Fatalf("metadataReader path = %q, want %q", path, audioPath)
+		}
+		return fakeMetadata{}, nil
+	}
+	embeddedPictureReader = func(path string) (*tag.Picture, error) {
+		if path != audioPath {
+			t.Fatalf("embeddedPictureReader path = %q, want %q", path, audioPath)
+		}
+		return nil, nil
+	}
+	wavCoverExtractor = func(gotAudioPath, gotAlbumDir string) string {
+		if gotAudioPath != audioPath {
+			t.Fatalf("wavCoverExtractor audioPath = %q, want %q", gotAudioPath, audioPath)
+		}
+		if gotAlbumDir != albumDir {
+			t.Fatalf("wavCoverExtractor albumDir = %q, want %q", gotAlbumDir, albumDir)
+		}
+		return ""
+	}
+	videoThumbFinder = func(string) string { return "" }
+
+	if err := Scan(mediaRoot, st, 1, 10); err != nil {
+		t.Fatalf("initial scan: %v", err)
+	}
+	if err := ScanWithOptions(mediaRoot, st, 1, 10, ScanOptions{Force: true}); err != nil {
+		t.Fatalf("force scan: %v", err)
+	}
+
+	if ffprobeCalls != 2 {
+		t.Fatalf("ffprobeCalls = %d, want %d", ffprobeCalls, 2)
+	}
+}
+
+func TestScanWithOptionsForceKeepsTrackIDsStable(t *testing.T) {
+	tmpDir := t.TempDir()
+	st, err := store.New(filepath.Join(tmpDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+
+	mediaRoot := filepath.Join(tmpDir, "media")
+	albumDir := filepath.Join(mediaRoot, "artist", "album")
+	if err := os.MkdirAll(albumDir, 0o755); err != nil {
+		t.Fatalf("mkdir album dir: %v", err)
+	}
+	audioPath := filepath.Join(albumDir, "track.flac")
+	if err := os.WriteFile(audioPath, []byte("audio"), 0o644); err != nil {
+		t.Fatalf("write audio file: %v", err)
+	}
+
+	restoreSeams := stubScannerSeams()
+	defer restoreSeams()
+
+	ffprobeRunner = func(path string) (int, string, map[string]string) {
+		if path != audioPath {
+			t.Fatalf("ffprobe path = %q, want %q", path, audioPath)
+		}
+		return 180, "FLAC", map[string]string{
+			"title": "Stable Track",
+			"album": "Stable Album",
+		}
+	}
+	metadataReader = func(path string) (tag.Metadata, error) {
+		if path != audioPath {
+			t.Fatalf("metadataReader path = %q, want %q", path, audioPath)
+		}
+		return fakeMetadata{}, nil
+	}
+	embeddedPictureReader = func(path string) (*tag.Picture, error) {
+		if path != audioPath {
+			t.Fatalf("embeddedPictureReader path = %q, want %q", path, audioPath)
+		}
+		return nil, nil
+	}
+	videoThumbFinder = func(string) string { return "" }
+
+	if err := Scan(mediaRoot, st, 1, 10); err != nil {
+		t.Fatalf("initial scan: %v", err)
+	}
+	before, err := st.ListTracks()
+	if err != nil {
+		t.Fatalf("list tracks before: %v", err)
+	}
+	if len(before) != 1 {
+		t.Fatalf("before len = %d, want %d", len(before), 1)
+	}
+
+	if err := ScanWithOptions(mediaRoot, st, 1, 10, ScanOptions{Force: true}); err != nil {
+		t.Fatalf("force scan: %v", err)
+	}
+	after, err := st.ListTracks()
+	if err != nil {
+		t.Fatalf("list tracks after: %v", err)
+	}
+	if len(after) != 1 {
+		t.Fatalf("after len = %d, want %d", len(after), 1)
+	}
+	if before[0].ID != after[0].ID {
+		t.Fatalf("track id changed from %d to %d", before[0].ID, after[0].ID)
+	}
+}
+
+func TestScanWithOptionsReportsProgress(t *testing.T) {
+	tmpDir := t.TempDir()
+	st, err := store.New(filepath.Join(tmpDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+
+	mediaRoot := filepath.Join(tmpDir, "media")
+	albumDir := filepath.Join(mediaRoot, "artist", "album")
+	if err := os.MkdirAll(albumDir, 0o755); err != nil {
+		t.Fatalf("mkdir album dir: %v", err)
+	}
+	audioPath := filepath.Join(albumDir, "track.flac")
+	if err := os.WriteFile(audioPath, []byte("audio"), 0o644); err != nil {
+		t.Fatalf("write audio file: %v", err)
+	}
+
+	restoreSeams := stubScannerSeams()
+	defer restoreSeams()
+
+	ffprobeRunner = func(path string) (int, string, map[string]string) {
+		if path != audioPath {
+			t.Fatalf("ffprobe path = %q, want %q", path, audioPath)
+		}
+		return 180, "FLAC", map[string]string{
+			"title": "Progress Track",
+			"album": "Progress Album",
+		}
+	}
+	metadataReader = func(path string) (tag.Metadata, error) {
+		if path != audioPath {
+			t.Fatalf("metadataReader path = %q, want %q", path, audioPath)
+		}
+		return fakeMetadata{}, nil
+	}
+	embeddedPictureReader = func(path string) (*tag.Picture, error) {
+		if path != audioPath {
+			t.Fatalf("embeddedPictureReader path = %q, want %q", path, audioPath)
+		}
+		return nil, nil
+	}
+	videoThumbFinder = func(string) string { return "" }
+
+	var progress []ScanProgress
+	err = ScanWithOptions(mediaRoot, st, 1, 10, ScanOptions{
+		OnProgress: func(update ScanProgress) {
+			progress = append(progress, update)
+		},
+	})
+	if err != nil {
+		t.Fatalf("scan with progress: %v", err)
+	}
+	if len(progress) == 0 {
+		t.Fatal("expected progress updates")
+	}
+	last := progress[len(progress)-1]
+	if last.ProcessedFiles != 1 {
+		t.Fatalf("processed = %d, want %d", last.ProcessedFiles, 1)
+	}
+	if last.TotalFiles != 1 {
+		t.Fatalf("total = %d, want %d", last.TotalFiles, 1)
+	}
+	if last.NewFiles != 1 {
+		t.Fatalf("new files = %d, want %d", last.NewFiles, 1)
+	}
+}
+
+func TestScanWithOptionsCompletedProgressCountsSkippedFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	st, err := store.New(filepath.Join(tmpDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+
+	mediaRoot := filepath.Join(tmpDir, "media")
+	albumDir := filepath.Join(mediaRoot, "artist", "album")
+	if err := os.MkdirAll(albumDir, 0o755); err != nil {
+		t.Fatalf("mkdir album dir: %v", err)
+	}
+	audioPath := filepath.Join(albumDir, "track.flac")
+	if err := os.WriteFile(audioPath, []byte("audio"), 0o644); err != nil {
+		t.Fatalf("write audio file: %v", err)
+	}
+
+	restoreSeams := stubScannerSeams()
+	defer restoreSeams()
+
+	ffprobeRunner = func(path string) (int, string, map[string]string) {
+		if path != audioPath {
+			t.Fatalf("ffprobe path = %q, want %q", path, audioPath)
+		}
+		return 180, "FLAC", map[string]string{
+			"title": "Skipped Track",
+			"album": "Skipped Album",
+		}
+	}
+	metadataReader = func(path string) (tag.Metadata, error) {
+		if path != audioPath {
+			t.Fatalf("metadataReader path = %q, want %q", path, audioPath)
+		}
+		return fakeMetadata{}, nil
+	}
+	embeddedPictureReader = func(path string) (*tag.Picture, error) {
+		if path != audioPath {
+			t.Fatalf("embeddedPictureReader path = %q, want %q", path, audioPath)
+		}
+		return nil, nil
+	}
+	videoThumbFinder = func(string) string { return "" }
+
+	if err := Scan(mediaRoot, st, 1, 10); err != nil {
+		t.Fatalf("initial scan: %v", err)
+	}
+
+	var progress []ScanProgress
+	err = ScanWithOptions(mediaRoot, st, 1, 10, ScanOptions{
+		OnProgress: func(update ScanProgress) {
+			progress = append(progress, update)
+		},
+	})
+	if err != nil {
+		t.Fatalf("scan with progress: %v", err)
+	}
+	if len(progress) == 0 {
+		t.Fatal("expected progress updates")
+	}
+	last := progress[len(progress)-1]
+	if last.Phase != "completed" {
+		t.Fatalf("last phase = %q, want %q", last.Phase, "completed")
+	}
+	if last.ProcessedFiles != 1 {
+		t.Fatalf("processed = %d, want %d", last.ProcessedFiles, 1)
+	}
+	if last.TotalFiles != 1 {
+		t.Fatalf("total = %d, want %d", last.TotalFiles, 1)
+	}
+	if last.SkippedFiles != 1 {
+		t.Fatalf("skipped = %d, want %d", last.SkippedFiles, 1)
 	}
 }
 

@@ -59,6 +59,10 @@ abstract final class ApiEndpoints {
       '$_prefix/playlists/$playlistId/items/$itemId/cover';
   static String playlistCover(int id) => '$_prefix/playlists/$id/cover';
 
+  // Library
+  static const String libraryRescan = '$_prefix/library/rescan';
+  static const String libraryRescanStatus = '$_prefix/library/rescan-status';
+
   // DB
   static const String dbBackup = '$_prefix/db/backup';
 }

@@ -11,20 +11,31 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/mikudrome/mikudrome/internal/library"
+	"github.com/mikudrome/mikudrome/internal/scanner"
 	"github.com/mikudrome/mikudrome/internal/store"
+	_ "modernc.org/sqlite"
 )
 
 func newTestHandler(t *testing.T) *Handler {
 	t.Helper()
+	h, _ := newTestHandlerWithDBPath(t)
+	return h
+}
+
+func newTestHandlerWithDBPath(t *testing.T) (*Handler, string) {
+	t.Helper()
 	dir := t.TempDir()
-	s, err := store.New(filepath.Join(dir, "test.db"))
+	dbPath := filepath.Join(dir, "test.db")
+	s, err := store.New(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
 	coverDir := filepath.Join(dir, "covers")
-	return New(s, dir, "", "", coverDir)
+	return New(s, dir, "", "", coverDir, nil), dbPath
 }
 
 func doReq(h http.Handler, method, path, body string) *httptest.ResponseRecorder {
@@ -349,6 +360,131 @@ func TestPlaylistTracksHTTP_RoundTrip(t *testing.T) {
 	if tracksResp.Tracks[0].ID != t2 {
 		t.Fatalf("remaining track should be %d, got %d", t2, tracksResp.Tracks[0].ID)
 	}
+}
+
+func TestLibraryRescanEndpointsSingleFlight(t *testing.T) {
+	h := newTestHandler(t)
+	h.libraryTasks = library.NewTaskManager(h.mediaRoot, h.store, 1, 10)
+
+	release := make(chan struct{})
+	h.libraryTasks.SetScanFunc(func(opts scanner.ScanOptions) error {
+		if opts.OnProgress != nil {
+			opts.OnProgress(scanner.ScanProgress{
+				Phase:          "processing",
+				TotalFiles:     3,
+				ProcessedFiles: 1,
+				UpdatedFiles:   1,
+			})
+		}
+		<-release
+		return nil
+	})
+
+	first := doReq(h, http.MethodPost, "/api/library/rescan", "")
+	second := doReq(h, http.MethodPost, "/api/library/rescan", "")
+	statusResp := doReq(h, http.MethodGet, "/api/library/rescan-status", "")
+
+	if first.Code != http.StatusAccepted {
+		t.Fatalf("first rescan code = %d, want %d: %s", first.Code, http.StatusAccepted, first.Body.String())
+	}
+	if second.Code != http.StatusAccepted {
+		t.Fatalf("second rescan code = %d, want %d: %s", second.Code, http.StatusAccepted, second.Body.String())
+	}
+	if statusResp.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d: %s", statusResp.Code, http.StatusOK, statusResp.Body.String())
+	}
+
+	var firstStatus struct {
+		TaskType       string `json:"task_type"`
+		Status         string `json:"status"`
+		TotalFiles     int    `json:"total_files"`
+		ProcessedFiles int    `json:"processed_files"`
+	}
+	if err := json.Unmarshal(first.Body.Bytes(), &firstStatus); err != nil {
+		t.Fatalf("decode first status: %v", err)
+	}
+	if firstStatus.TaskType != "full_rescan" {
+		t.Fatalf("task_type = %q, want %q", firstStatus.TaskType, "full_rescan")
+	}
+	if firstStatus.Status != "running" {
+		t.Fatalf("status = %q, want %q", firstStatus.Status, "running")
+	}
+
+	var secondStatus struct {
+		Status    string `json:"status"`
+		StartedAt int64  `json:"started_at"`
+	}
+	if err := json.Unmarshal(second.Body.Bytes(), &secondStatus); err != nil {
+		t.Fatalf("decode second status: %v", err)
+	}
+	if secondStatus.Status != "running" {
+		t.Fatalf("second status = %q, want %q", secondStatus.Status, "running")
+	}
+
+	var currentStatus struct {
+		Status         string `json:"status"`
+		StartedAt      int64  `json:"started_at"`
+		TotalFiles     int    `json:"total_files"`
+		ProcessedFiles int    `json:"processed_files"`
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := json.Unmarshal(statusResp.Body.Bytes(), &currentStatus); err != nil {
+			t.Fatalf("decode current status: %v", err)
+		}
+		if currentStatus.Status == "running" &&
+			currentStatus.StartedAt != 0 &&
+			currentStatus.TotalFiles == 3 &&
+			currentStatus.ProcessedFiles == 1 {
+			break
+		}
+
+		time.Sleep(10 * time.Millisecond)
+		statusResp = doReq(h, http.MethodGet, "/api/library/rescan-status", "")
+		if statusResp.Code != http.StatusOK {
+			t.Fatalf("poll current status code = %d, want %d", statusResp.Code, http.StatusOK)
+		}
+	}
+	if currentStatus.Status != "running" {
+		t.Fatalf("current status = %q, want %q", currentStatus.Status, "running")
+	}
+	if currentStatus.StartedAt == 0 {
+		t.Fatal("expected started_at to be set")
+	}
+	if currentStatus.TotalFiles != 3 {
+		t.Fatalf("total_files = %d, want 3", currentStatus.TotalFiles)
+	}
+	if currentStatus.ProcessedFiles != 1 {
+		t.Fatalf("processed_files = %d, want 1", currentStatus.ProcessedFiles)
+	}
+
+	close(release)
+
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		rr := doReq(h, http.MethodGet, "/api/library/rescan-status", "")
+		if rr.Code != http.StatusOK {
+			t.Fatalf("poll status code = %d, want %d", rr.Code, http.StatusOK)
+		}
+
+		var done struct {
+			Status     string `json:"status"`
+			FinishedAt int64  `json:"finished_at"`
+		}
+		if err := json.Unmarshal(rr.Body.Bytes(), &done); err != nil {
+			t.Fatalf("decode completed status: %v", err)
+		}
+		if done.Status == "completed" {
+			if done.FinishedAt == 0 {
+				t.Fatal("expected finished_at to be set on completion")
+			}
+			return
+		}
+
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	t.Fatal("timed out waiting for completed rescan status")
 }
 
 func TestPlaylistItemsHTTP_GroupedReadReturnsUngroupedWithItems(t *testing.T) {
