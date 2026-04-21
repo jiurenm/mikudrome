@@ -253,13 +253,83 @@ func migrate(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	// Add album_artist column (idempotent: ALTER TABLE fails silently if column exists).
-	db.Exec(`ALTER TABLE albums ADD COLUMN album_artist TEXT DEFAULT ''`)
-	db.Exec(`ALTER TABLE tracks ADD COLUMN composer_scanned TEXT NOT NULL DEFAULT ''`)
-	db.Exec(`ALTER TABLE tracks ADD COLUMN lyricist_scanned TEXT NOT NULL DEFAULT ''`)
-	db.Exec(`UPDATE tracks SET composer_scanned = composer WHERE composer_scanned = ''`)
-	db.Exec(`UPDATE tracks SET lyricist_scanned = lyricist WHERE lyricist_scanned = ''`)
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin migration tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := addColumnIfMissingTx(tx, "albums", "album_artist", "TEXT DEFAULT ''"); err != nil {
+		return fmt.Errorf("migrate albums.album_artist: %w", err)
+	}
+
+	composerAdded, err := addColumnIfMissingTx(tx, "tracks", "composer_scanned", "TEXT NOT NULL DEFAULT ''")
+	if err != nil {
+		return fmt.Errorf("migrate tracks.composer_scanned: %w", err)
+	}
+	if composerAdded {
+		if _, err := tx.Exec(`UPDATE tracks SET composer_scanned = composer WHERE composer_scanned = ''`); err != nil {
+			return fmt.Errorf("backfill tracks.composer_scanned: %w", err)
+		}
+	}
+
+	lyricistAdded, err := addColumnIfMissingTx(tx, "tracks", "lyricist_scanned", "TEXT NOT NULL DEFAULT ''")
+	if err != nil {
+		return fmt.Errorf("migrate tracks.lyricist_scanned: %w", err)
+	}
+	if lyricistAdded {
+		if _, err := tx.Exec(`UPDATE tracks SET lyricist_scanned = lyricist WHERE lyricist_scanned = ''`); err != nil {
+			return fmt.Errorf("backfill tracks.lyricist_scanned: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit migration tx: %w", err)
+	}
 	return nil
+}
+
+func addColumnIfMissingTx(tx *sql.Tx, table, column, definition string) (bool, error) {
+	exists, err := columnExistsTx(tx, table, column)
+	if err != nil {
+		return false, err
+	}
+	if exists {
+		return false, nil
+	}
+	if _, err := tx.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, definition)); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func columnExistsTx(tx *sql.Tx, table, column string) (bool, error) {
+	rows, err := tx.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			colType   string
+			notNull   int
+			defaultV  sql.NullString
+			primaryPK int
+		)
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &defaultV, &primaryPK); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	return false, nil
 }
 
 // UpsertProducer inserts or updates a producer by name. Returns producer ID.
