@@ -255,6 +255,10 @@ func migrate(db *sql.DB) error {
 	}
 	// Add album_artist column (idempotent: ALTER TABLE fails silently if column exists).
 	db.Exec(`ALTER TABLE albums ADD COLUMN album_artist TEXT DEFAULT ''`)
+	db.Exec(`ALTER TABLE tracks ADD COLUMN composer_scanned TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE tracks ADD COLUMN lyricist_scanned TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`UPDATE tracks SET composer_scanned = composer WHERE composer_scanned = ''`)
+	db.Exec(`UPDATE tracks SET lyricist_scanned = lyricist WHERE lyricist_scanned = ''`)
 	return nil
 }
 
