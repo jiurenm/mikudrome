@@ -1766,6 +1766,61 @@ func TestReadEmbeddedPictureUsesMetadataReaderSeam(t *testing.T) {
 	}
 }
 
+func TestFindArtistAvatarUsesPreferredImageFormats(t *testing.T) {
+	tests := []struct {
+		name       string
+		files      []string
+		wantAvatar string
+	}{
+		{
+			name:       "prefers jpg before other supported formats",
+			files:      []string{"artist.webp", "artist.png", "artist.jpeg", "artist.jpg"},
+			wantAvatar: "artist.jpg",
+		},
+		{
+			name:       "falls back to jpeg when jpg is missing",
+			files:      []string{"artist.webp", "artist.png", "artist.jpeg"},
+			wantAvatar: "artist.jpeg",
+		},
+		{
+			name:       "falls back to png when jpeg is missing",
+			files:      []string{"artist.webp", "artist.png"},
+			wantAvatar: "artist.png",
+		},
+		{
+			name:       "falls back to webp when it is the only supported format",
+			files:      []string{"artist.webp"},
+			wantAvatar: "artist.webp",
+		},
+		{
+			name:       "ignores unsupported artist image names",
+			files:      []string{"artist.gif", "avatar.jpg"},
+			wantAvatar: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			artistDir := t.TempDir()
+			for _, name := range tc.files {
+				path := filepath.Join(artistDir, name)
+				if err := os.WriteFile(path, []byte(name), 0o644); err != nil {
+					t.Fatalf("write %s: %v", name, err)
+				}
+			}
+
+			got := findArtistAvatar(artistDir)
+			want := ""
+			if tc.wantAvatar != "" {
+				want = filepath.Join(artistDir, tc.wantAvatar)
+			}
+			if got != want {
+				t.Fatalf("findArtistAvatar() = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 func TestStubScannerSeamsRestoresAllScannerSeams(t *testing.T) {
 	origFFprobeRunner := ffprobeRunner
 	origMetadataReader := metadataReader

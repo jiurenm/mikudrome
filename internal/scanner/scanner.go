@@ -33,6 +33,9 @@ var ThumbExts = []string{".jpg", ".jpeg", ".png", ".webp"}
 // extracted_cover.jpg or extracted_cover.png may be written when we extract art from a track.
 var CoverNames = []string{"Cover.jpg", "cover.jpg", "Jacket.jpg", "jacket.jpg", "folder.jpg", "Folder.jpg", "extracted_cover.jpg", "extracted_cover.png"}
 
+// ArtistAvatarNames preferred filenames for producer avatar image in the artist folder.
+var ArtistAvatarNames = []string{"artist.jpg", "artist.jpeg", "artist.png", "artist.webp"}
+
 var (
 	ffprobeRunner         = runFFprobe
 	metadataReader        = readMetadata
@@ -1020,11 +1023,13 @@ func findCoverInDir(dir string) string {
 	return ""
 }
 
-// findArtistAvatar looks for artist.jpg in the P主 folder. Returns path or "".
+// findArtistAvatar looks for a supported artist avatar image in the P主 folder. Returns path or "".
 func findArtistAvatar(artistDir string) string {
-	p := filepath.Join(artistDir, "artist.jpg")
-	if _, err := os.Stat(p); err == nil {
-		return p
+	for _, name := range ArtistAvatarNames {
+		p := filepath.Join(artistDir, name)
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
 	}
 	return ""
 }
