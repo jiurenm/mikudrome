@@ -31,7 +31,15 @@ var ThumbExts = []string{".jpg", ".jpeg", ".png", ".webp"}
 
 // CoverNames preferred filenames for album cover image (same dir as tracks).
 // extracted_cover.jpg or extracted_cover.png may be written when we extract art from a track.
-var CoverNames = []string{"Cover.jpg", "cover.jpg", "Jacket.jpg", "jacket.jpg", "folder.jpg", "Folder.jpg", "extracted_cover.jpg", "extracted_cover.png"}
+var CoverNames = []string{
+	"Cover.jpg", "Cover.jpeg", "Cover.png", "Cover.webp",
+	"cover.jpg", "cover.jpeg", "cover.png", "cover.webp",
+	"Jacket.jpg", "Jacket.jpeg", "Jacket.png", "Jacket.webp",
+	"jacket.jpg", "jacket.jpeg", "jacket.png", "jacket.webp",
+	"folder.jpg", "folder.jpeg", "folder.png", "folder.webp",
+	"Folder.jpg", "Folder.jpeg", "Folder.png", "Folder.webp",
+	"extracted_cover.jpg", "extracted_cover.png",
+}
 
 // ArtistAvatarNames preferred filenames for producer avatar image in the artist folder.
 var ArtistAvatarNames = []string{"artist.jpg", "artist.jpeg", "artist.png", "artist.webp"}

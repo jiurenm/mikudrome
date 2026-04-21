@@ -406,6 +406,59 @@ func TestExtractCoverFromTrackFallsBackForWAV(t *testing.T) {
 	}
 }
 
+func TestProcessFileUsesExistingCoverPNG(t *testing.T) {
+	tmpDir := t.TempDir()
+	restoreSeams := stubScannerSeams()
+	defer restoreSeams()
+
+	albumDir := filepath.Join(tmpDir, "artist-folder", "album-folder")
+	if err := os.MkdirAll(albumDir, 0o755); err != nil {
+		t.Fatalf("mkdir album dir: %v", err)
+	}
+	audioPath := filepath.Join(albumDir, "track.flac")
+	if err := os.WriteFile(audioPath, []byte("fLaC"), 0o644); err != nil {
+		t.Fatalf("write audio file: %v", err)
+	}
+	coverPath := filepath.Join(albumDir, "cover.png")
+	if err := os.WriteFile(coverPath, []byte("png"), 0o644); err != nil {
+		t.Fatalf("write cover file: %v", err)
+	}
+
+	ffprobeRunner = func(path string) (int, string, map[string]string) {
+		if path != audioPath {
+			t.Fatalf("ffprobe path = %q, want %q", path, audioPath)
+		}
+		return 180, "FLAC", map[string]string{
+			"title": "Track",
+			"album": "Album",
+		}
+	}
+	metadataReader = func(path string) (tag.Metadata, error) {
+		if path != audioPath {
+			t.Fatalf("metadataReader path = %q, want %q", path, audioPath)
+		}
+		return fakeMetadata{}, nil
+	}
+	embeddedPictureReader = func(path string) (*tag.Picture, error) {
+		t.Fatalf("embeddedPictureReader should not be called when directory cover exists, got %q", path)
+		return nil, nil
+	}
+	wavCoverExtractor = func(audioPath, albumDir string) string {
+		t.Fatalf("wavCoverExtractor should not be called for existing directory cover, got audioPath=%q albumDir=%q", audioPath, albumDir)
+		return ""
+	}
+	videoThumbFinder = func(path string) string {
+		t.Fatalf("videoThumbFinder should not be called, got %q", path)
+		return ""
+	}
+
+	result := processFile(scanJob{audioPath: audioPath}, tmpDir)
+
+	if result.album.CoverPath != coverPath {
+		t.Fatalf("cover path = %q, want %q", result.album.CoverPath, coverPath)
+	}
+}
+
 func TestProcessFileRefreshesStaleCrossFormatExtractedCoverForWAV(t *testing.T) {
 	tmpDir := t.TempDir()
 	restoreSeams := stubScannerSeams()

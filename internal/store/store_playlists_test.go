@@ -197,6 +197,64 @@ func TestBatchInserterFlushUpsertsExistingTrackWithoutDeletingPlaylistItems(t *t
 	}
 }
 
+func TestBatchInserterFlushKeepsExistingProducerIDAndRefreshesAvatar(t *testing.T) {
+	s := newTestStore(t)
+
+	eveID, err := s.UpsertProducer("Eve", "")
+	if err != nil {
+		t.Fatalf("UpsertProducer: %v", err)
+	}
+
+	batch, err := s.BeginBatch(2)
+	if err != nil {
+		t.Fatalf("BeginBatch: %v", err)
+	}
+
+	if err := batch.Add(
+		Track{Title: "Blank", AudioPath: "/blank.flac", DiscNumber: 1, TrackNumber: 1},
+		Album{Title: "Blank Album", CoverPath: "/blank.jpg"},
+		Producer{Name: "", AvatarPath: "/app/media/初音ミク/artist.jpg"},
+	); err != nil {
+		t.Fatalf("batch.Add blank: %v", err)
+	}
+
+	if err := batch.Add(
+		Track{Title: "Eve Song", AudioPath: "/eve.flac", DiscNumber: 1, TrackNumber: 1},
+		Album{Title: "Eve Album", CoverPath: "/eve.jpg", AlbumArtist: "Eve"},
+		Producer{Name: "Eve", AvatarPath: "/app/media/Eve/artist.png"},
+	); err != nil {
+		t.Fatalf("batch.Add Eve: %v", err)
+	}
+
+	if err := batch.Close(); err != nil {
+		t.Fatalf("batch.Close: %v", err)
+	}
+
+	var producerID int64
+	if err := s.db.QueryRow(`SELECT producer_id FROM albums WHERE title = ?`, "Eve Album").Scan(&producerID); err != nil {
+		t.Fatalf("select album producer_id: %v", err)
+	}
+	if producerID != eveID {
+		t.Fatalf("producer_id = %d, want %d", producerID, eveID)
+	}
+
+	var avatarPath string
+	if err := s.db.QueryRow(`SELECT avatar_path FROM producers WHERE id = ?`, eveID).Scan(&avatarPath); err != nil {
+		t.Fatalf("select producer avatar_path: %v", err)
+	}
+	if avatarPath != "/app/media/Eve/artist.png" {
+		t.Fatalf("avatar_path = %q, want %q", avatarPath, "/app/media/Eve/artist.png")
+	}
+
+	var emptyProducerCount int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM producers WHERE name = ''`).Scan(&emptyProducerCount); err != nil {
+		t.Fatalf("count empty-name producers: %v", err)
+	}
+	if emptyProducerCount != 0 {
+		t.Fatalf("empty-name producer count = %d, want 0", emptyProducerCount)
+	}
+}
+
 // --- Task 3: Playlist CRUD ---
 
 func TestPlaylist_CRUD(t *testing.T) {

@@ -1045,18 +1045,22 @@ func (b *BatchInserter) Flush() error {
 
 	// Batch upsert producers
 	for _, p := range b.producers {
+		if p.Name == "" {
+			continue
+		}
 		if _, exists := b.producerCache[p.Name]; !exists {
-			result, err := b.tx.Exec(`INSERT OR IGNORE INTO producers (name, avatar_path) VALUES (?, ?)`, p.Name, p.AvatarPath)
+			_, err := b.tx.Exec(
+				`INSERT INTO producers (name, avatar_path) VALUES (?, ?)
+				 ON CONFLICT(name) DO UPDATE SET avatar_path=excluded.avatar_path`,
+				p.Name, p.AvatarPath,
+			)
 			if err != nil {
 				return err
 			}
-			id, _ := result.LastInsertId()
-			if id == 0 {
-				// Already exists, fetch it
-				err = b.tx.QueryRow(`SELECT id FROM producers WHERE name = ?`, p.Name).Scan(&id)
-				if err != nil {
-					return err
-				}
+			var id int64
+			err = b.tx.QueryRow(`SELECT id FROM producers WHERE name = ?`, p.Name).Scan(&id)
+			if err != nil {
+				return err
 			}
 			b.producerCache[p.Name] = id
 		}
