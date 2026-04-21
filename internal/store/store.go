@@ -54,6 +54,8 @@ type Track struct {
 	// Extended metadata fields
 	Composer          string `json:"composer,omitempty"`           // 作曲
 	Lyricist          string `json:"lyricist,omitempty"`           // 作词
+	ComposerScanned   string `json:"-"`                            // Internal scanned fallback for composer
+	LyricistScanned   string `json:"-"`                            // Internal scanned fallback for lyricist
 	Arranger          string `json:"arranger,omitempty"`           // 编曲
 	Vocal             string `json:"vocal,omitempty"`              // Vocal（如 "初音ミク"）
 	VoiceManipulator  string `json:"voice_manipulator,omitempty"`  // 调教
@@ -93,6 +95,41 @@ type VideoMeta struct {
 	Path    string
 	ModTime int64
 	Size    int64
+}
+
+// TrackMetadataRow represents editable track metadata with effective composer/lyricist values.
+type TrackMetadataRow struct {
+	ID               int64  `json:"id"`
+	Title            string `json:"title"`
+	TrackNumber      int    `json:"track_number"`
+	DiscNumber       int    `json:"disc_number"`
+	AlbumID          int64  `json:"album_id"`
+	AlbumTitle       string `json:"album_title"`
+	AlbumCoverPath   string `json:"album_cover_path"`
+	ProducerID       int64  `json:"producer_id"`
+	ProducerName     string `json:"producer_name"`
+	Composer         string `json:"composer"`
+	Lyricist         string `json:"lyricist"`
+	Arranger         string `json:"arranger"`
+	Vocal            string `json:"vocal"`
+	VoiceManipulator string `json:"voice_manipulator"`
+	Illustrator      string `json:"illustrator"`
+	Movie            string `json:"movie"`
+	Source           string `json:"source"`
+	ComposerSource   string `json:"composer_source"`
+	LyricistSource   string `json:"lyricist_source"`
+}
+
+// TrackMetadataPatch holds partial metadata updates for editable fields.
+type TrackMetadataPatch struct {
+	Composer         *string `json:"composer,omitempty"`
+	Lyricist         *string `json:"lyricist,omitempty"`
+	Arranger         *string `json:"arranger,omitempty"`
+	Vocal            *string `json:"vocal,omitempty"`
+	VoiceManipulator *string `json:"voice_manipulator,omitempty"`
+	Illustrator      *string `json:"illustrator,omitempty"`
+	Movie            *string `json:"movie,omitempty"`
+	Source           *string `json:"source,omitempty"`
 }
 
 // Store provides SQLite persistence for tracks.
@@ -253,9 +290,83 @@ func migrate(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	// Add album_artist column (idempotent: ALTER TABLE fails silently if column exists).
-	db.Exec(`ALTER TABLE albums ADD COLUMN album_artist TEXT DEFAULT ''`)
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin migration tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := addColumnIfMissingTx(tx, "albums", "album_artist", "TEXT DEFAULT ''"); err != nil {
+		return fmt.Errorf("migrate albums.album_artist: %w", err)
+	}
+
+	composerAdded, err := addColumnIfMissingTx(tx, "tracks", "composer_scanned", "TEXT NOT NULL DEFAULT ''")
+	if err != nil {
+		return fmt.Errorf("migrate tracks.composer_scanned: %w", err)
+	}
+	if composerAdded {
+		if _, err := tx.Exec(`UPDATE tracks SET composer_scanned = composer WHERE composer_scanned = ''`); err != nil {
+			return fmt.Errorf("backfill tracks.composer_scanned: %w", err)
+		}
+	}
+
+	lyricistAdded, err := addColumnIfMissingTx(tx, "tracks", "lyricist_scanned", "TEXT NOT NULL DEFAULT ''")
+	if err != nil {
+		return fmt.Errorf("migrate tracks.lyricist_scanned: %w", err)
+	}
+	if lyricistAdded {
+		if _, err := tx.Exec(`UPDATE tracks SET lyricist_scanned = lyricist WHERE lyricist_scanned = ''`); err != nil {
+			return fmt.Errorf("backfill tracks.lyricist_scanned: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit migration tx: %w", err)
+	}
 	return nil
+}
+
+func addColumnIfMissingTx(tx *sql.Tx, table, column, definition string) (bool, error) {
+	exists, err := columnExistsTx(tx, table, column)
+	if err != nil {
+		return false, err
+	}
+	if exists {
+		return false, nil
+	}
+	if _, err := tx.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, definition)); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func columnExistsTx(tx *sql.Tx, table, column string) (bool, error) {
+	rows, err := tx.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			colType   string
+			notNull   int
+			defaultV  sql.NullString
+			primaryPK int
+		)
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &defaultV, &primaryPK); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	return false, nil
 }
 
 // UpsertProducer inserts or updates a producer by name. Returns producer ID.
@@ -376,7 +487,17 @@ func (s *Store) GetTracksByAlbumID(albumID int64) ([]Track, error) {
 	rows, err := s.db.Query(
 		`SELECT t.id, t.title, t.audio_path, t.video_path, COALESCE(t.video_thumb_path, ''), COALESCE(t.album_id, 0),
 		 COALESCE(t.disc_number, 1), COALESCE(t.track_number, 0), COALESCE(t.artists, ''), COALESCE(t.year, 0),
-		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''), COALESCE(t.composer, ''), COALESCE(t.lyricist, ''),
+		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''),
+		 CASE
+			 WHEN TRIM(COALESCE(t.composer, '')) != '' THEN t.composer
+			 WHEN TRIM(COALESCE(t.composer_scanned, '')) != '' THEN t.composer_scanned
+			 ELSE ''
+		 END,
+		 CASE
+			 WHEN TRIM(COALESCE(t.lyricist, '')) != '' THEN t.lyricist
+			 WHEN TRIM(COALESCE(t.lyricist_scanned, '')) != '' THEN t.lyricist_scanned
+			 ELSE ''
+		 END,
 		 COALESCE(t.arranger, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''), COALESCE(t.illustrator, ''),
 		 COALESCE(t.movie, ''), COALESCE(t.source, ''), COALESCE(t.lyrics, ''), COALESCE(t.comment, ''),
 		 COALESCE(a.album_artist, '')
@@ -407,7 +528,17 @@ func (s *Store) GetTracksByAlbumID(albumID int64) ([]Track, error) {
 func (s *Store) ListTracks() ([]Track, error) {
 	rows, err := s.db.Query(`SELECT t.id, t.title, t.audio_path, t.video_path, COALESCE(t.video_thumb_path, ''), COALESCE(t.album_id, 0),
 		 COALESCE(t.disc_number, 1), COALESCE(t.track_number, 0), COALESCE(t.artists, ''), COALESCE(t.year, 0),
-		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''), COALESCE(t.composer, ''), COALESCE(t.lyricist, ''),
+		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''),
+		 CASE
+			 WHEN TRIM(COALESCE(t.composer, '')) != '' THEN t.composer
+			 WHEN TRIM(COALESCE(t.composer_scanned, '')) != '' THEN t.composer_scanned
+			 ELSE ''
+		 END,
+		 CASE
+			 WHEN TRIM(COALESCE(t.lyricist, '')) != '' THEN t.lyricist
+			 WHEN TRIM(COALESCE(t.lyricist_scanned, '')) != '' THEN t.lyricist_scanned
+			 ELSE ''
+		 END,
 		 COALESCE(t.arranger, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''), COALESCE(t.illustrator, ''),
 		 COALESCE(t.movie, ''), COALESCE(t.source, ''), COALESCE(t.lyrics, ''), COALESCE(t.comment, ''),
 		 COALESCE(a.album_artist, '')
@@ -438,7 +569,17 @@ func (s *Store) GetTrackByID(id int64) (Track, bool, error) {
 	err := s.db.QueryRow(
 		`SELECT t.id, t.title, t.audio_path, t.video_path, COALESCE(t.video_thumb_path, ''), COALESCE(t.album_id, 0),
 		 COALESCE(t.disc_number, 1), COALESCE(t.track_number, 0), COALESCE(t.artists, ''), COALESCE(t.year, 0),
-		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''), COALESCE(t.composer, ''), COALESCE(t.lyricist, ''),
+		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''),
+		 CASE
+			 WHEN TRIM(COALESCE(t.composer, '')) != '' THEN t.composer
+			 WHEN TRIM(COALESCE(t.composer_scanned, '')) != '' THEN t.composer_scanned
+			 ELSE ''
+		 END,
+		 CASE
+			 WHEN TRIM(COALESCE(t.lyricist, '')) != '' THEN t.lyricist
+			 WHEN TRIM(COALESCE(t.lyricist_scanned, '')) != '' THEN t.lyricist_scanned
+			 ELSE ''
+		 END,
 		 COALESCE(t.arranger, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''), COALESCE(t.illustrator, ''),
 		 COALESCE(t.movie, ''), COALESCE(t.source, ''), COALESCE(t.lyrics, ''), COALESCE(t.comment, ''),
 		 COALESCE(a.album_artist, '')
@@ -457,6 +598,207 @@ func (s *Store) GetTrackByID(id int64) (Track, bool, error) {
 		return Track{}, false, err
 	}
 	return t, true, nil
+}
+
+// ListTrackMetadata returns projected track metadata rows for metadata editing.
+func (s *Store) ListTrackMetadata() ([]TrackMetadataRow, error) {
+	rows, err := s.db.Query(`
+		SELECT
+			t.id,
+			t.title,
+			COALESCE(t.track_number, 0),
+			COALESCE(t.disc_number, 1),
+			COALESCE(t.album_id, 0),
+			COALESCE(a.title, ''),
+			COALESCE(a.cover_path, ''),
+			COALESCE(a.producer_id, 0),
+			COALESCE(p.name, ''),
+			CASE
+				WHEN TRIM(COALESCE(t.composer, '')) != '' THEN t.composer
+				WHEN TRIM(COALESCE(t.composer_scanned, '')) != '' THEN t.composer_scanned
+				ELSE ''
+			END,
+			CASE
+				WHEN TRIM(COALESCE(t.lyricist, '')) != '' THEN t.lyricist
+				WHEN TRIM(COALESCE(t.lyricist_scanned, '')) != '' THEN t.lyricist_scanned
+				ELSE ''
+			END,
+			COALESCE(t.arranger, ''),
+			COALESCE(t.vocal, ''),
+			COALESCE(t.voice_manipulator, ''),
+			COALESCE(t.illustrator, ''),
+			COALESCE(t.movie, ''),
+			COALESCE(t.source, ''),
+			CASE
+				WHEN TRIM(COALESCE(t.composer, '')) != '' THEN 'manual'
+				WHEN TRIM(COALESCE(t.composer_scanned, '')) != '' THEN 'scanned'
+				ELSE 'empty'
+			END,
+			CASE
+				WHEN TRIM(COALESCE(t.lyricist, '')) != '' THEN 'manual'
+				WHEN TRIM(COALESCE(t.lyricist_scanned, '')) != '' THEN 'scanned'
+				ELSE 'empty'
+			END
+		FROM tracks t
+		LEFT JOIN albums a ON a.id = t.album_id
+		LEFT JOIN producers p ON p.id = a.producer_id
+		ORDER BY t.id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []TrackMetadataRow
+	for rows.Next() {
+		var r TrackMetadataRow
+		if err := rows.Scan(
+			&r.ID,
+			&r.Title,
+			&r.TrackNumber,
+			&r.DiscNumber,
+			&r.AlbumID,
+			&r.AlbumTitle,
+			&r.AlbumCoverPath,
+			&r.ProducerID,
+			&r.ProducerName,
+			&r.Composer,
+			&r.Lyricist,
+			&r.Arranger,
+			&r.Vocal,
+			&r.VoiceManipulator,
+			&r.Illustrator,
+			&r.Movie,
+			&r.Source,
+			&r.ComposerSource,
+			&r.LyricistSource,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// GetTrackMetadataByID returns one projected metadata row by track id.
+func (s *Store) GetTrackMetadataByID(id int64) (TrackMetadataRow, bool, error) {
+	var r TrackMetadataRow
+	err := s.db.QueryRow(`
+		SELECT
+			t.id,
+			t.title,
+			COALESCE(t.track_number, 0),
+			COALESCE(t.disc_number, 1),
+			COALESCE(t.album_id, 0),
+			COALESCE(a.title, ''),
+			COALESCE(a.cover_path, ''),
+			COALESCE(a.producer_id, 0),
+			COALESCE(p.name, ''),
+			CASE
+				WHEN TRIM(COALESCE(t.composer, '')) != '' THEN t.composer
+				WHEN TRIM(COALESCE(t.composer_scanned, '')) != '' THEN t.composer_scanned
+				ELSE ''
+			END,
+			CASE
+				WHEN TRIM(COALESCE(t.lyricist, '')) != '' THEN t.lyricist
+				WHEN TRIM(COALESCE(t.lyricist_scanned, '')) != '' THEN t.lyricist_scanned
+				ELSE ''
+			END,
+			COALESCE(t.arranger, ''),
+			COALESCE(t.vocal, ''),
+			COALESCE(t.voice_manipulator, ''),
+			COALESCE(t.illustrator, ''),
+			COALESCE(t.movie, ''),
+			COALESCE(t.source, ''),
+			CASE
+				WHEN TRIM(COALESCE(t.composer, '')) != '' THEN 'manual'
+				WHEN TRIM(COALESCE(t.composer_scanned, '')) != '' THEN 'scanned'
+				ELSE 'empty'
+			END,
+			CASE
+				WHEN TRIM(COALESCE(t.lyricist, '')) != '' THEN 'manual'
+				WHEN TRIM(COALESCE(t.lyricist_scanned, '')) != '' THEN 'scanned'
+				ELSE 'empty'
+			END
+		FROM tracks t
+		LEFT JOIN albums a ON a.id = t.album_id
+		LEFT JOIN producers p ON p.id = a.producer_id
+		WHERE t.id = ?
+	`, id).Scan(
+		&r.ID,
+		&r.Title,
+		&r.TrackNumber,
+		&r.DiscNumber,
+		&r.AlbumID,
+		&r.AlbumTitle,
+		&r.AlbumCoverPath,
+		&r.ProducerID,
+		&r.ProducerName,
+		&r.Composer,
+		&r.Lyricist,
+		&r.Arranger,
+		&r.Vocal,
+		&r.VoiceManipulator,
+		&r.Illustrator,
+		&r.Movie,
+		&r.Source,
+		&r.ComposerSource,
+		&r.LyricistSource,
+	)
+	if err == sql.ErrNoRows {
+		return TrackMetadataRow{}, false, nil
+	}
+	if err != nil {
+		return TrackMetadataRow{}, false, err
+	}
+	return r, true, nil
+}
+
+// UpdateTrackMetadata applies partial updates to editable metadata fields.
+func (s *Store) UpdateTrackMetadata(trackID int64, patch TrackMetadataPatch) error {
+	var (
+		sets []string
+		args []any
+	)
+	if patch.Composer != nil {
+		sets = append(sets, "composer = ?")
+		args = append(args, strings.TrimSpace(*patch.Composer))
+	}
+	if patch.Lyricist != nil {
+		sets = append(sets, "lyricist = ?")
+		args = append(args, strings.TrimSpace(*patch.Lyricist))
+	}
+	if patch.Arranger != nil {
+		sets = append(sets, "arranger = ?")
+		args = append(args, strings.TrimSpace(*patch.Arranger))
+	}
+	if patch.Vocal != nil {
+		sets = append(sets, "vocal = ?")
+		args = append(args, strings.TrimSpace(*patch.Vocal))
+	}
+	if patch.VoiceManipulator != nil {
+		sets = append(sets, "voice_manipulator = ?")
+		args = append(args, strings.TrimSpace(*patch.VoiceManipulator))
+	}
+	if patch.Illustrator != nil {
+		sets = append(sets, "illustrator = ?")
+		args = append(args, strings.TrimSpace(*patch.Illustrator))
+	}
+	if patch.Movie != nil {
+		sets = append(sets, "movie = ?")
+		args = append(args, strings.TrimSpace(*patch.Movie))
+	}
+	if patch.Source != nil {
+		sets = append(sets, "source = ?")
+		args = append(args, strings.TrimSpace(*patch.Source))
+	}
+	if len(sets) == 0 {
+		return nil
+	}
+
+	args = append(args, trackID)
+	_, err := s.db.Exec(fmt.Sprintf("UPDATE tracks SET %s WHERE id = ?", strings.Join(sets, ", ")), args...)
+	return err
 }
 
 // ListProducers returns all distinct producers from albums with track and album counts.
@@ -539,7 +881,17 @@ func (s *Store) GetTracksByProducer(id int64) ([]Track, error) {
 	rows, err := s.db.Query(
 		`SELECT t.id, t.title, t.audio_path, t.video_path, COALESCE(t.video_thumb_path, ''), COALESCE(t.album_id, 0),
 		 COALESCE(t.disc_number, 1), COALESCE(t.track_number, 0), COALESCE(t.artists, ''), COALESCE(t.year, 0),
-		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''), COALESCE(t.composer, ''), COALESCE(t.lyricist, ''),
+		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''),
+		 CASE
+			 WHEN TRIM(COALESCE(t.composer, '')) != '' THEN t.composer
+			 WHEN TRIM(COALESCE(t.composer_scanned, '')) != '' THEN t.composer_scanned
+			 ELSE ''
+		 END,
+		 CASE
+			 WHEN TRIM(COALESCE(t.lyricist, '')) != '' THEN t.lyricist
+			 WHEN TRIM(COALESCE(t.lyricist_scanned, '')) != '' THEN t.lyricist_scanned
+			 ELSE ''
+		 END,
 		 COALESCE(t.arranger, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''), COALESCE(t.illustrator, ''),
 		 COALESCE(t.movie, ''), COALESCE(t.source, ''), COALESCE(t.lyrics, ''), COALESCE(t.comment, ''),
 		 COALESCE(a.album_artist, '')
@@ -656,7 +1008,17 @@ func (s *Store) GetTracksByVocalist(name string) ([]Track, error) {
 	rows, err := s.db.Query(
 		`SELECT t.id, t.title, t.audio_path, t.video_path, COALESCE(t.video_thumb_path, ''), COALESCE(t.album_id, 0),
 		 COALESCE(t.disc_number, 1), COALESCE(t.track_number, 0), COALESCE(t.artists, ''), COALESCE(t.year, 0),
-		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''), COALESCE(t.composer, ''), COALESCE(t.lyricist, ''),
+		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''),
+		 CASE
+			 WHEN TRIM(COALESCE(t.composer, '')) != '' THEN t.composer
+			 WHEN TRIM(COALESCE(t.composer_scanned, '')) != '' THEN t.composer_scanned
+			 ELSE ''
+		 END,
+		 CASE
+			 WHEN TRIM(COALESCE(t.lyricist, '')) != '' THEN t.lyricist
+			 WHEN TRIM(COALESCE(t.lyricist_scanned, '')) != '' THEN t.lyricist_scanned
+			 ELSE ''
+		 END,
 		 COALESCE(t.arranger, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''), COALESCE(t.illustrator, ''),
 		 COALESCE(t.movie, ''), COALESCE(t.source, ''), COALESCE(t.lyrics, ''), COALESCE(t.comment, ''),
 		 COALESCE(a.album_artist, '')
@@ -815,7 +1177,12 @@ func (s *Store) ListVideos() ([]Video, error) {
 		SELECT v.id, v.title, v.artist, v.path, v.thumb_path, v.duration_seconds,
 		       v.track_id, v.producer_id, v.source, v.file_mtime, v.file_size,
 		       COALESCE(t.title, ''), COALESCE(al.title, ''), COALESCE(al.cover_path, ''),
-		       COALESCE(t.composer, ''), COALESCE(t.vocal, '')
+		       CASE
+			       WHEN TRIM(COALESCE(t.composer, '')) != '' THEN t.composer
+			       WHEN TRIM(COALESCE(t.composer_scanned, '')) != '' THEN t.composer_scanned
+			       ELSE ''
+		       END,
+		       COALESCE(t.vocal, '')
 		FROM videos v
 		LEFT JOIN tracks t ON v.track_id = t.id
 		LEFT JOIN albums al ON t.album_id = al.id
@@ -845,7 +1212,12 @@ func (s *Store) GetVideoByID(id int64) (Video, bool, error) {
 		SELECT v.id, v.title, v.artist, v.path, v.thumb_path, v.duration_seconds,
 		       v.track_id, v.producer_id, v.source, v.file_mtime, v.file_size,
 		       COALESCE(t.title, ''), COALESCE(al.title, ''), COALESCE(al.cover_path, ''),
-		       COALESCE(t.composer, ''), COALESCE(t.vocal, '')
+		       CASE
+			       WHEN TRIM(COALESCE(t.composer, '')) != '' THEN t.composer
+			       WHEN TRIM(COALESCE(t.composer_scanned, '')) != '' THEN t.composer_scanned
+			       ELSE ''
+		       END,
+		       COALESCE(t.vocal, '')
 		FROM videos v
 		LEFT JOIN tracks t ON v.track_id = t.id
 		LEFT JOIN albums al ON t.album_id = al.id
@@ -1099,9 +1471,9 @@ func (b *BatchInserter) Flush() error {
 		albumID := b.albumCache[b.albums[i].Title]
 		_, err := b.tx.Exec(`INSERT INTO tracks
 			(title, audio_path, video_path, video_thumb_path, album_id, disc_number, track_number,
-			 artists, year, duration_seconds, format, composer, lyricist, arranger, vocal,
-			 voice_manipulator, illustrator, movie, source, lyrics, comment, file_mtime, file_size)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 artists, year, duration_seconds, format, composer_scanned, lyricist_scanned,
+			 lyrics, comment, file_mtime, file_size)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(audio_path) DO UPDATE SET
 				title = excluded.title,
 				video_path = excluded.video_path,
@@ -1113,21 +1485,15 @@ func (b *BatchInserter) Flush() error {
 				year = excluded.year,
 				duration_seconds = excluded.duration_seconds,
 				format = excluded.format,
-				composer = excluded.composer,
-				lyricist = excluded.lyricist,
-				arranger = excluded.arranger,
-				vocal = excluded.vocal,
-				voice_manipulator = excluded.voice_manipulator,
-				illustrator = excluded.illustrator,
-				movie = excluded.movie,
-				source = excluded.source,
+				composer_scanned = excluded.composer_scanned,
+				lyricist_scanned = excluded.lyricist_scanned,
 				lyrics = excluded.lyrics,
 				comment = excluded.comment,
 				file_mtime = excluded.file_mtime,
 				file_size = excluded.file_size`,
 			t.Title, t.AudioPath, t.VideoPath, t.VideoThumbPath, albumID, t.DiscNumber, t.TrackNumber,
-			t.Artists, t.Year, t.DurationSeconds, t.Format, t.Composer, t.Lyricist, t.Arranger, t.Vocal,
-			t.VoiceManipulator, t.Illustrator, t.Movie, t.Source, t.Lyrics, t.Comment, t.FileMtime, t.FileSize)
+			t.Artists, t.Year, t.DurationSeconds, t.Format, t.ComposerScanned, t.LyricistScanned,
+			t.Lyrics, t.Comment, t.FileMtime, t.FileSize)
 		if err != nil {
 			return err
 		}

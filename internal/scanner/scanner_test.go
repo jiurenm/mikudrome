@@ -1654,6 +1654,83 @@ func TestScanWithOptionsForceKeepsTrackIDsStable(t *testing.T) {
 	}
 }
 
+func TestScanWithOptionsWritesScannedComposerAndPreservesManualMetadata(t *testing.T) {
+	tmpDir := t.TempDir()
+	st, err := store.New(filepath.Join(tmpDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+
+	mediaRoot := filepath.Join(tmpDir, "media")
+	albumDir := filepath.Join(mediaRoot, "artist", "album")
+	if err := os.MkdirAll(albumDir, 0o755); err != nil {
+		t.Fatalf("mkdir album dir: %v", err)
+	}
+	audioPath := filepath.Join(albumDir, "track.flac")
+	if err := os.WriteFile(audioPath, []byte("audio"), 0o644); err != nil {
+		t.Fatalf("write audio file: %v", err)
+	}
+
+	restoreSeams := stubScannerSeams()
+	defer restoreSeams()
+
+	ffprobeRunner = func(path string) (int, string, map[string]string) {
+		if path != audioPath {
+			t.Fatalf("ffprobe path = %q, want %q", path, audioPath)
+		}
+		return 180, "FLAC", map[string]string{
+			"title":             "Track",
+			"album":             "Album",
+			"composer":          "scan composer",
+			"lyricist":          "scan lyricist",
+			"arranger":          "scan arranger",
+			"vocal":             "scan vocal",
+			"voice_manipulator": "scan manipulator",
+			"illustrator":       "scan illustrator",
+			"movie":             "scan movie",
+			"source":            "scan source",
+		}
+	}
+	metadataReader = func(string) (tag.Metadata, error) { return fakeMetadata{}, nil }
+	embeddedPictureReader = func(string) (*tag.Picture, error) { return nil, nil }
+	videoThumbFinder = func(string) string { return "" }
+
+	if err := ScanWithOptions(mediaRoot, st, 1, 10, ScanOptions{}); err != nil {
+		t.Fatalf("initial scan: %v", err)
+	}
+
+	manualComposer := "manual composer"
+	manualVocal := "manual vocal"
+	if err := st.UpdateTrackMetadata(1, store.TrackMetadataPatch{
+		Composer: &manualComposer,
+		Vocal:    &manualVocal,
+	}); err != nil {
+		t.Fatalf("seed manual metadata: %v", err)
+	}
+
+	if err := ScanWithOptions(mediaRoot, st, 1, 10, ScanOptions{Force: true}); err != nil {
+		t.Fatalf("rescan: %v", err)
+	}
+
+	row, ok, err := st.GetTrackMetadataByID(1)
+	if err != nil || !ok {
+		t.Fatalf("get metadata after rescan: ok=%v err=%v", ok, err)
+	}
+	if row.Composer != "manual composer" || row.ComposerSource != "manual" {
+		t.Fatalf("composer = %q (%s)", row.Composer, row.ComposerSource)
+	}
+	if row.Lyricist != "scan lyricist" || row.LyricistSource != "scanned" {
+		t.Fatalf("lyricist = %q (%s)", row.Lyricist, row.LyricistSource)
+	}
+	if row.Vocal != "manual vocal" {
+		t.Fatalf("vocal = %q, want %q", row.Vocal, "manual vocal")
+	}
+	if row.Arranger != "" || row.VoiceManipulator != "" || row.Illustrator != "" || row.Movie != "" || row.Source != "" {
+		t.Fatalf("manual-only fields were overwritten by scan: %+v", row)
+	}
+}
+
 func TestScanWithOptionsReportsProgress(t *testing.T) {
 	tmpDir := t.TempDir()
 	st, err := store.New(filepath.Join(tmpDir, "test.db"))

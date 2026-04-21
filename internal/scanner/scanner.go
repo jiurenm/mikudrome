@@ -353,12 +353,6 @@ func processFileWithAlbumCoverCoordinator(job scanJob, mediaRoot string, albumCo
 	// Extended metadata fields
 	composer := ""
 	lyricist := ""
-	arranger := ""
-	vocal := ""
-	voiceManipulator := ""
-	illustrator := ""
-	movie := ""
-	source := ""
 	lyrics := ""
 	comment := ""
 
@@ -393,24 +387,6 @@ func processFileWithAlbumCoverCoordinator(job scanJob, mediaRoot string, albumCo
 		}
 		if l, ok := ffprobeTags["lyricist"]; ok && l != "" {
 			lyricist = normalizeCreditList(l)
-		}
-		if arr, ok := ffprobeTags["arranger"]; ok && arr != "" {
-			arranger = normalizeCreditList(arr)
-		}
-		if v, ok := ffprobeTags["vocal"]; ok && v != "" {
-			vocal = normalizeCreditList(v)
-		}
-		if vm, ok := ffprobeTags["voice_manipulator"]; ok && vm != "" {
-			voiceManipulator = strings.TrimSpace(vm)
-		}
-		if ill, ok := ffprobeTags["illustrator"]; ok && ill != "" {
-			illustrator = strings.TrimSpace(ill)
-		}
-		if mov, ok := ffprobeTags["movie"]; ok && mov != "" {
-			movie = strings.TrimSpace(mov)
-		}
-		if src, ok := ffprobeTags["source"]; ok && src != "" {
-			source = strings.TrimSpace(src)
 		}
 		if lyr := lookupTag(ffprobeTags, "lyrics", "LYRICS"); lyr != "" {
 			lyrics = lyr
@@ -473,8 +449,6 @@ func processFileWithAlbumCoverCoordinator(job scanJob, mediaRoot string, albumCo
 
 	composer = normalizeCreditList(composer)
 	lyricist = normalizeCreditList(lyricist)
-	arranger = normalizeCreditList(arranger)
-	vocal = normalizeCreditList(vocal)
 
 	mediaRootAbs := mediaRoot
 
@@ -515,14 +489,8 @@ func processFileWithAlbumCoverCoordinator(job scanJob, mediaRoot string, albumCo
 			Year:             year,
 			DurationSeconds:  durationSeconds,
 			Format:           format,
-			Composer:         composer,
-			Lyricist:         lyricist,
-			Arranger:         arranger,
-			Vocal:            vocal,
-			VoiceManipulator: voiceManipulator,
-			Illustrator:      illustrator,
-			Movie:            movie,
-			Source:           source,
+			ComposerScanned:  composer,
+			LyricistScanned:  lyricist,
 			Lyrics:           lyrics,
 			Comment:          comment,
 			FileMtime:        job.modTime,
