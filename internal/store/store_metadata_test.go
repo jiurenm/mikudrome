@@ -224,3 +224,34 @@ func TestUpdateTrackMetadataOnlyTouchesRequestedFields(t *testing.T) {
 		t.Fatalf("composer changed unexpectedly: %q (%s)", row.Composer, row.ComposerSource)
 	}
 }
+
+func TestGetTracksByAlbumIDUsesEffectiveComposerAndLyricist(t *testing.T) {
+	st := newTestStore(t)
+
+	_, err := st.db.Exec(`
+		INSERT INTO albums (id, title) VALUES (1, 'Album');
+		INSERT INTO tracks (
+			id, title, audio_path, album_id, composer, composer_scanned, lyricist, lyricist_scanned
+		) VALUES (
+			1, 'Track', '/tmp/track.flac', 1, '', 'scan composer', 'manual lyricist', 'scan lyricist'
+		);
+	`)
+	if err != nil {
+		t.Fatalf("seed track: %v", err)
+	}
+
+	tracks, err := st.GetTracksByAlbumID(1)
+	if err != nil {
+		t.Fatalf("get tracks by album: %v", err)
+	}
+	if len(tracks) != 1 {
+		t.Fatalf("tracks = %d, want 1", len(tracks))
+	}
+
+	if tracks[0].Composer != "scan composer" {
+		t.Fatalf("composer = %q, want %q", tracks[0].Composer, "scan composer")
+	}
+	if tracks[0].Lyricist != "manual lyricist" {
+		t.Fatalf("lyricist = %q, want %q", tracks[0].Lyricist, "manual lyricist")
+	}
+}

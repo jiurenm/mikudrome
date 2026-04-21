@@ -487,7 +487,17 @@ func (s *Store) GetTracksByAlbumID(albumID int64) ([]Track, error) {
 	rows, err := s.db.Query(
 		`SELECT t.id, t.title, t.audio_path, t.video_path, COALESCE(t.video_thumb_path, ''), COALESCE(t.album_id, 0),
 		 COALESCE(t.disc_number, 1), COALESCE(t.track_number, 0), COALESCE(t.artists, ''), COALESCE(t.year, 0),
-		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''), COALESCE(t.composer, ''), COALESCE(t.lyricist, ''),
+		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''),
+		 CASE
+			 WHEN TRIM(COALESCE(t.composer, '')) != '' THEN t.composer
+			 WHEN TRIM(COALESCE(t.composer_scanned, '')) != '' THEN t.composer_scanned
+			 ELSE ''
+		 END,
+		 CASE
+			 WHEN TRIM(COALESCE(t.lyricist, '')) != '' THEN t.lyricist
+			 WHEN TRIM(COALESCE(t.lyricist_scanned, '')) != '' THEN t.lyricist_scanned
+			 ELSE ''
+		 END,
 		 COALESCE(t.arranger, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''), COALESCE(t.illustrator, ''),
 		 COALESCE(t.movie, ''), COALESCE(t.source, ''), COALESCE(t.lyrics, ''), COALESCE(t.comment, ''),
 		 COALESCE(a.album_artist, '')
@@ -518,7 +528,17 @@ func (s *Store) GetTracksByAlbumID(albumID int64) ([]Track, error) {
 func (s *Store) ListTracks() ([]Track, error) {
 	rows, err := s.db.Query(`SELECT t.id, t.title, t.audio_path, t.video_path, COALESCE(t.video_thumb_path, ''), COALESCE(t.album_id, 0),
 		 COALESCE(t.disc_number, 1), COALESCE(t.track_number, 0), COALESCE(t.artists, ''), COALESCE(t.year, 0),
-		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''), COALESCE(t.composer, ''), COALESCE(t.lyricist, ''),
+		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''),
+		 CASE
+			 WHEN TRIM(COALESCE(t.composer, '')) != '' THEN t.composer
+			 WHEN TRIM(COALESCE(t.composer_scanned, '')) != '' THEN t.composer_scanned
+			 ELSE ''
+		 END,
+		 CASE
+			 WHEN TRIM(COALESCE(t.lyricist, '')) != '' THEN t.lyricist
+			 WHEN TRIM(COALESCE(t.lyricist_scanned, '')) != '' THEN t.lyricist_scanned
+			 ELSE ''
+		 END,
 		 COALESCE(t.arranger, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''), COALESCE(t.illustrator, ''),
 		 COALESCE(t.movie, ''), COALESCE(t.source, ''), COALESCE(t.lyrics, ''), COALESCE(t.comment, ''),
 		 COALESCE(a.album_artist, '')
@@ -549,7 +569,17 @@ func (s *Store) GetTrackByID(id int64) (Track, bool, error) {
 	err := s.db.QueryRow(
 		`SELECT t.id, t.title, t.audio_path, t.video_path, COALESCE(t.video_thumb_path, ''), COALESCE(t.album_id, 0),
 		 COALESCE(t.disc_number, 1), COALESCE(t.track_number, 0), COALESCE(t.artists, ''), COALESCE(t.year, 0),
-		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''), COALESCE(t.composer, ''), COALESCE(t.lyricist, ''),
+		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''),
+		 CASE
+			 WHEN TRIM(COALESCE(t.composer, '')) != '' THEN t.composer
+			 WHEN TRIM(COALESCE(t.composer_scanned, '')) != '' THEN t.composer_scanned
+			 ELSE ''
+		 END,
+		 CASE
+			 WHEN TRIM(COALESCE(t.lyricist, '')) != '' THEN t.lyricist
+			 WHEN TRIM(COALESCE(t.lyricist_scanned, '')) != '' THEN t.lyricist_scanned
+			 ELSE ''
+		 END,
 		 COALESCE(t.arranger, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''), COALESCE(t.illustrator, ''),
 		 COALESCE(t.movie, ''), COALESCE(t.source, ''), COALESCE(t.lyrics, ''), COALESCE(t.comment, ''),
 		 COALESCE(a.album_artist, '')
@@ -851,7 +881,17 @@ func (s *Store) GetTracksByProducer(id int64) ([]Track, error) {
 	rows, err := s.db.Query(
 		`SELECT t.id, t.title, t.audio_path, t.video_path, COALESCE(t.video_thumb_path, ''), COALESCE(t.album_id, 0),
 		 COALESCE(t.disc_number, 1), COALESCE(t.track_number, 0), COALESCE(t.artists, ''), COALESCE(t.year, 0),
-		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''), COALESCE(t.composer, ''), COALESCE(t.lyricist, ''),
+		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''),
+		 CASE
+			 WHEN TRIM(COALESCE(t.composer, '')) != '' THEN t.composer
+			 WHEN TRIM(COALESCE(t.composer_scanned, '')) != '' THEN t.composer_scanned
+			 ELSE ''
+		 END,
+		 CASE
+			 WHEN TRIM(COALESCE(t.lyricist, '')) != '' THEN t.lyricist
+			 WHEN TRIM(COALESCE(t.lyricist_scanned, '')) != '' THEN t.lyricist_scanned
+			 ELSE ''
+		 END,
 		 COALESCE(t.arranger, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''), COALESCE(t.illustrator, ''),
 		 COALESCE(t.movie, ''), COALESCE(t.source, ''), COALESCE(t.lyrics, ''), COALESCE(t.comment, ''),
 		 COALESCE(a.album_artist, '')
@@ -968,7 +1008,17 @@ func (s *Store) GetTracksByVocalist(name string) ([]Track, error) {
 	rows, err := s.db.Query(
 		`SELECT t.id, t.title, t.audio_path, t.video_path, COALESCE(t.video_thumb_path, ''), COALESCE(t.album_id, 0),
 		 COALESCE(t.disc_number, 1), COALESCE(t.track_number, 0), COALESCE(t.artists, ''), COALESCE(t.year, 0),
-		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''), COALESCE(t.composer, ''), COALESCE(t.lyricist, ''),
+		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''),
+		 CASE
+			 WHEN TRIM(COALESCE(t.composer, '')) != '' THEN t.composer
+			 WHEN TRIM(COALESCE(t.composer_scanned, '')) != '' THEN t.composer_scanned
+			 ELSE ''
+		 END,
+		 CASE
+			 WHEN TRIM(COALESCE(t.lyricist, '')) != '' THEN t.lyricist
+			 WHEN TRIM(COALESCE(t.lyricist_scanned, '')) != '' THEN t.lyricist_scanned
+			 ELSE ''
+		 END,
 		 COALESCE(t.arranger, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''), COALESCE(t.illustrator, ''),
 		 COALESCE(t.movie, ''), COALESCE(t.source, ''), COALESCE(t.lyrics, ''), COALESCE(t.comment, ''),
 		 COALESCE(a.album_artist, '')
@@ -1127,7 +1177,12 @@ func (s *Store) ListVideos() ([]Video, error) {
 		SELECT v.id, v.title, v.artist, v.path, v.thumb_path, v.duration_seconds,
 		       v.track_id, v.producer_id, v.source, v.file_mtime, v.file_size,
 		       COALESCE(t.title, ''), COALESCE(al.title, ''), COALESCE(al.cover_path, ''),
-		       COALESCE(t.composer, ''), COALESCE(t.vocal, '')
+		       CASE
+			       WHEN TRIM(COALESCE(t.composer, '')) != '' THEN t.composer
+			       WHEN TRIM(COALESCE(t.composer_scanned, '')) != '' THEN t.composer_scanned
+			       ELSE ''
+		       END,
+		       COALESCE(t.vocal, '')
 		FROM videos v
 		LEFT JOIN tracks t ON v.track_id = t.id
 		LEFT JOIN albums al ON t.album_id = al.id
@@ -1157,7 +1212,12 @@ func (s *Store) GetVideoByID(id int64) (Video, bool, error) {
 		SELECT v.id, v.title, v.artist, v.path, v.thumb_path, v.duration_seconds,
 		       v.track_id, v.producer_id, v.source, v.file_mtime, v.file_size,
 		       COALESCE(t.title, ''), COALESCE(al.title, ''), COALESCE(al.cover_path, ''),
-		       COALESCE(t.composer, ''), COALESCE(t.vocal, '')
+		       CASE
+			       WHEN TRIM(COALESCE(t.composer, '')) != '' THEN t.composer
+			       WHEN TRIM(COALESCE(t.composer_scanned, '')) != '' THEN t.composer_scanned
+			       ELSE ''
+		       END,
+		       COALESCE(t.vocal, '')
 		FROM videos v
 		LEFT JOIN tracks t ON v.track_id = t.id
 		LEFT JOIN albums al ON t.album_id = al.id
