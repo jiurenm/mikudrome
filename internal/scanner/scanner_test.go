@@ -1654,6 +1654,79 @@ func TestScanWithOptionsForceKeepsTrackIDsStable(t *testing.T) {
 	}
 }
 
+func TestScanRemovesOrphanedAlbumAfterEditedFileMovesTrackToNewAlbum(t *testing.T) {
+	tmpDir := t.TempDir()
+	st, err := store.New(filepath.Join(tmpDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+
+	mediaRoot := filepath.Join(tmpDir, "media")
+	albumDir := filepath.Join(mediaRoot, "artist", "album")
+	if err := os.MkdirAll(albumDir, 0o755); err != nil {
+		t.Fatalf("mkdir album dir: %v", err)
+	}
+	audioPath := filepath.Join(albumDir, "track.flac")
+	if err := os.WriteFile(audioPath, []byte("audio-v1"), 0o644); err != nil {
+		t.Fatalf("write audio file: %v", err)
+	}
+
+	restoreSeams := stubScannerSeams()
+	defer restoreSeams()
+
+	currentAlbum := "Old Album"
+	ffprobeRunner = func(path string) (int, string, map[string]string) {
+		if path != audioPath {
+			t.Fatalf("ffprobe path = %q, want %q", path, audioPath)
+		}
+		return 180, "FLAC", map[string]string{
+			"title": "Edited Track",
+			"album": currentAlbum,
+		}
+	}
+	metadataReader = func(path string) (tag.Metadata, error) {
+		if path != audioPath {
+			t.Fatalf("metadataReader path = %q, want %q", path, audioPath)
+		}
+		return fakeMetadata{}, nil
+	}
+	embeddedPictureReader = func(path string) (*tag.Picture, error) {
+		if path != audioPath {
+			t.Fatalf("embeddedPictureReader path = %q, want %q", path, audioPath)
+		}
+		return nil, nil
+	}
+	videoThumbFinder = func(string) string { return "" }
+
+	if err := Scan(mediaRoot, st, 1, 10); err != nil {
+		t.Fatalf("initial scan: %v", err)
+	}
+
+	currentAlbum = "New Album"
+	if err := os.WriteFile(audioPath, []byte("audio-v2-updated"), 0o644); err != nil {
+		t.Fatalf("rewrite audio file: %v", err)
+	}
+
+	if err := Scan(mediaRoot, st, 1, 10); err != nil {
+		t.Fatalf("incremental scan after edit: %v", err)
+	}
+
+	albums, err := st.ListAlbums()
+	if err != nil {
+		t.Fatalf("list albums: %v", err)
+	}
+	if len(albums) != 1 {
+		t.Fatalf("album count = %d, want %d (%+v)", len(albums), 1, albums)
+	}
+	if albums[0].Title != "New Album" {
+		t.Fatalf("album title = %q, want %q", albums[0].Title, "New Album")
+	}
+	if albums[0].TrackCount != 1 {
+		t.Fatalf("track count = %d, want %d", albums[0].TrackCount, 1)
+	}
+}
+
 func TestScanWithOptionsWritesScannedComposerAndPreservesManualMetadata(t *testing.T) {
 	tmpDir := t.TempDir()
 	st, err := store.New(filepath.Join(tmpDir, "test.db"))

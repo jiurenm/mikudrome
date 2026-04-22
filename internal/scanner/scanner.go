@@ -292,13 +292,13 @@ func ScanWithOptions(mediaRoot string, s *store.Store, workers, batchSize int, o
 		if err := s.DeleteTracksByPaths(deletedPaths); err != nil {
 			log.Printf("scan: error deleting tracks: %v", err)
 		}
-		if err := s.CleanOrphanedAlbums(); err != nil {
-			log.Printf("scan: error cleaning orphaned albums: %v", err)
-		}
-		if err := s.CleanOrphanedProducers(); err != nil {
-			log.Printf("scan: error cleaning orphaned producers: %v", err)
-		}
 		emitScanProgress(opts, "deleting", stats, len(jobsToProcess))
+	}
+
+	if len(jobsToProcess) > 0 || len(deletedPaths) > 0 {
+		if err := cleanOrphanedLibraryRecords(s); err != nil {
+			log.Printf("scan: error cleaning orphaned library records: %v", err)
+		}
 	}
 
 	// Phase 4: Video consistency check
@@ -324,6 +324,16 @@ func ScanWithOptions(mediaRoot string, s *store.Store, workers, batchSize int, o
 // processFile processes a single audio file and returns the result.
 func processFile(job scanJob, mediaRoot string) scanResult {
 	return processFileWithAlbumCoverCoordinator(job, mediaRoot, nil)
+}
+
+func cleanOrphanedLibraryRecords(s *store.Store) error {
+	if err := s.CleanOrphanedAlbums(); err != nil {
+		return err
+	}
+	if err := s.CleanOrphanedProducers(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func processFileWithAlbumCoverCoordinator(job scanJob, mediaRoot string, albumCovers *albumCoverCoordinator) scanResult {
