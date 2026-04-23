@@ -612,6 +612,45 @@ void main() {
   });
 
   testWidgets(
+    'PlaylistDetailScreen hero cover opens and closes the lightbox without affecting actions',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: _FakeApiClient(_buildReorderableDetail()),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.widgetWithText(FilledButton, 'PLAY'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'EDIT'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Open playlist cover preview'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('playlist-hero-cover-trigger')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('detail-cover-lightbox-close-button')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsNothing);
+      expect(find.widgetWithText(FilledButton, 'PLAY'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'EDIT'), findsOneWidget);
+      semantics.dispose();
+    },
+  );
+
+  testWidgets(
     'PlaylistDetailScreen edit mode adds groups and saves item metadata',
     (tester) async {
       final client = _EditableFakeApiClient(_buildEditableDetail());

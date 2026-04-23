@@ -4,6 +4,7 @@ import '../../api/api_client.dart';
 import '../../models/playlist.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/responsive.dart';
+import '../detail_cover_lightbox.dart';
 import '../playlists/playlist_cover.dart';
 
 class PlaylistHero extends StatelessWidget {
@@ -43,6 +44,33 @@ class PlaylistHero extends StatelessWidget {
     return _buildDesktopLayout(context, _gradient);
   }
 
+  Widget _buildInteractiveCover(BuildContext context, double size) {
+    final previewSize =
+        (MediaQuery.sizeOf(context).shortestSide - 32).clamp(240.0, 640.0)
+            .toDouble();
+
+    return DetailCoverLightboxTrigger(
+      key: const ValueKey('playlist-hero-cover-trigger'),
+      semanticLabel: 'Open playlist cover preview',
+      lightboxBuilder: (_) => ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: PlaylistCover(
+          playlist: playlist,
+          client: client,
+          size: previewSize,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: PlaylistCover(
+          playlist: playlist,
+          client: client,
+          size: size,
+        ),
+      ),
+    );
+  }
+
   Widget _buildMobileLayout(BuildContext context, BoxDecoration gradient) {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final coverSize = screenWidth * 0.6;
@@ -53,14 +81,7 @@ class PlaylistHero extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       child: Column(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: PlaylistCover(
-              playlist: playlist,
-              client: client,
-              size: coverSize,
-            ),
-          ),
+          _buildInteractiveCover(context, coverSize),
           const SizedBox(height: 16),
           Text(
             'PLAYLIST',
@@ -143,14 +164,7 @@ class PlaylistHero extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: PlaylistCover(
-              playlist: playlist,
-              client: client,
-              size: 224,
-            ),
-          ),
+          _buildInteractiveCover(context, 224),
           const SizedBox(width: 32),
           Expanded(
             child: Padding(
