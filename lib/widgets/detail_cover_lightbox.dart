@@ -106,16 +106,6 @@ class _DetailCoverLightboxState extends State<DetailCoverLightbox> {
           children: [
             Positioned.fill(
               child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => Navigator.of(context).maybePop(),
-              ),
-            ),
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 120,
-              child: GestureDetector(
                 key: const ValueKey('detail-cover-lightbox-backdrop'),
                 behavior: HitTestBehavior.opaque,
                 onTap: () => Navigator.of(context).maybePop(),

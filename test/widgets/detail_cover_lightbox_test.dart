@@ -47,11 +47,15 @@ void main() {
     );
     expect(find.byKey(const ValueKey('detail-cover-preview-child')),
         findsOneWidget);
-
-    await tester.tap(
-      find.byKey(const ValueKey('detail-cover-lightbox-backdrop')),
-      warnIfMissed: false,
+    expect(
+      tester.getRect(find.byKey(const ValueKey('detail-cover-lightbox-backdrop'))),
+      tester.getRect(find.byKey(const ValueKey('detail-cover-lightbox'))),
     );
+
+    final backdropRect = tester.getRect(
+      find.byKey(const ValueKey('detail-cover-lightbox-backdrop')),
+    );
+    await tester.tapAt(backdropRect.bottomLeft - const Offset(-16, 16));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsNothing);
