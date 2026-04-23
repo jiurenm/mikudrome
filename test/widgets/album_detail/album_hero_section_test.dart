@@ -7,9 +7,9 @@ Widget _buildHarness(Size size) {
   return MaterialApp(
     home: MediaQuery(
       data: MediaQueryData(size: size),
-      child: Scaffold(
+      child: const Scaffold(
         body: AlbumHeroSection(
-          album: const Album(
+          album: Album(
             id: '42',
             title: 'World.exe',
             trackCount: 1,

@@ -92,9 +92,9 @@ class _DetailCoverLightboxState extends State<DetailCoverLightbox> {
     final scaleDelta = targetScale / currentScale;
 
     final nextTransform = Matrix4.identity()
-      ..translate(focalPoint.dx, focalPoint.dy)
-      ..scale(scaleDelta)
-      ..translate(-focalPoint.dx, -focalPoint.dy)
+      ..translateByDouble(focalPoint.dx, focalPoint.dy, 0, 1)
+      ..scaleByDouble(scaleDelta, scaleDelta, 1, 1)
+      ..translateByDouble(-focalPoint.dx, -focalPoint.dy, 0, 1)
       ..multiply(_transformationController.value);
 
     _transformationController.value = nextTransform;

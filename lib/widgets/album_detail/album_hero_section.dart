@@ -41,7 +41,7 @@ class AlbumHeroSection extends StatelessWidget {
     final h = totalSeconds ~/ 3600;
     final m = (totalSeconds % 3600) ~/ 60;
     if (h > 0) {
-      return '${h} h ${m} min';
+      return '$h h $m min';
     }
     return '$m min';
   }
