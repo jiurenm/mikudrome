@@ -734,6 +734,84 @@ void main() {
   );
 
   testWidgets(
+    'PlaylistDetailScreen hero lightbox preserves custom playlist cover rendering',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: _FakeApiClient(
+              _buildDetailWithPlaylist(
+                const Playlist(
+                  id: 7,
+                  name: 'Custom Cover Mix',
+                  coverPath: '/api/playlists/7/cover',
+                  trackCount: 3,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byKey(const ValueKey('playlist-hero-cover-trigger')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsOneWidget);
+      expect(
+        _networkImageUrlsInLightbox(tester),
+        contains('http://example.test/api/playlists/7/cover'),
+      );
+    },
+  );
+
+  testWidgets(
+    'PlaylistDetailScreen hero lightbox preserves mosaic playlist cover rendering',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaylistDetailScreen(
+            playlistId: 7,
+            client: _FakeApiClient(
+              _buildDetailWithPlaylist(
+                const Playlist(
+                  id: 7,
+                  name: 'Mosaic Cover Mix',
+                  trackCount: 4,
+                  coverTrackIds: [11, 12, 21, 22],
+                  coverAlbumIds: [101, 102, 201, 202],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byKey(const ValueKey('playlist-hero-cover-trigger')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsOneWidget);
+      expect(
+        _networkImageUrlsInLightbox(tester),
+        containsAll(<String>[
+          'http://example.test/api/stream/11/thumb',
+          'http://example.test/api/stream/12/thumb',
+          'http://example.test/api/stream/21/thumb',
+          'http://example.test/api/stream/22/thumb',
+        ]),
+      );
+    },
+  );
+
+  testWidgets(
     'PlaylistDetailScreen edit mode adds groups and saves item metadata',
     (tester) async {
       final client = _EditableFakeApiClient(_buildEditableDetail());
@@ -2146,6 +2224,28 @@ PlaylistDetailData _buildReorderableDetail() {
       ),
     ],
   );
+}
+
+PlaylistDetailData _buildDetailWithPlaylist(Playlist playlist) {
+  final detail = _buildReorderableDetail();
+  return PlaylistDetailData(
+    playlist: playlist,
+    groups: detail.groups,
+  );
+}
+
+List<String> _networkImageUrlsInLightbox(WidgetTester tester) {
+  return tester
+      .widgetList<Image>(
+        find.descendant(
+          of: find.byKey(const ValueKey('detail-cover-lightbox')),
+          matching: find.byType(Image),
+        ),
+      )
+      .map((image) => image.image)
+      .whereType<NetworkImage>()
+      .map((image) => image.url)
+      .toList();
 }
 
 PlaylistDetailData _buildThreeGroupDetail() {

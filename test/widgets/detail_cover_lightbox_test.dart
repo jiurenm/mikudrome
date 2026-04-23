@@ -1,4 +1,5 @@
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/widgets/detail_cover_lightbox.dart';
@@ -117,6 +118,47 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey('detail-cover-lightbox-close-button')),
     );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsNothing);
+  });
+
+  testWidgets(
+    'DetailCoverLightboxTrigger supports keyboard activation with Enter and Space',
+    (tester) async {
+      await tester.pumpWidget(_buildHarness());
+
+      expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsNothing);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('detail-cover-lightbox-close-button')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsNothing);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsOneWidget);
+    },
+  );
+
+  testWidgets('DetailCoverLightbox closes on Escape', (tester) async {
+    await tester.pumpWidget(_buildHarness());
+    await tester.tap(find.byKey(const ValueKey('detail-cover-trigger')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsNothing);

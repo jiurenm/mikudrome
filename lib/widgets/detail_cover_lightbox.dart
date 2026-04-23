@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class DetailCoverLightboxTrigger extends StatelessWidget {
   const DetailCoverLightboxTrigger({
@@ -13,19 +14,36 @@ class DetailCoverLightboxTrigger extends StatelessWidget {
   final WidgetBuilder lightboxBuilder;
   final String semanticLabel;
 
+  void _openLightbox(BuildContext context) {
+    showDetailCoverLightbox(
+      context,
+      child: lightboxBuilder(context),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
+    return FocusableActionDetector(
+      mouseCursor: SystemMouseCursors.click,
+      shortcuts: const <ShortcutActivator, Intent>{
+        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+      },
+      actions: <Type, Action<Intent>>{
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            _openLightbox(context);
+            return null;
+          },
+        ),
+      },
       child: Semantics(
         button: true,
         label: semanticLabel,
+        onTap: () => _openLightbox(context),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => showDetailCoverLightbox(
-            context,
-            child: lightboxBuilder(context),
-          ),
+          onTap: () => _openLightbox(context),
           child: child,
         ),
       ),
@@ -100,52 +118,74 @@ class _DetailCoverLightboxState extends State<DetailCoverLightbox> {
     _transformationController.value = nextTransform;
   }
 
+  void _dismissLightbox() {
+    Navigator.of(context).maybePop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final viewport = MediaQuery.sizeOf(context);
 
-    return Material(
-      key: const ValueKey('detail-cover-lightbox'),
-      color: Colors.black.withValues(alpha: 0.94),
-      child: SafeArea(
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                key: const ValueKey('detail-cover-lightbox-backdrop'),
-                behavior: HitTestBehavior.opaque,
-                onTap: () => Navigator.of(context).maybePop(),
-              ),
-            ),
-            Center(
-              child: Listener(
-                onPointerSignal: _handlePointerSignal,
-                child: InteractiveViewer(
-                  key: const ValueKey('detail-cover-lightbox-viewer'),
-                  transformationController: _transformationController,
-                  minScale: _minScale,
-                  maxScale: _maxScale,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: viewport.width - 32,
-                      maxHeight: viewport.height - 32,
+    return Shortcuts(
+      shortcuts: const <ShortcutActivator, Intent>{
+        SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
+      },
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          DismissIntent: CallbackAction<DismissIntent>(
+            onInvoke: (_) {
+              _dismissLightbox();
+              return null;
+            },
+          ),
+        },
+        child: Focus(
+          autofocus: true,
+          child: Material(
+            key: const ValueKey('detail-cover-lightbox'),
+            color: Colors.black.withValues(alpha: 0.94),
+            child: SafeArea(
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: GestureDetector(
+                      key: const ValueKey('detail-cover-lightbox-backdrop'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _dismissLightbox,
                     ),
-                    child: widget.child,
                   ),
-                ),
+                  Center(
+                    child: Listener(
+                      onPointerSignal: _handlePointerSignal,
+                      child: InteractiveViewer(
+                        key: const ValueKey('detail-cover-lightbox-viewer'),
+                        transformationController: _transformationController,
+                        minScale: _minScale,
+                        maxScale: _maxScale,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: viewport.width - 32,
+                            maxHeight: viewport.height - 32,
+                          ),
+                          child: widget.child,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: IconButton(
+                      key: const ValueKey('detail-cover-lightbox-close-button'),
+                      onPressed: _dismissLightbox,
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Close cover preview',
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
               ),
             ),
-            Align(
-              alignment: Alignment.topRight,
-              child: IconButton(
-                key: const ValueKey('detail-cover-lightbox-close-button'),
-                onPressed: () => Navigator.of(context).maybePop(),
-                icon: const Icon(Icons.close),
-                tooltip: 'Close cover preview',
-                color: Colors.white,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
