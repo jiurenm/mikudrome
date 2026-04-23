@@ -6,6 +6,7 @@ import '../../models/producer.dart';
 import '../../models/track.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/responsive.dart';
+import '../detail_cover_lightbox.dart';
 
 class AlbumHeroSection extends StatelessWidget {
   const AlbumHeroSection({
@@ -40,7 +41,7 @@ class AlbumHeroSection extends StatelessWidget {
     final h = totalSeconds ~/ 3600;
     final m = (totalSeconds % 3600) ~/ 60;
     if (h > 0) {
-      return '${h} h ${m} min';
+      return '$h h $m min';
     }
     return '$m min';
   }
@@ -165,6 +166,41 @@ class AlbumHeroSection extends StatelessWidget {
     );
   }
 
+  Widget _buildAlbumCover(double size) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.network(
+        album.coverUrl,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          width: size,
+          height: size,
+          color: AppTheme.cardBg,
+          child: const Icon(
+            Icons.album,
+            color: AppTheme.textMuted,
+            size: 64,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInteractiveAlbumCover(BuildContext context, double size) {
+    final previewSize =
+        (MediaQuery.sizeOf(context).shortestSide - 32).clamp(240.0, 640.0)
+            .toDouble();
+
+    return DetailCoverLightboxTrigger(
+      key: const ValueKey('album-hero-cover-trigger'),
+      semanticLabel: 'Open album cover preview',
+      lightboxBuilder: (_) => _buildAlbumCover(previewSize),
+      child: _buildAlbumCover(size),
+    );
+  }
+
   Widget _buildMobileLayout(
       BuildContext context, int year, String durationStr, BoxDecoration gradient) {
     final screenWidth = MediaQuery.sizeOf(context).width;
@@ -175,22 +211,7 @@ class AlbumHeroSection extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       child: Column(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              album.coverUrl,
-              width: coverSize,
-              height: coverSize,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                width: coverSize,
-                height: coverSize,
-                color: AppTheme.cardBg,
-                child: const Icon(Icons.album,
-                    color: AppTheme.textMuted, size: 64),
-              ),
-            ),
-          ),
+          _buildInteractiveAlbumCover(context, coverSize),
           const SizedBox(height: 16),
           Text(
             'ALBUM',
@@ -234,22 +255,7 @@ class AlbumHeroSection extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              album.coverUrl,
-              width: 224,
-              height: 224,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                width: 224,
-                height: 224,
-                color: AppTheme.cardBg,
-                child: const Icon(Icons.album,
-                    color: AppTheme.textMuted, size: 64),
-              ),
-            ),
-          ),
+          _buildInteractiveAlbumCover(context, 224),
           const SizedBox(width: 32),
           Expanded(
             child: Padding(
