@@ -612,15 +612,26 @@ void main() {
   });
 
   testWidgets(
-    'PlaylistDetailScreen hero cover opens and closes the lightbox without affecting actions',
+    'PlaylistDetailScreen desktop hero cover closes lightbox and keeps play and edit working',
     (tester) async {
       final semantics = tester.ensureSemantics();
+      Track? playedTrack;
+      List<Track>? playedQueue;
+      int? playedIndex;
+
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
       await tester.pumpWidget(
         MaterialApp(
           home: PlaylistDetailScreen(
             playlistId: 7,
             client: _FakeApiClient(_buildReorderableDetail()),
+            onPlayTrack: (track, queue, index) {
+              playedTrack = track;
+              playedQueue = queue;
+              playedIndex = index;
+            },
           ),
         ),
       );
@@ -644,8 +655,80 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsNothing);
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'EDIT'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('DONE'), findsOneWidget);
+      expect(find.text('ADD GROUP'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'PLAY'));
+      await tester.pumpAndSettle();
+
+      expect(playedTrack?.id, 11);
+      expect(playedQueue?.length, 3);
+      expect(playedIndex, 0);
+      semantics.dispose();
+    },
+  );
+
+  testWidgets(
+    'PlaylistDetailScreen mobile hero cover closes lightbox and keeps play and edit working',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      Track? playedTrack;
+      List<Track>? playedQueue;
+      int? playedIndex;
+
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(size: Size(390, 844)),
+          child: MaterialApp(
+            home: PlaylistDetailScreen(
+              playlistId: 7,
+              client: _FakeApiClient(_buildReorderableDetail()),
+              onPlayTrack: (track, queue, index) {
+                playedTrack = track;
+                playedQueue = queue;
+                playedIndex = index;
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
       expect(find.widgetWithText(FilledButton, 'PLAY'), findsOneWidget);
       expect(find.widgetWithText(OutlinedButton, 'EDIT'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Open playlist cover preview'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('playlist-hero-cover-trigger')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('detail-cover-lightbox-close-button')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsNothing);
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'EDIT'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('DONE'), findsOneWidget);
+      expect(find.text('ADD GROUP'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'PLAY'));
+      await tester.pumpAndSettle();
+
+      expect(playedTrack?.id, 11);
+      expect(playedQueue?.length, 3);
+      expect(playedIndex, 0);
       semantics.dispose();
     },
   );
