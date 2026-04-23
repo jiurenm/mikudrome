@@ -869,30 +869,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               )
                             : Column(
                                 children: [
-                                  Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                        28, 28, 28, 8),
-                                    child: Column(
-                                      children: [
-                                        Text(
-                                          _track.title,
-                                          textAlign: TextAlign.center,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .headlineMedium
-                                              ?.copyWith(
-                                                color: AppTheme.textPrimary,
-                                                fontWeight: FontWeight.w900,
-                                              ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                      ],
-                                    ),
-                                  ),
                                   Expanded(
                                     child: Padding(
                                       padding: const EdgeInsets.fromLTRB(
-                                          28, 8, 28, 12),
+                                          28, 28, 28, 12),
                                       child: LayoutBuilder(
                                         builder: (context, constraints) {
                                           final lyricsPanelWidth =
@@ -900,6 +880,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                   .clamp(320.0, 860.0);
 
                                           return Row(
+                                            key: const ValueKey(
+                                                'player-audio-layout'),
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.stretch,
                                             children: [
@@ -915,15 +897,48 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                     duration: const Duration(
                                                         milliseconds: 260),
                                                     curve: Curves.easeOutCubic,
-                                                    alignment: _showLyrics
-                                                        ? Alignment.topCenter
-                                                        : Alignment.center,
+                                                    alignment: Alignment.center,
                                                     child: Column(
+                                                      key: const ValueKey(
+                                                          'player-audio-left-column'),
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
-                                                        _buildMediaArea(
-                                                            context),
+                                                        Padding(
+                                                          key: const ValueKey(
+                                                              'player-audio-title-block'),
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .only(
+                                                                  bottom: 16),
+                                                          child: Text(
+                                                            _track.title,
+                                                            textAlign: TextAlign
+                                                                .center,
+                                                            maxLines: 2,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                            style: Theme.of(
+                                                                    context)
+                                                                .textTheme
+                                                                .headlineMedium
+                                                                ?.copyWith(
+                                                                  color: AppTheme
+                                                                      .textPrimary,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w900,
+                                                                ),
+                                                          ),
+                                                        ),
+                                                        KeyedSubtree(
+                                                          key: const ValueKey(
+                                                              'player-audio-cover-block'),
+                                                          child:
+                                                              _buildMediaArea(
+                                                                  context),
+                                                        ),
                                                         TrackInfoSection(
                                                           track: _track,
                                                         ),
@@ -971,14 +986,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                         : const Offset(0.12, 0),
                                                     child: SizedBox(
                                                       width: lyricsPanelWidth,
-                                                      child: LyricsSection(
-                                                        lyrics: _track.lyrics,
-                                                        timedLyrics:
-                                                            _timedLyrics,
-                                                        activeIndex: _showLyrics &&
-                                                                _hasTimedLyrics
-                                                            ? _activeLyricIndex
-                                                            : -1,
+                                                      child: KeyedSubtree(
+                                                        key: const ValueKey(
+                                                            'player-audio-lyrics-panel'),
+                                                        child: LyricsSection(
+                                                          lyrics: _track.lyrics,
+                                                          timedLyrics:
+                                                              _timedLyrics,
+                                                          activeIndex: _showLyrics &&
+                                                                  _hasTimedLyrics
+                                                              ? _activeLyricIndex
+                                                              : -1,
+                                                        ),
                                                       ),
                                                     ),
                                                   ),

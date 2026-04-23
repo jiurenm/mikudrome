@@ -29,3 +29,5 @@ media/
 # Misc
 *.log
 .DS_Store
+
+apps/
