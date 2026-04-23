@@ -52,6 +52,16 @@ void main() {
       tester.getRect(find.byKey(const ValueKey('detail-cover-lightbox'))),
     );
 
+    await tester.tap(
+      find.byKey(const ValueKey('detail-cover-lightbox-close-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('detail-cover-trigger')));
+    await tester.pumpAndSettle();
+
     final backdropRect = tester.getRect(
       find.byKey(const ValueKey('detail-cover-lightbox-backdrop')),
     );
@@ -74,9 +84,14 @@ void main() {
     final interactiveViewer = find.byKey(
       const ValueKey('detail-cover-lightbox-viewer'),
     );
-    final center = tester.getCenter(interactiveViewer);
+    final renderBox = tester.renderObject<RenderBox>(interactiveViewer);
+    final pointerPosition = tester.getTopLeft(interactiveViewer) +
+        const Offset(240, 180);
+    final localPointerPosition = renderBox.globalToLocal(pointerPosition);
 
     final before = tester.widget<InteractiveViewer>(interactiveViewer);
+    final beforeScenePoint =
+        before.transformationController!.toScene(localPointerPosition);
     expect(
       before.transformationController!.value.getMaxScaleOnAxis(),
       1.0,
@@ -84,17 +99,20 @@ void main() {
 
     await tester.sendEventToBinding(
       PointerScrollEvent(
-        position: center,
+        position: pointerPosition,
         scrollDelta: const Offset(0, -40),
       ),
     );
     await tester.pump();
 
     final after = tester.widget<InteractiveViewer>(interactiveViewer);
+    final afterScenePoint =
+        after.transformationController!.toScene(localPointerPosition);
     expect(
       after.transformationController!.value.getMaxScaleOnAxis(),
       greaterThan(1.0),
     );
+    expect((afterScenePoint - beforeScenePoint).distance, lessThan(0.1));
 
     await tester.tap(
       find.byKey(const ValueKey('detail-cover-lightbox-close-button')),

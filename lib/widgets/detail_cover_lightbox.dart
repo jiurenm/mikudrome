@@ -81,6 +81,7 @@ class _DetailCoverLightboxState extends State<DetailCoverLightbox> {
       return;
     }
 
+    final focalPoint = event.localPosition;
     final currentScale =
         _transformationController.value.getMaxScaleOnAxis().clamp(
               _minScale,
@@ -90,8 +91,13 @@ class _DetailCoverLightboxState extends State<DetailCoverLightbox> {
         .clamp(_minScale, _maxScale);
     final scaleDelta = targetScale / currentScale;
 
-    _transformationController.value =
-        _transformationController.value.clone()..scale(scaleDelta);
+    final nextTransform = Matrix4.identity()
+      ..translate(focalPoint.dx, focalPoint.dy)
+      ..scale(scaleDelta)
+      ..translate(-focalPoint.dx, -focalPoint.dy)
+      ..multiply(_transformationController.value);
+
+    _transformationController.value = nextTransform;
   }
 
   @override
