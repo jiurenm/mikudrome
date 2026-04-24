@@ -42,6 +42,7 @@ class _LyricsSectionState extends State<LyricsSection> {
   int _displayedActiveIndex = -1;
   double _stageOffset = 0;
   double? _timedLyricsWidth;
+  bool? _lastTimedLyricsDesktopMode;
   int _lastAutoScrolledIndex = -1;
   bool _isAutoScrolling = false;
   bool _lineHeightFlushScheduled = false;
@@ -71,6 +72,7 @@ class _LyricsSectionState extends State<LyricsSection> {
       _lineHeights.clear();
       _pendingLineHeights.clear();
       _lineHeightFlushScheduled = false;
+      _lastTimedLyricsDesktopMode = null;
       _displayedActiveIndex = -1;
       _stageOffset = 0;
       _lastAutoScrolledIndex = -1;
@@ -85,6 +87,7 @@ class _LyricsSectionState extends State<LyricsSection> {
       _lineHeights.clear();
       _pendingLineHeights.clear();
       _lineHeightFlushScheduled = false;
+      _lastTimedLyricsDesktopMode = null;
       _displayedActiveIndex = widget.activeIndex;
       _stageOffset = 0;
       _lastAutoScrolledIndex = -1;
@@ -152,6 +155,30 @@ class _LyricsSectionState extends State<LyricsSection> {
     final width = _timedLyricsWidth ?? MediaQuery.maybeOf(context)?.size.width;
     if (width == null) return false;
     return _hasTimedLyrics && _isDesktopTimedLyrics(width);
+  }
+
+  void _trackTimedLyricsLayoutMode(double width) {
+    _timedLyricsWidth = width;
+    final usesDesktopStage = _isDesktopTimedLyrics(width);
+    final previousMode = _lastTimedLyricsDesktopMode;
+    _lastTimedLyricsDesktopMode = usesDesktopStage;
+
+    if (previousMode == null || previousMode == usesDesktopStage) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_hasTimedLyrics) return;
+      final currentMode = _usesDesktopStageInCurrentContext();
+      if (currentMode != usesDesktopStage) return;
+
+      if (usesDesktopStage) {
+        _syncDisplayedActiveIndex(immediate: true);
+        return;
+      }
+
+      _scheduleAutoScrollToActive(force: true);
+    });
   }
 
   void _queueLineHeight(int index, double height) {
@@ -364,7 +391,7 @@ class _LyricsSectionState extends State<LyricsSection> {
           : _hasTimedLyrics
               ? LayoutBuilder(
                   builder: (context, constraints) {
-                    _timedLyricsWidth = constraints.maxWidth;
+                    _trackTimedLyricsLayoutMode(constraints.maxWidth);
                     if (_isDesktopTimedLyrics(constraints.maxWidth)) {
                       final metrics = _buildStageMetrics();
                       _syncStageOffset(metrics, constraints.maxHeight);
@@ -620,11 +647,10 @@ class _LyricLineItem extends StatelessWidget {
 class _StageLineSizeListener extends SingleChildRenderObjectWidget {
   const _StageLineSizeListener({
     required this.onSizeChanged,
-    required this.child,
+    super.child,
   });
 
   final ValueChanged<Size> onSizeChanged;
-  final Widget child;
 
   @override
   RenderObject createRenderObject(BuildContext context) {

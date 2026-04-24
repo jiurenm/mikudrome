@@ -174,6 +174,42 @@ void main() {
   );
 
   testWidgets(
+    'width-only transition from desktop stage to mobile list keeps the active line in view',
+    (tester) async {
+      final timedLyrics = _timedLyrics(80);
+
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: timedLyrics,
+          activeIndex: 40,
+          width: desktopWidth,
+          height: desktopHeight,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: timedLyrics,
+          activeIndex: 40,
+          width: 420,
+          height: 320,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pumpAndSettle();
+
+      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+      final position = scrollable.position;
+
+      expect(find.text('Line 40'), findsOneWidget);
+      expect(position.pixels, greaterThan(0));
+      expect(position.pixels, lessThan(position.maxScrollExtent));
+    },
+  );
+
+  testWidgets(
     'plain text lyrics keep the fallback scroll view structure',
     (tester) async {
       await tester.pumpWidget(
