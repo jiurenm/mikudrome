@@ -20,8 +20,10 @@ Widget _buildLyricsSection({
   double width = 420,
   double height = 320,
   String? lyrics,
+  TargetPlatform platform = TargetPlatform.macOS,
 }) {
   return MaterialApp(
+    theme: ThemeData(platform: platform),
     home: Scaffold(
       body: Center(
         child: SizedBox(
@@ -257,6 +259,35 @@ void main() {
   );
 
   testWidgets(
+    'wide non-desktop timed lyrics stay on the scrollable list path',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: _timedLyrics(8),
+          activeIndex: 3,
+          width: desktopWidth,
+          height: desktopHeight,
+          platform: TargetPlatform.android,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey<String>('lyrics-stage')), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('lyrics-stage-mask')),
+        findsNothing,
+      );
+      expect(find.byType(ListView), findsOneWidget);
+      expect(find.byType(Scrollbar), findsOneWidget);
+      expect(find.text('Line 3'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('lyrics-line-3')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
     'mobile timed lyrics keep the active line free of desktop glow styling',
     (tester) async {
       await tester.pumpWidget(
@@ -303,6 +334,15 @@ void main() {
       expect(find.byType(SelectableText), findsOneWidget);
       expect(find.byType(SingleChildScrollView), findsOneWidget);
       expect(find.byKey(const ValueKey<String>('lyrics-stage')), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('lyrics-stage-mask')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('lyrics-line-0')),
+        findsNothing,
+      );
+      expect(find.text('First line\nSecond line'), findsOneWidget);
     },
   );
 

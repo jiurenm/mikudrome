@@ -178,12 +178,18 @@ class _LyricsSectionState extends State<LyricsSection>
   bool _usesDesktopStageInCurrentContext() {
     final width = _timedLyricsWidth ?? MediaQuery.maybeOf(context)?.size.width;
     if (width == null) return false;
-    return _hasTimedLyrics && _isDesktopTimedLyrics(width);
+    return _usesDesktopStageForWidth(width);
+  }
+
+  bool _usesDesktopStageForWidth(double width) {
+    return _hasTimedLyrics &&
+        _isDesktopPlatform(Theme.of(context).platform) &&
+        width >= _desktopLyricsBreakpoint;
   }
 
   void _trackTimedLyricsLayoutMode(double width) {
     _timedLyricsWidth = width;
-    final usesDesktopStage = _isDesktopTimedLyrics(width);
+    final usesDesktopStage = _usesDesktopStageForWidth(width);
     _syncAmbientBreathing(usesDesktopStage);
     final previousMode = _lastTimedLyricsDesktopMode;
     _lastTimedLyricsDesktopMode = usesDesktopStage;
@@ -291,7 +297,14 @@ class _LyricsSectionState extends State<LyricsSection>
     });
   }
 
-  bool _isDesktopTimedLyrics(double width) => width >= _desktopLyricsBreakpoint;
+  bool _isDesktopPlatform(TargetPlatform platform) {
+    return switch (platform) {
+      TargetPlatform.linux ||
+      TargetPlatform.macOS ||
+      TargetPlatform.windows => true,
+      _ => false,
+    };
+  }
 
   double _approximateOffsetForIndex(int index) {
     if (!_scrollController.hasClients ||
@@ -429,7 +442,7 @@ class _LyricsSectionState extends State<LyricsSection>
               ? LayoutBuilder(
                   builder: (context, constraints) {
                     _trackTimedLyricsLayoutMode(constraints.maxWidth);
-                    if (_isDesktopTimedLyrics(constraints.maxWidth)) {
+                    if (_usesDesktopStageForWidth(constraints.maxWidth)) {
                       final metrics = _buildStageMetrics();
                       _syncStageOffset(metrics, constraints.maxHeight);
                       return Stack(
