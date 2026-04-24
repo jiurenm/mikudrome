@@ -6,6 +6,8 @@ class VocalColors {
 
   static const Color defaultColor = Color(0xFF39C5BB);
 
+  static String _normalizeName(String name) => name.toLowerCase();
+
   static final Map<String, Color> _groupMap = {
     'leo/need': const Color(0xFF4455DD),
     'more more jump!': const Color(0xFF88DD44),
@@ -21,15 +23,34 @@ class VocalColors {
     '鏡音レン': const Color(0xFFFFE211),
     'kaito': const Color(0xFF0000FF),
     'meiko': const Color(0xFFD80000),
+    '宵崎奏': const Color(0xFFBB6688),
+    '朝比奈まふゆ': const Color(0xFF8888CC),
+    '東雲絵名': const Color(0xFFCCAA88),
+    '暁山瑞希': const Color(0xFFDDAACC),
+    '花里みのり': const Color(0xFFFFCCAA),
+    '桐谷遥': const Color(0xFF99CCFF),
+    '桃井愛莉': const Color(0xFFFFAACC),
+    '日野森雫': const Color(0xFF99EEDD),
+    '星乃一歌': const Color(0xFF33AAEE),
+    '天馬咲希': const Color(0xFFFFDD44),
+    '望月穗波': const Color(0xFFEE6666),
+    '望月穂波': const Color(0xFFEE6666),
+    '日野森志步': const Color(0xFFBBDD22),
+    '日野森志歩': const Color(0xFFBBDD22),
+    '重音テト': const Color(0xFFDD4444),
+    '重音テトsv': const Color(0xFFDD4444),
+    'gumi': const Color(0xFF7ED957),
+    'ia': const Color(0xFFF6D1D8),
+    '可不': const Color(0xFFC9D6EA),
   };
 
   static Color colorForName(String name) {
-    return _vocalMap[name.toLowerCase()] ?? defaultColor;
+    return _vocalMap[_normalizeName(name)] ?? defaultColor;
   }
 
   static Color resolveColor(Track track) {
     if (track.albumArtist.isNotEmpty) {
-      final groupColor = _groupMap[track.albumArtist.toLowerCase()];
+      final groupColor = _groupMap[_normalizeName(track.albumArtist)];
       if (groupColor != null) return groupColor;
     }
 
@@ -38,7 +59,7 @@ class VocalColors {
 
     final colors = <Color>[];
     for (final v in vocalists) {
-      final color = _vocalMap[v.toLowerCase()];
+      final color = _vocalMap[_normalizeName(v)];
       if (color != null) colors.add(color);
     }
 
