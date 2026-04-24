@@ -56,6 +56,8 @@ class _LyricsSectionState extends State<LyricsSection>
 
   bool get _hasLyrics => widget.lyrics.trim().isNotEmpty;
   bool get _hasTimedLyrics => widget.timedLyrics.isNotEmpty;
+  bool get _hasActiveTimedLine =>
+      widget.activeIndex >= 0 && widget.activeIndex < widget.timedLyrics.length;
 
   @override
   void initState() {
@@ -183,6 +185,7 @@ class _LyricsSectionState extends State<LyricsSection>
 
   bool _usesDesktopStageForWidth(double width) {
     return _hasTimedLyrics &&
+        _hasActiveTimedLine &&
         _isDesktopPlatform(Theme.of(context).platform) &&
         width >= _desktopLyricsBreakpoint;
   }

@@ -212,6 +212,35 @@ void main() {
   );
 
   testWidgets(
+    'desktop timed lyrics with no active line stay on the scrollable list path',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: _timedLyrics(40),
+          activeIndex: -1,
+          width: desktopWidth,
+          height: desktopHeight,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey<String>('lyrics-stage')), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('lyrics-stage-mask')),
+        findsNothing,
+      );
+      expect(find.byType(ListView), findsOneWidget);
+      expect(find.text('Line 0'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('lyrics-line-0')),
+        findsNothing,
+      );
+      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+      expect(scrollable.position.maxScrollExtent, greaterThan(0));
+    },
+  );
+
+  testWidgets(
     'width-only transition from desktop stage to mobile list keeps the active line in view',
     (tester) async {
       final timedLyrics = _timedLyrics(80);
