@@ -27,8 +27,7 @@ Widget _buildLyricsSection({
           width: width,
           height: height,
           child: LyricsSection(
-            lyrics:
-                lyrics ??
+            lyrics: lyrics ??
                 timedLyrics.map((line) => line.texts.join(' / ')).join('\n'),
             timedLyrics: timedLyrics,
             activeIndex: activeIndex,
@@ -56,7 +55,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey<String>('lyrics-stage')), findsOneWidget);
+      expect(
+          find.byKey(const ValueKey<String>('lyrics-stage')), findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('lyrics-stage-mask')),
         findsOneWidget,
@@ -91,6 +91,49 @@ void main() {
       expect(lineFinder, findsOneWidget);
       expect(activeMarkerWithinLineFinder, findsOneWidget);
       expect(activeMarkerFinder, findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'desktop timed lyrics update the active marker after large index jumps',
+    (tester) async {
+      final timedLyrics = _timedLyrics(40);
+
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: timedLyrics,
+          activeIndex: 1,
+          width: desktopWidth,
+          height: desktopHeight,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('lyrics-line-active-1')),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: timedLyrics,
+          activeIndex: 28,
+          width: desktopWidth,
+          height: desktopHeight,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('lyrics-line-active-28')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('lyrics-line-active-1')),
+        findsNothing,
+      );
     },
   );
 
