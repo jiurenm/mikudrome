@@ -80,13 +80,18 @@ void main() {
       await tester.pumpAndSettle();
 
       final lineFinder = find.byKey(const ValueKey<String>('lyrics-line-3'));
+      final activeMarkerFinder = find.byKey(
+        const ValueKey<String>('lyrics-line-active-3'),
+      );
+      final activeMarkerWithinLineFinder = find.descendant(
+        of: lineFinder,
+        matching: activeMarkerFinder,
+      );
 
       expect(lineFinder, findsOneWidget);
       expect(tester.element(lineFinder), isA<Element>());
-      expect(
-        find.byKey(const ValueKey<String>('lyrics-line-active-3')),
-        findsOneWidget,
-      );
+      expect(activeMarkerWithinLineFinder, findsOneWidget);
+      expect(activeMarkerFinder, findsOneWidget);
     },
   );
 
