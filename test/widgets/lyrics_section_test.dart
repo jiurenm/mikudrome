@@ -40,6 +40,9 @@ Widget _buildLyricsSection({
 }
 
 void main() {
+  const desktopWidth = 1280.0;
+  const desktopHeight = 720.0;
+
   testWidgets(
     'desktop timed lyrics render a stage instead of a scrollable list',
     (tester) async {
@@ -47,8 +50,8 @@ void main() {
         _buildLyricsSection(
           timedLyrics: _timedLyrics(8),
           activeIndex: 3,
-          width: 1280,
-          height: 720,
+          width: desktopWidth,
+          height: desktopHeight,
         ),
       );
       await tester.pumpAndSettle();
@@ -70,12 +73,16 @@ void main() {
         _buildLyricsSection(
           timedLyrics: _timedLyrics(8),
           activeIndex: 3,
-          width: 1280,
-          height: 720,
+          width: desktopWidth,
+          height: desktopHeight,
         ),
       );
       await tester.pumpAndSettle();
 
+      final lineFinder = find.byKey(const ValueKey<String>('lyrics-line-3'));
+
+      expect(lineFinder, findsOneWidget);
+      expect(tester.element(lineFinder), isA<Element>());
       expect(
         find.byKey(const ValueKey<String>('lyrics-line-active-3')),
         findsOneWidget,
@@ -89,8 +96,8 @@ void main() {
       await tester.pumpWidget(
         _buildLyricsSection(
           lyrics: 'First line\nSecond line',
-          width: 1280,
-          height: 720,
+          width: desktopWidth,
+          height: desktopHeight,
         ),
       );
       await tester.pumpAndSettle();
