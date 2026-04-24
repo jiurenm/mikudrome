@@ -105,7 +105,7 @@ class QueuePanel extends StatelessWidget {
                 final track = queue[index];
                 final subtitle = track.vocalLine.isNotEmpty
                     ? track.vocalLine
-                    : 'Unknown credits';
+                    : '-';
                 return Row(
                   children: [
                     Expanded(

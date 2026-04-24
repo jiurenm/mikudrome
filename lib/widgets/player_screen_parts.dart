@@ -250,7 +250,7 @@ class VocalBadgeColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final values = vocalists.isNotEmpty ? vocalists : const ['Unknown'];
+    final values = vocalists.isNotEmpty ? vocalists : const ['-'];
     final vocalText = values.join(', ');
     const vocalStyle = TextStyle(
       fontSize: 18,
@@ -629,7 +629,7 @@ class TrackListItem extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    subtitle.isNotEmpty ? subtitle : 'Unknown credits',
+                    subtitle.isNotEmpty ? subtitle : '-',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AppTheme.textMuted,
                         ),

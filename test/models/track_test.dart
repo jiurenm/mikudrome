@@ -42,4 +42,28 @@ void main() {
       expect(track.vocalLine, 'Miku, Rin');
     });
   });
+
+  group('Track credit display fallbacks', () {
+    test('uses dash when composer is unavailable', () {
+      const track = Track(
+        id: 1,
+        title: 'Test',
+        audioPath: '/tmp/test.flac',
+        videoPath: '',
+      );
+
+      expect(track.composerDisplay, '-');
+    });
+
+    test('uses dash when lyricist is unavailable', () {
+      const track = Track(
+        id: 1,
+        title: 'Test',
+        audioPath: '/tmp/test.flac',
+        videoPath: '',
+      );
+
+      expect(track.lyricistDisplay, '-');
+    });
+  });
 }

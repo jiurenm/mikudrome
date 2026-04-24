@@ -136,12 +136,12 @@ class Track {
       if (artistCredits.isNotEmpty) return artistCredits.join(' x ');
       return artists;
     }
-    return 'Unknown';
+    return '-';
   }
 
   String get lyricistDisplay {
     if (lyricists.isNotEmpty) return lyricists.join(' x ');
-    return 'Unknown';
+    return '-';
   }
 
   String get vocalLine {

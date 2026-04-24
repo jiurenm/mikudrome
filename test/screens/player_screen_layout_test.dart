@@ -15,6 +15,14 @@ Track _desktopTrack() => const Track(
       lyrics: 'line 1\nline 2\nline 3',
     );
 
+Track _creditlessTrack() => const Track(
+      id: 8,
+      title: 'creditless',
+      audioPath: '/tmp/8.flac',
+      videoPath: '',
+      lyrics: 'line 1\nline 2\nline 3',
+    );
+
 Widget _buildPlayer({
   required Size surfaceSize,
   Track? track,
@@ -141,5 +149,20 @@ void main() {
         findsNothing);
     expect(find.byKey(const ValueKey('player-audio-title-block')),
         findsNothing);
+  });
+
+  testWidgets('empty credits use dash instead of unknown credits',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1600, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpPlayer(
+      tester,
+      surfaceSize: const Size(1600, 900),
+      track: _creditlessTrack(),
+    );
+
+    expect(find.text('Unknown credits'), findsNothing);
+    expect(find.text('-'), findsWidgets);
   });
 }

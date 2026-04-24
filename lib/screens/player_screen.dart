@@ -750,7 +750,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   String get _queueSubtitle {
     final line = _track.vocalLine;
-    return line.isNotEmpty ? line : 'Unknown credits';
+    return line.isNotEmpty ? line : '-';
   }
 
   String _formatDuration(Duration value) {
@@ -1728,7 +1728,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final modeLabel = _isVideoMode ? 'Local MV Active' : 'Audio Stream Active';
     final vocalists = _track.vocalists.isNotEmpty
         ? _track.vocalists.join(', ')
-        : 'Unknown vocalists';
+        : '-';
     return Container(
       height: 24,
       color: accentColor,
