@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../../models/timed_lyric_line.dart';
 import '../../theme/app_theme.dart';
@@ -35,12 +36,15 @@ class _LyricsSectionState extends State<LyricsSection> {
   late final ScrollController _scrollController;
   final Map<int, GlobalKey> _lineKeys = <int, GlobalKey>{};
   final Map<int, double> _lineHeights = <int, double>{};
+  final Map<int, double> _pendingLineHeights = <int, double>{};
   static const _highlightSyncDelay = Duration(milliseconds: 40);
 
   int _displayedActiveIndex = -1;
   double _stageOffset = 0;
+  double? _timedLyricsWidth;
   int _lastAutoScrolledIndex = -1;
   bool _isAutoScrolling = false;
+  bool _lineHeightFlushScheduled = false;
   int? _pendingAutoScrollIndex;
   Timer? _highlightSyncTimer;
 
@@ -52,15 +56,21 @@ class _LyricsSectionState extends State<LyricsSection> {
     super.initState();
     _scrollController = ScrollController();
     _displayedActiveIndex = widget.activeIndex;
-    _scheduleAutoScrollToActive(force: true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _usesDesktopStageInCurrentContext()) return;
+      _scheduleAutoScrollToActive(force: true);
+    });
   }
 
   @override
   void didUpdateWidget(covariant LyricsSection oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final usesDesktopStage = _usesDesktopStageInCurrentContext();
     if (!_hasTimedLyrics) {
       _lineKeys.clear();
       _lineHeights.clear();
+      _pendingLineHeights.clear();
+      _lineHeightFlushScheduled = false;
       _displayedActiveIndex = -1;
       _stageOffset = 0;
       _lastAutoScrolledIndex = -1;
@@ -73,6 +83,8 @@ class _LyricsSectionState extends State<LyricsSection> {
     if (oldWidget.timedLyrics != widget.timedLyrics) {
       _lineKeys.clear();
       _lineHeights.clear();
+      _pendingLineHeights.clear();
+      _lineHeightFlushScheduled = false;
       _displayedActiveIndex = widget.activeIndex;
       _stageOffset = 0;
       _lastAutoScrolledIndex = -1;
@@ -80,16 +92,20 @@ class _LyricsSectionState extends State<LyricsSection> {
       _isAutoScrolling = false;
       _highlightSyncTimer?.cancel();
       // Jump to top instantly on track change — no visible scroll-back.
-      if (_scrollController.hasClients) {
+      if (!usesDesktopStage && _scrollController.hasClients) {
         _scrollController.jumpTo(0);
       }
-      _scheduleAutoScrollToActive(force: true);
+      if (!usesDesktopStage) {
+        _scheduleAutoScrollToActive(force: true);
+      }
       return;
     }
 
     if (widget.activeIndex != oldWidget.activeIndex) {
-      _syncDisplayedActiveIndex();
-      _scheduleAutoScrollToActive();
+      _syncDisplayedActiveIndex(immediate: usesDesktopStage);
+      if (!usesDesktopStage) {
+        _scheduleAutoScrollToActive();
+      }
     }
   }
 
@@ -100,14 +116,21 @@ class _LyricsSectionState extends State<LyricsSection> {
     super.dispose();
   }
 
-  void _syncDisplayedActiveIndex() {
+  void _syncDisplayedActiveIndex({bool immediate = false}) {
     _highlightSyncTimer?.cancel();
 
     final targetIndex = widget.activeIndex;
     if (!mounted) return;
+    if (_displayedActiveIndex == targetIndex) return;
+
+    if (immediate || _usesDesktopStageInCurrentContext()) {
+      setState(() {
+        _displayedActiveIndex = targetIndex;
+      });
+      return;
+    }
 
     if (_isAutoScrolling) {
-      if (_displayedActiveIndex == targetIndex) return;
       setState(() {
         _displayedActiveIndex = targetIndex;
       });
@@ -125,13 +148,40 @@ class _LyricsSectionState extends State<LyricsSection> {
   GlobalKey _keyForLine(int index) =>
       _lineKeys.putIfAbsent(index, GlobalKey.new);
 
-  void _updateLineHeight(int index, double height) {
-    final currentHeight = _lineHeights[index];
+  bool _usesDesktopStageInCurrentContext() {
+    final width = _timedLyricsWidth ?? MediaQuery.maybeOf(context)?.size.width;
+    if (width == null) return false;
+    return _hasTimedLyrics && _isDesktopTimedLyrics(width);
+  }
+
+  void _queueLineHeight(int index, double height) {
+    final currentHeight = _pendingLineHeights[index] ?? _lineHeights[index];
     if (currentHeight != null && (currentHeight - height).abs() < 0.5) {
       return;
     }
-    setState(() {
-      _lineHeights[index] = height;
+
+    _pendingLineHeights[index] = height;
+    if (_lineHeightFlushScheduled) return;
+
+    _lineHeightFlushScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _lineHeightFlushScheduled = false;
+      if (!mounted || _pendingLineHeights.isEmpty) return;
+
+      var hasChanges = false;
+      for (final entry in _pendingLineHeights.entries) {
+        final currentHeight = _lineHeights[entry.key];
+        if (currentHeight != null &&
+            (currentHeight - entry.value).abs() < 0.5) {
+          continue;
+        }
+        _lineHeights[entry.key] = entry.value;
+        hasChanges = true;
+      }
+      _pendingLineHeights.clear();
+
+      if (!hasChanges) return;
+      setState(() {});
     });
   }
 
@@ -314,6 +364,7 @@ class _LyricsSectionState extends State<LyricsSection> {
           : _hasTimedLyrics
               ? LayoutBuilder(
                   builder: (context, constraints) {
+                    _timedLyricsWidth = constraints.maxWidth;
                     if (_isDesktopTimedLyrics(constraints.maxWidth)) {
                       final metrics = _buildStageMetrics();
                       _syncStageOffset(metrics, constraints.maxHeight);
@@ -373,13 +424,12 @@ class _LyricsSectionState extends State<LyricsSection> {
                                             top: metrics.lineTops[index],
                                             left: 0,
                                             right: 0,
-                                            child: _MeasuredStageLine(
-                                              onHeightChanged: (height) {
-                                                _updateLineHeight(
-                                                  index,
-                                                  height,
-                                                );
-                                              },
+                                            child: _StageLineSizeListener(
+                                              onSizeChanged: (size) =>
+                                                  _queueLineHeight(
+                                                index,
+                                                size.height,
+                                              ),
                                               child: _LyricLineItem(
                                                 lineKey: ValueKey<String>(
                                                   'lyrics-line-$index',
@@ -567,59 +617,45 @@ class _LyricLineItem extends StatelessWidget {
   }
 }
 
-class _MeasuredStageLine extends StatefulWidget {
-  const _MeasuredStageLine({
-    required this.onHeightChanged,
+class _StageLineSizeListener extends SingleChildRenderObjectWidget {
+  const _StageLineSizeListener({
+    required this.onSizeChanged,
     required this.child,
   });
 
-  final ValueChanged<double> onHeightChanged;
+  final ValueChanged<Size> onSizeChanged;
   final Widget child;
 
   @override
-  State<_MeasuredStageLine> createState() => _MeasuredStageLineState();
+  RenderObject createRenderObject(BuildContext context) {
+    return _RenderStageLineSizeListener(onSizeChanged);
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant _RenderStageLineSizeListener renderObject,
+  ) {
+    renderObject.onSizeChanged = onSizeChanged;
+  }
 }
 
-class _MeasuredStageLineState extends State<_MeasuredStageLine> {
-  final GlobalKey _measurementKey = GlobalKey();
-  double? _lastReportedHeight;
+class _RenderStageLineSizeListener extends RenderProxyBox {
+  _RenderStageLineSizeListener(this.onSizeChanged);
+
+  ValueChanged<Size> onSizeChanged;
+  Size? _lastReportedSize;
 
   @override
-  void initState() {
-    super.initState();
+  void performLayout() {
+    super.performLayout();
+
+    final nextSize = child?.size ?? size;
+    if (_lastReportedSize == nextSize) return;
+
+    _lastReportedSize = nextSize;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _reportHeight();
+      onSizeChanged(nextSize);
     });
-  }
-
-  @override
-  void didUpdateWidget(covariant _MeasuredStageLine oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _reportHeight();
-    });
-  }
-
-  void _reportHeight() {
-    final context = _measurementKey.currentContext;
-    final renderObject = context?.findRenderObject() as RenderBox?;
-    if (!mounted || renderObject == null || !renderObject.hasSize) return;
-
-    final height = renderObject.size.height;
-    if (_lastReportedHeight != null &&
-        (_lastReportedHeight! - height).abs() < 0.5) {
-      return;
-    }
-
-    _lastReportedHeight = height;
-    widget.onHeightChanged(height);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return KeyedSubtree(
-      key: _measurementKey,
-      child: widget.child,
-    );
   }
 }

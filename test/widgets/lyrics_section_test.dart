@@ -138,6 +138,42 @@ void main() {
   );
 
   testWidgets(
+    'desktop timed lyrics switch the active marker without delayed sync',
+    (tester) async {
+      final timedLyrics = _timedLyrics(12);
+
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: timedLyrics,
+          activeIndex: 2,
+          width: desktopWidth,
+          height: desktopHeight,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: timedLyrics,
+          activeIndex: 5,
+          width: desktopWidth,
+          height: desktopHeight,
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey<String>('lyrics-line-active-5')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('lyrics-line-active-2')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
     'plain text lyrics keep the fallback scroll view structure',
     (tester) async {
       await tester.pumpWidget(
