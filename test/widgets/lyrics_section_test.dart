@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/models/timed_lyric_line.dart';
+import 'package:mikudrome/theme/app_theme.dart';
 import 'package:mikudrome/widgets/player/lyrics_section.dart';
 
 List<TimedLyricLine> _timedLyrics(int count) {
@@ -38,6 +39,11 @@ Widget _buildLyricsSection({
   );
 }
 
+Future<void> _pumpDesktopStage(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
 void main() {
   const desktopWidth = 1280.0;
   const desktopHeight = 720.0;
@@ -53,7 +59,7 @@ void main() {
           height: desktopHeight,
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpDesktopStage(tester);
 
       expect(
           find.byKey(const ValueKey<String>('lyrics-stage')), findsOneWidget);
@@ -77,7 +83,7 @@ void main() {
           height: desktopHeight,
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpDesktopStage(tester);
 
       final lineFinder = find.byKey(const ValueKey<String>('lyrics-line-3'));
       final activeMarkerFinder = find.byKey(
@@ -95,6 +101,37 @@ void main() {
   );
 
   testWidgets(
+    'desktop timed lyrics wrap the active line in the focus animation shell',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: _timedLyrics(8),
+          activeIndex: 4,
+          width: desktopWidth,
+          height: desktopHeight,
+        ),
+      );
+      await _pumpDesktopStage(tester);
+
+      final lineFinder = find.byKey(const ValueKey<String>('lyrics-line-4'));
+      final activeMarkerFinder = find.byKey(
+        const ValueKey<String>('lyrics-line-active-4'),
+      );
+      final glowFinder = find.byKey(
+        const ValueKey<String>('lyrics-line-glow-4'),
+      );
+
+      expect(lineFinder, findsOneWidget);
+      expect(activeMarkerFinder, findsOneWidget);
+      expect(glowFinder, findsOneWidget);
+      expect(
+        find.descendant(of: lineFinder, matching: glowFinder),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
     'desktop timed lyrics update the active marker after large index jumps',
     (tester) async {
       final timedLyrics = _timedLyrics(40);
@@ -107,7 +144,7 @@ void main() {
           height: desktopHeight,
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpDesktopStage(tester);
 
       expect(
         find.byKey(const ValueKey<String>('lyrics-line-active-1')),
@@ -124,7 +161,6 @@ void main() {
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.pumpAndSettle();
 
       expect(
         find.byKey(const ValueKey<String>('lyrics-line-active-28')),
@@ -150,7 +186,7 @@ void main() {
           height: desktopHeight,
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpDesktopStage(tester);
 
       await tester.pumpWidget(
         _buildLyricsSection(
@@ -186,7 +222,12 @@ void main() {
           height: desktopHeight,
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpDesktopStage(tester);
+
+      expect(
+        find.byKey(const ValueKey<String>('lyrics-line-glow-40')),
+        findsOneWidget,
+      );
 
       await tester.pumpWidget(
         _buildLyricsSection(
@@ -204,8 +245,44 @@ void main() {
       final position = scrollable.position;
 
       expect(find.text('Line 40'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('lyrics-line-glow-40')),
+        findsNothing,
+      );
+      final activeLineText = tester.widget<Text>(find.text('Line 40'));
+      expect(activeLineText.style?.shadows, isNull);
       expect(position.pixels, greaterThan(0));
       expect(position.pixels, lessThan(position.maxScrollExtent));
+    },
+  );
+
+  testWidgets(
+    'mobile timed lyrics keep the active line free of desktop glow styling',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: _timedLyrics(8),
+          activeIndex: 4,
+          width: 420,
+          height: 320,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('lyrics-line-glow-4')),
+        findsNothing,
+      );
+
+      final activeLineText = tester.widget<Text>(find.text('Line 4'));
+      expect(activeLineText.style?.shadows, isNull);
+
+      final nearbyLineText = tester.widget<Text>(find.text('Line 3'));
+      expect(
+        nearbyLineText.style?.color,
+        AppTheme.textPrimary.withValues(alpha: 0.72),
+      );
+      expect(nearbyLineText.style?.fontWeight, FontWeight.w500);
     },
   );
 

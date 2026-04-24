@@ -22,7 +22,8 @@ class LyricsSection extends StatefulWidget {
   State<LyricsSection> createState() => _LyricsSectionState();
 }
 
-class _LyricsSectionState extends State<LyricsSection> {
+class _LyricsSectionState extends State<LyricsSection>
+    with SingleTickerProviderStateMixin {
   static const _desktopLyricsBreakpoint = 600.0;
   static const _lineSpacing = 18.0;
   static const _mobileLineSpacing = 8.0;
@@ -32,8 +33,12 @@ class _LyricsSectionState extends State<LyricsSection> {
   static const _estimatedLineHeight = 74.0;
   static const _lyricsAnimationDuration = Duration(milliseconds: 200);
   static const _lyricsAnimationCurve = Curves.easeOutCubic;
+  static const _ambientBreathingDuration = Duration(milliseconds: 2600);
 
   late final ScrollController _scrollController;
+  late final AnimationController _ambientBreathingController;
+  late final Animation<double> _activeLineOpacity;
+  late final Animation<double> _activeLineScale;
   final Map<int, GlobalKey> _lineKeys = <int, GlobalKey>{};
   final Map<int, double> _lineHeights = <int, double>{};
   final Map<int, double> _pendingLineHeights = <int, double>{};
@@ -56,6 +61,23 @@ class _LyricsSectionState extends State<LyricsSection> {
   void initState() {
     super.initState();
     _scrollController = ScrollController();
+    _ambientBreathingController = AnimationController(
+      vsync: this,
+      duration: _ambientBreathingDuration,
+      value: 1.0,
+    );
+    final breathingCurve = CurvedAnimation(
+      parent: _ambientBreathingController,
+      curve: Curves.easeInOutSine,
+    );
+    _activeLineOpacity = Tween<double>(
+      begin: 0.95,
+      end: 1.0,
+    ).animate(breathingCurve);
+    _activeLineScale = Tween<double>(
+      begin: 0.95,
+      end: 1.1,
+    ).animate(breathingCurve);
     _displayedActiveIndex = widget.activeIndex;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _usesDesktopStageInCurrentContext()) return;
@@ -68,6 +90,7 @@ class _LyricsSectionState extends State<LyricsSection> {
     super.didUpdateWidget(oldWidget);
     final usesDesktopStage = _usesDesktopStageInCurrentContext();
     if (!_hasTimedLyrics) {
+      _syncAmbientBreathing(false);
       _lineKeys.clear();
       _lineHeights.clear();
       _pendingLineHeights.clear();
@@ -115,6 +138,7 @@ class _LyricsSectionState extends State<LyricsSection> {
   @override
   void dispose() {
     _highlightSyncTimer?.cancel();
+    _ambientBreathingController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -160,6 +184,7 @@ class _LyricsSectionState extends State<LyricsSection> {
   void _trackTimedLyricsLayoutMode(double width) {
     _timedLyricsWidth = width;
     final usesDesktopStage = _isDesktopTimedLyrics(width);
+    _syncAmbientBreathing(usesDesktopStage);
     final previousMode = _lastTimedLyricsDesktopMode;
     _lastTimedLyricsDesktopMode = usesDesktopStage;
 
@@ -210,6 +235,18 @@ class _LyricsSectionState extends State<LyricsSection> {
       if (!hasChanges) return;
       setState(() {});
     });
+  }
+
+  void _syncAmbientBreathing(bool enabled) {
+    if (enabled) {
+      if (_ambientBreathingController.isAnimating) return;
+      _ambientBreathingController.repeat(reverse: true);
+      return;
+    }
+
+    _ambientBreathingController
+      ..stop()
+      ..value = 1.0;
   }
 
   _StageMetrics _buildStageMetrics() {
@@ -467,13 +504,27 @@ class _LyricsSectionState extends State<LyricsSection> {
                                                         'lyrics-line-active-$index',
                                                       )
                                                     : null,
+                                                activeGlowKey: index ==
+                                                        _displayedActiveIndex
+                                                    ? ValueKey<String>(
+                                                        'lyrics-line-glow-$index',
+                                                      )
+                                                    : null,
                                                 line: widget.timedLyrics[index],
                                                 isActive: index ==
                                                     _displayedActiveIndex,
-                                                colorAlpha:
-                                                    _colorAlphaForIndex(index),
-                                                inactiveFontWeight:
-                                                    _fontWeightForIndex(index),
+                                                visualStyle:
+                                                    _desktopVisualStyleForIndex(
+                                                      index,
+                                                    ),
+                                                focusOpacity: index ==
+                                                        _displayedActiveIndex
+                                                    ? _activeLineOpacity
+                                                    : null,
+                                                focusScale: index ==
+                                                        _displayedActiveIndex
+                                                    ? _activeLineScale
+                                                    : null,
                                                 animationDuration:
                                                     _lyricsAnimationDuration,
                                                 animationCurve:
@@ -507,10 +558,10 @@ class _LyricsSectionState extends State<LyricsSection> {
                             child: _LyricLineItem(
                               lineKey: _keyForLine(index),
                               activeMarkerKey: null,
+                              activeGlowKey: null,
                               line: widget.timedLyrics[index],
                               isActive: index == _displayedActiveIndex,
-                              colorAlpha: _colorAlphaForIndex(index),
-                              inactiveFontWeight: _fontWeightForIndex(index),
+                              visualStyle: _mobileVisualStyleForIndex(index),
                               animationDuration: _lyricsAnimationDuration,
                               animationCurve: _lyricsAnimationCurve,
                             ),
@@ -537,28 +588,79 @@ class _LyricsSectionState extends State<LyricsSection> {
     );
   }
 
-  double _colorAlphaForIndex(int index) {
+  _LyricLineVisualStyle _desktopVisualStyleForIndex(int index) {
     final distance = _displayedActiveIndex < 0
         ? null
         : (index - _displayedActiveIndex).abs();
     return switch (distance) {
-      null => 0.82,
-      0 => 1.0,
-      1 => 0.72,
-      2 => 0.56,
-      _ => 0.36,
+      null => const _LyricLineVisualStyle(
+          primaryAlpha: 0.82,
+          secondaryAlpha: 0.43,
+          primaryFontWeight: FontWeight.w400,
+          secondaryFontWeight: FontWeight.w400,
+        ),
+      0 => const _LyricLineVisualStyle(
+          primaryAlpha: 1.0,
+          secondaryAlpha: 0.72,
+          primaryFontWeight: FontWeight.w700,
+          secondaryFontWeight: FontWeight.w400,
+        ),
+      1 => const _LyricLineVisualStyle(
+          primaryAlpha: 0.68,
+          secondaryAlpha: 0.38,
+          primaryFontWeight: FontWeight.w500,
+          secondaryFontWeight: FontWeight.w400,
+        ),
+      2 => const _LyricLineVisualStyle(
+          primaryAlpha: 0.58,
+          secondaryAlpha: 0.32,
+          primaryFontWeight: FontWeight.w400,
+          secondaryFontWeight: FontWeight.w400,
+        ),
+      _ => const _LyricLineVisualStyle(
+          primaryAlpha: 0.36,
+          secondaryAlpha: 0.2,
+          primaryFontWeight: FontWeight.w400,
+          secondaryFontWeight: FontWeight.w400,
+        ),
     };
   }
 
-  FontWeight _fontWeightForIndex(int index) {
+  _LyricLineVisualStyle _mobileVisualStyleForIndex(int index) {
     final distance = _displayedActiveIndex < 0
         ? null
         : (index - _displayedActiveIndex).abs();
     return switch (distance) {
-      null => FontWeight.w400,
-      0 => FontWeight.w600,
-      1 => FontWeight.w500,
-      _ => FontWeight.w400,
+      null => const _LyricLineVisualStyle(
+          primaryAlpha: 0.82,
+          secondaryAlpha: 0.4264,
+          primaryFontWeight: FontWeight.w400,
+          secondaryFontWeight: FontWeight.w400,
+        ),
+      0 => const _LyricLineVisualStyle(
+          primaryAlpha: 1.0,
+          secondaryAlpha: 0.62,
+          primaryFontWeight: FontWeight.w700,
+          secondaryFontWeight: FontWeight.w400,
+        ),
+      1 => const _LyricLineVisualStyle(
+          primaryAlpha: 0.72,
+          secondaryAlpha: 0.3744,
+          primaryFontWeight: FontWeight.w500,
+          secondaryFontWeight: FontWeight.w500,
+        ),
+      2 => const _LyricLineVisualStyle(
+          primaryAlpha: 0.56,
+          secondaryAlpha: 0.2912,
+          primaryFontWeight: FontWeight.w400,
+          secondaryFontWeight: FontWeight.w400,
+        ),
+      _ => const _LyricLineVisualStyle(
+          primaryAlpha: 0.36,
+          secondaryAlpha: 0.1872,
+          primaryFontWeight: FontWeight.w400,
+          secondaryFontWeight: FontWeight.w400,
+        ),
     };
   }
 }
@@ -573,16 +675,32 @@ class _StageMetrics {
   final double contentHeight;
 }
 
+class _LyricLineVisualStyle {
+  const _LyricLineVisualStyle({
+    required this.primaryAlpha,
+    required this.secondaryAlpha,
+    required this.primaryFontWeight,
+    required this.secondaryFontWeight,
+  });
+
+  final double primaryAlpha;
+  final double secondaryAlpha;
+  final FontWeight primaryFontWeight;
+  final FontWeight secondaryFontWeight;
+}
+
 class _LyricLineItem extends StatelessWidget {
   const _LyricLineItem({
     required this.lineKey,
     required this.activeMarkerKey,
+    required this.activeGlowKey,
     required this.line,
     required this.isActive,
-    required this.colorAlpha,
-    required this.inactiveFontWeight,
+    required this.visualStyle,
     required this.animationDuration,
     required this.animationCurve,
+    this.focusOpacity,
+    this.focusScale,
   });
 
   static const _primaryFontSize = 22.0;
@@ -590,16 +708,93 @@ class _LyricLineItem extends StatelessWidget {
 
   final Key lineKey;
   final Key? activeMarkerKey;
+  final Key? activeGlowKey;
   final TimedLyricLine line;
   final bool isActive;
-  final double colorAlpha;
-  final FontWeight inactiveFontWeight;
+  final _LyricLineVisualStyle visualStyle;
   final Duration animationDuration;
   final Curve animationCurve;
+  final Animation<double>? focusOpacity;
+  final Animation<double>? focusScale;
 
   @override
   Widget build(BuildContext context) {
     final baseStyle = Theme.of(context).textTheme.bodyLarge!;
+    final showFocusGlow = isActive && activeGlowKey != null;
+    final glow = <Shadow>[
+      Shadow(
+        color: AppTheme.mikuGreen.withValues(alpha: 0.38),
+        blurRadius: 22,
+      ),
+      Shadow(
+        color: AppTheme.mikuGreen.withValues(alpha: 0.16),
+        blurRadius: 42,
+      ),
+    ];
+    Widget content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var textIndex = 0; textIndex < line.texts.length; textIndex++)
+          TweenAnimationBuilder<Color?>(
+            duration: animationDuration,
+            curve: animationCurve,
+            tween: ColorTween(
+              end: isActive
+                  ? AppTheme.mikuGreen.withValues(
+                      alpha: textIndex == 0
+                          ? visualStyle.primaryAlpha
+                          : visualStyle.secondaryAlpha,
+                    )
+                  : AppTheme.textPrimary.withValues(
+                      alpha: textIndex == 0
+                          ? visualStyle.primaryAlpha
+                          : visualStyle.secondaryAlpha,
+                    ),
+            ),
+            builder: (context, color, child) {
+              return Text(
+                line.texts[textIndex],
+                style: baseStyle.copyWith(
+                  color: color,
+                  height: line.texts.length > 1
+                      ? (textIndex == 0 ? 1.58 : 1.18)
+                      : 1.7,
+                  fontWeight: textIndex == 0
+                      ? visualStyle.primaryFontWeight
+                      : visualStyle.secondaryFontWeight,
+                  fontSize:
+                      textIndex == 0 ? _primaryFontSize : _translationFontSize,
+                  shadows: showFocusGlow ? glow : null,
+                ),
+              );
+            },
+          ),
+      ],
+    );
+
+    if (showFocusGlow &&
+        activeGlowKey != null &&
+        focusOpacity != null &&
+        focusScale != null) {
+      content = AnimatedBuilder(
+        animation: Listenable.merge([focusOpacity!, focusScale!]),
+        child: content,
+        builder: (context, child) {
+          return Opacity(
+            opacity: focusOpacity!.value,
+            child: Transform.scale(
+              alignment: Alignment.centerLeft,
+              scale: focusScale!.value,
+              child: Container(
+                key: activeGlowKey,
+                child: child,
+              ),
+            ),
+          );
+        },
+      );
+    }
+
     return Container(
       key: lineKey,
       child: Column(
@@ -607,37 +802,7 @@ class _LyricLineItem extends StatelessWidget {
         children: [
           if (activeMarkerKey != null)
             SizedBox(key: activeMarkerKey, width: 0, height: 0),
-          for (var textIndex = 0; textIndex < line.texts.length; textIndex++)
-            TweenAnimationBuilder<Color?>(
-              duration: animationDuration,
-              curve: animationCurve,
-              tween: ColorTween(
-                end: isActive
-                    ? (textIndex == 0
-                        ? AppTheme.mikuGreen
-                        : AppTheme.mikuGreen.withValues(alpha: 0.62))
-                    : AppTheme.textPrimary.withValues(
-                        alpha: textIndex == 0 ? colorAlpha : colorAlpha * 0.52,
-                      ),
-              ),
-              builder: (context, color, child) {
-                return Text(
-                  line.texts[textIndex],
-                  style: baseStyle.copyWith(
-                    color: color,
-                    height: line.texts.length > 1
-                        ? (textIndex == 0 ? 1.58 : 1.18)
-                        : 1.7,
-                    fontWeight: isActive
-                        ? (textIndex == 0 ? FontWeight.w700 : FontWeight.w400)
-                        : inactiveFontWeight,
-                    fontSize: textIndex == 0
-                        ? _primaryFontSize
-                        : _translationFontSize,
-                  ),
-                );
-              },
-            ),
+          content,
         ],
       ),
     );
