@@ -14,17 +14,22 @@ List<TimedLyricLine> _timedLyrics(int count) {
 }
 
 Widget _buildLyricsSection({
-  required List<TimedLyricLine> timedLyrics,
-  required int activeIndex,
+  List<TimedLyricLine> timedLyrics = const <TimedLyricLine>[],
+  int activeIndex = -1,
+  double width = 420,
+  double height = 320,
+  String? lyrics,
 }) {
   return MaterialApp(
     home: Scaffold(
       body: Center(
         child: SizedBox(
-          width: 420,
-          height: 320,
+          width: width,
+          height: height,
           child: LyricsSection(
-            lyrics: timedLyrics.map((line) => line.texts.join(' / ')).join('\n'),
+            lyrics:
+                lyrics ??
+                timedLyrics.map((line) => line.texts.join(' / ')).join('\n'),
             timedLyrics: timedLyrics,
             activeIndex: activeIndex,
           ),
@@ -35,6 +40,67 @@ Widget _buildLyricsSection({
 }
 
 void main() {
+  testWidgets(
+    'desktop timed lyrics render a stage instead of a scrollable list',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: _timedLyrics(8),
+          activeIndex: 3,
+          width: 1280,
+          height: 720,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey<String>('lyrics-stage')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('lyrics-stage-mask')),
+        findsOneWidget,
+      );
+      expect(find.byType(ListView), findsNothing);
+      expect(find.byType(Scrollbar), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'desktop timed lyrics expose the active line marker for highlight styling',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: _timedLyrics(8),
+          activeIndex: 3,
+          width: 1280,
+          height: 720,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('lyrics-line-active-3')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'plain text lyrics keep the fallback scroll view structure',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          lyrics: 'First line\nSecond line',
+          width: 1280,
+          height: 720,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SelectableText), findsOneWidget);
+      expect(find.byType(SingleChildScrollView), findsOneWidget);
+      expect(find.byKey(const ValueKey<String>('lyrics-stage')), findsNothing);
+    },
+  );
+
   testWidgets(
     'keeps far active lyric jumps from snapping to the bottom of the list',
     (tester) async {
