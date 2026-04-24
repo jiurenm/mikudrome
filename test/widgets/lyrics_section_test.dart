@@ -14,8 +14,8 @@ List<TimedLyricLine> _timedLyrics(int count) {
 }
 
 Widget _buildLyricsSection({
-  List<TimedLyricLine> timedLyrics = const <TimedLyricLine>[],
-  int activeIndex = -1,
+  required List<TimedLyricLine> timedLyrics,
+  required int activeIndex,
   double width = 420,
   double height = 320,
   String? lyrics,
@@ -89,7 +89,6 @@ void main() {
       );
 
       expect(lineFinder, findsOneWidget);
-      expect(tester.element(lineFinder), isA<Element>());
       expect(activeMarkerWithinLineFinder, findsOneWidget);
       expect(activeMarkerFinder, findsOneWidget);
     },
@@ -100,6 +99,8 @@ void main() {
     (tester) async {
       await tester.pumpWidget(
         _buildLyricsSection(
+          timedLyrics: const <TimedLyricLine>[],
+          activeIndex: -1,
           lyrics: 'First line\nSecond line',
           width: desktopWidth,
           height: desktopHeight,
