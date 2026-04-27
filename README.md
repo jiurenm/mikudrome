@@ -107,6 +107,22 @@ API 地址通过环境变量 `API_BASE_URL` 在构建时注入（与后端一致
 - **分离部署**：构建时设置 `API_BASE_URL=http://后端地址:端口`。
 - **开发模式**（`make dev`）：默认 `http://127.0.0.1:8080`，可通过 `API_BASE_URL` 覆盖。
 
+### Android App
+
+Build a debug APK:
+
+```bash
+flutter build apk --debug
+```
+
+Install it on a device or emulator, then enter the Mikudrome server URL on first launch, for example:
+
+```text
+http://192.168.1.100:8080
+```
+
+The Android app supports foreground MV playback and basic background audio playback. Local HTTP servers are supported for LAN use.
+
 ---
 
 ## API
