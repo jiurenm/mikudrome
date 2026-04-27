@@ -54,6 +54,7 @@ abstract class MobileAudioPlaybackService {
   });
 
   Future<void> pause();
+  Future<void> seek(Duration position);
   Future<void> stop();
   Future<void> next();
   Future<void> previous();
@@ -106,6 +107,9 @@ class FakeMobileAudioPlaybackService implements MobileAudioPlaybackService {
   Future<void> pause() async {
     _emit(_currentState.copyWith(isPlaying: false));
   }
+
+  @override
+  Future<void> seek(Duration position) async {}
 
   @override
   Future<void> stop() async {
@@ -181,6 +185,9 @@ class NoopMobileAudioPlaybackService implements MobileAudioPlaybackService {
 
   @override
   Future<void> pause() async {}
+
+  @override
+  Future<void> seek(Duration position) async {}
 
   @override
   Future<void> stop() async {}
