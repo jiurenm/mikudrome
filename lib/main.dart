@@ -1,27 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:mikudrome/screens/library_home_screen.dart';
+import 'package:mikudrome/config/app_config_controller.dart';
 import 'package:mikudrome/theme/app_theme.dart';
+import 'package:mikudrome/widgets/app_root.dart';
 
-const List<({String family, String assetPath})> _bundledFonts = <({
-  String family,
-  String assetPath,
-})>[
-  (
-    family: 'NotoSansJP',
-    assetPath: 'lib/assets/fonts/NotoSansJP-Regular.ttf',
-  ),
-  (
-    family: 'NotoSansSC',
-    assetPath: 'lib/assets/fonts/NotoSansSC-Regular.ttf',
-  ),
+const List<({String family, String assetPath})>
+_bundledFonts = <({String family, String assetPath})>[
+  (family: 'NotoSansJP', assetPath: 'lib/assets/fonts/NotoSansJP-Regular.ttf'),
+  (family: 'NotoSansSC', assetPath: 'lib/assets/fonts/NotoSansSC-Regular.ttf'),
 ];
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await loadBundledFonts();
+  final appConfigController = AppConfigController();
+  await appConfigController.load();
 
-  runApp(const MikudromeApp());
+  runApp(MikudromeApp(appConfigController: appConfigController));
 }
 
 Future<void> loadBundledFonts({
@@ -40,7 +35,9 @@ Future<void> _loadBundledFont(String family, String assetPath) async {
 }
 
 class MikudromeApp extends StatelessWidget {
-  const MikudromeApp({super.key});
+  const MikudromeApp({super.key, required this.appConfigController});
+
+  final AppConfigController appConfigController;
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +45,7 @@ class MikudromeApp extends StatelessWidget {
       title: 'Mikudrome',
       theme: AppTheme.dark,
       debugShowCheckedModeBanner: false,
-      home: const LibraryHomeScreen(),
+      home: AppRoot(controller: appConfigController),
     );
   }
 }

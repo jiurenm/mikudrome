@@ -4,13 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../api/api.dart';
+import '../config/app_config_controller.dart';
 import '../models/track.dart';
 import '../models/video.dart';
+import '../services/mobile_audio_playback.dart'
+    hide createMobileAudioPlaybackService;
+import '../services/mobile_audio_playback_service.dart';
 import '../services/playback_storage.dart';
 import '../theme/vocal_theme.dart';
 import '../widgets/now_playing_bar.dart';
 import '../widgets/player/pip_mini_player.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/discover_screen.dart';
+import '../widgets/mobile_app_shell.dart';
 import 'album_detail_screen.dart';
 import 'albums_screen.dart';
 import 'player_screen.dart';
@@ -25,19 +31,39 @@ import '../models/vocalist.dart';
 import '../utils/responsive.dart';
 import '../widgets/mobile_player_sheet.dart';
 import '../widgets/mobile_more_screen.dart';
+import '../widgets/my_music_screen.dart';
+import '../widgets/settings_screen.dart';
 import '../services/playlist_repository.dart';
 import '../services/web_audio_playback_controller.dart';
 import 'playlists_screen.dart';
 import 'playlist_detail_screen.dart';
 import 'favorites_screen.dart';
+import 'server_setup_screen.dart';
 
 enum PlaybackMode { video, audio }
 
 enum PlaybackOrderMode { sequential, listLoop, singleLoop }
 
+@visibleForTesting
+Future<void> routeMobileAudioPlaybackForMode({
+  required bool isMobile,
+  required PlaybackMode playbackMode,
+  required MobileAudioPlaybackService service,
+  required Future<void> Function() playAudioQueue,
+}) async {
+  if (!isMobile) return;
+  if (playbackMode == PlaybackMode.audio) {
+    await playAudioQueue();
+    return;
+  }
+  await service.stop();
+}
+
 /// Root screen: app shell + route-based content. Album detail is shown in-shell (sidebar stays).
 class LibraryHomeScreen extends StatefulWidget {
-  const LibraryHomeScreen({super.key});
+  const LibraryHomeScreen({super.key, this.appConfigController});
+
+  final AppConfigController? appConfigController;
 
   @override
   State<LibraryHomeScreen> createState() => _LibraryHomeScreenState();
@@ -52,6 +78,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   Producer? _selectedProducer;
   Vocalist? _selectedVocalist;
   int? _selectedPlaylistId;
+  MobileAppTab _mobileTab = MobileAppTab.discover;
   List<Track> _playerQueue = const [];
   int _playerIndex = 0;
   bool _showPlayer = false;
@@ -65,6 +92,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   PlayerTogglePlayback _playerTogglePlayback = _noopTogglePlayback;
   PlayerSeekToFraction _playerSeekToFraction = _noopSeekToFraction;
   late final WebAudioPlaybackController _webAudioPlaybackController;
+  late final MobileAudioPlaybackService _mobileAudioPlaybackService;
+  StreamSubscription<MobileAudioPlaybackState>? _mobileAudioSubscription;
 
   bool _restoredNotStarted = false;
   double? _resumeProgress;
@@ -74,8 +103,19 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   void initState() {
     super.initState();
     _webAudioPlaybackController = WebAudioPlaybackController();
+    _mobileAudioPlaybackService = createMobileAudioPlaybackService();
+    _mobileAudioSubscription = _mobileAudioPlaybackService.states.listen(
+      _handleMobileAudioState,
+    );
     _restorePlaybackState();
     PlaylistRepository.instance.initialize(ApiClient());
+  }
+
+  @override
+  void dispose() {
+    unawaited(_mobileAudioSubscription?.cancel());
+    unawaited(_mobileAudioPlaybackService.dispose());
+    super.dispose();
   }
 
   String _formatDuration(int totalSeconds) {
@@ -92,13 +132,15 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   void _restorePlaybackState() {
     final saved = PlaybackStorage.load();
     if (saved == null) return;
-    final track = saved.queue.isNotEmpty &&
+    final track =
+        saved.queue.isNotEmpty &&
             saved.index >= 0 &&
             saved.index < saved.queue.length
         ? saved.queue[saved.index]
         : null;
-    final elapsed =
-        track != null ? (track.durationSeconds * saved.progress).round() : 0;
+    final elapsed = track != null
+        ? (track.durationSeconds * saved.progress).round()
+        : 0;
     setState(() {
       _playerQueue = saved.queue;
       _playerIndex = saved.index;
@@ -195,9 +237,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           isPlaying: _isPlaying,
         );
       case ShellRoute.localMv:
-        return MvGalleryScreen(
-          onVideoTap: _playVideo,
-        );
+        return MvGalleryScreen(onVideoTap: _playVideo);
       case ShellRoute.more:
         return MobileMoreScreen(
           onNavigate: (r) => setState(() {
@@ -207,12 +247,263 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     }
   }
 
+  DiscoverSection _discoverSectionForRoute(ShellRoute route) {
+    return switch (route) {
+      ShellRoute.producers => DiscoverSection.producers,
+      ShellRoute.vocalists => DiscoverSection.vocalists,
+      ShellRoute.localMv => DiscoverSection.mv,
+      _ => DiscoverSection.albums,
+    };
+  }
+
+  ShellRoute _routeForDiscoverSection(DiscoverSection section) {
+    return switch (section) {
+      DiscoverSection.albums => ShellRoute.albums,
+      DiscoverSection.producers => ShellRoute.producers,
+      DiscoverSection.vocalists => ShellRoute.vocalists,
+      DiscoverSection.mv => ShellRoute.localMv,
+    };
+  }
+
+  void _clearSelection() {
+    _selectedAlbum = null;
+    _selectedProducer = null;
+    _selectedVocalist = null;
+    _selectedPlaylistId = null;
+  }
+
+  void _navigateMobileDiscover(DiscoverSection section) {
+    setState(() {
+      _mobileTab = MobileAppTab.discover;
+      _route = _routeForDiscoverSection(section);
+      _clearSelection();
+      _showPlayer = false;
+    });
+  }
+
+  void _navigateMobileMyMusic(ShellRoute route) {
+    setState(() {
+      _mobileTab = MobileAppTab.myMusic;
+      _route = route;
+      _clearSelection();
+      _showPlayer = false;
+    });
+  }
+
+  void _selectMobileTab(MobileAppTab tab) {
+    setState(() {
+      _mobileTab = tab;
+      if (tab == MobileAppTab.discover) {
+        _route = ShellRoute.albums;
+        _clearSelection();
+      }
+      _showPlayer = false;
+    });
+  }
+
+  void _openMobileRescan() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: 'mobile-library-rescan'),
+        builder: (routeContext) => Scaffold(
+          appBar: AppBar(title: const Text('媒体库重扫')),
+          body: SafeArea(
+            child: MobileMoreScreen(
+              onNavigate: (route) {
+                Navigator.of(routeContext).pop();
+                if (!mounted) return;
+                setState(() {
+                  _mobileTab = switch (route) {
+                    ShellRoute.favorites ||
+                    ShellRoute.playlists => MobileAppTab.myMusic,
+                    _ => MobileAppTab.discover,
+                  };
+                  _route = route;
+                  _clearSelection();
+                  _showPlayer = false;
+                });
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _clearPlaybackForServerChange() {
+    setState(() {
+      _playerQueue = const [];
+      _playerIndex = 0;
+      _showPlayer = false;
+      _isPlaying = false;
+      _playbackProgress = 0;
+      _elapsedLabel = '--:--';
+      _durationLabel = '--:--';
+      _playerContextLabel = 'Now Playing';
+      _playbackMode = PlaybackMode.audio;
+      _playbackOrderMode = PlaybackOrderMode.sequential;
+      _playerTogglePlayback = _noopTogglePlayback;
+      _playerSeekToFraction = _noopSeekToFraction;
+      _restoredNotStarted = false;
+      _resumeProgress = null;
+      _videoController = null;
+      _lastSavedProgress = 0;
+    });
+    PlaybackStorage.clear();
+  }
+
+  Future<void> _openServerSettings() async {
+    final controller = widget.appConfigController;
+    if (controller == null) return;
+
+    var previousStatus = controller.state.status;
+    var clearedForSave = false;
+    late final VoidCallback listener;
+    listener = () {
+      final state = controller.state;
+      if (!clearedForSave &&
+          previousStatus == AppConfigStatus.loading &&
+          state.status == AppConfigStatus.configured) {
+        clearedForSave = true;
+        _clearPlaybackForServerChange();
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+      }
+      previousStatus = state.status;
+    };
+
+    controller.addListener(listener);
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => ServerSetupScreen(controller: controller),
+        ),
+      );
+    } finally {
+      controller.removeListener(listener);
+    }
+  }
+
   PlaybackMode _defaultModeForTrack(Track track) =>
       track.hasVideo ? PlaybackMode.video : PlaybackMode.audio;
 
   bool get _canUseSharedWebAudio =>
       _playbackMode == PlaybackMode.audio &&
+      !_canUseMobileAudioPlayback &&
       _webAudioPlaybackController.isAvailable;
+
+  bool get _canUseMobileAudioPlayback {
+    if (!mounted) return false;
+    return isMobile(context) && _playbackMode == PlaybackMode.audio;
+  }
+
+  bool get _isMobilePlaybackSurface {
+    if (!mounted) return false;
+    return isMobile(context);
+  }
+
+  String _mobileAudioUrlForTrack(Track track) {
+    return ApiClient().streamAudioUrl(track.id);
+  }
+
+  Future<void> _playMobileAudioQueue({
+    required List<Track> queue,
+    required int index,
+  }) {
+    return _mobileAudioPlaybackService.playQueue(
+      queue: queue,
+      index: index,
+      audioUrlForTrack: _mobileAudioUrlForTrack,
+    );
+  }
+
+  Future<void> _routeMobileAudioPlaybackForCurrentMode() {
+    return routeMobileAudioPlaybackForMode(
+      isMobile: _isMobilePlaybackSurface,
+      playbackMode: _playbackMode,
+      service: _mobileAudioPlaybackService,
+      playAudioQueue: () =>
+          _playMobileAudioQueue(queue: _playerQueue, index: _playerIndex),
+    );
+  }
+
+  void _handleMobileAudioState(MobileAudioPlaybackState state) {
+    if (!mounted || !isMobile(context) || _playbackMode != PlaybackMode.audio) {
+      return;
+    }
+
+    final previousTrackId = _currentTrack?.id;
+    final track = state.track;
+    final effectiveDuration = state.duration > Duration.zero
+        ? state.duration
+        : Duration(seconds: track?.durationSeconds ?? 0);
+    final effectivePosition =
+        effectiveDuration > Duration.zero && state.position > effectiveDuration
+        ? effectiveDuration
+        : state.position;
+    var shouldSavePlaybackState = previousTrackId != track?.id;
+    setState(() {
+      _playerQueue = state.queue;
+      _playerIndex = state.queue.isEmpty
+          ? 0
+          : state.index.clamp(0, state.queue.length - 1);
+      _isPlaying = state.isPlaying;
+      if (track == null) {
+        _playbackProgress = 0;
+        _elapsedLabel = '--:--';
+        _durationLabel = '--:--';
+        return;
+      }
+      if (previousTrackId != track.id) {
+        _playbackProgress = 0;
+        _elapsedLabel = '00:00';
+      }
+      if (effectiveDuration > Duration.zero) {
+        _playbackProgress =
+            effectivePosition.inMilliseconds / effectiveDuration.inMilliseconds;
+        _elapsedLabel = _formatDuration(effectivePosition.inSeconds);
+        _durationLabel = _formatDuration(effectiveDuration.inSeconds);
+        shouldSavePlaybackState =
+            shouldSavePlaybackState ||
+            (_playbackProgress - _lastSavedProgress).abs() > 0.05 ||
+            !state.isPlaying ||
+            state.isCompleted;
+      } else {
+        _playbackProgress = 0;
+        _elapsedLabel = '--:--';
+        _durationLabel = '--:--';
+        shouldSavePlaybackState =
+            shouldSavePlaybackState || !state.isPlaying || state.isCompleted;
+      }
+    });
+    if (shouldSavePlaybackState) {
+      _lastSavedProgress = _playbackProgress;
+      _savePlaybackState();
+    }
+    if (state.isCompleted) {
+      unawaited(_handleMobileAudioCompletion());
+    }
+  }
+
+  Future<void> _handleMobileAudioCompletion() async {
+    if (!mounted || _playerQueue.isEmpty) return;
+    if (_playbackOrderMode == PlaybackOrderMode.singleLoop) {
+      await _playMobileAudioQueue(queue: _playerQueue, index: _playerIndex);
+      return;
+    }
+    if (_playerIndex < _playerQueue.length - 1) {
+      _playNext();
+      return;
+    }
+    if (_playbackOrderMode == PlaybackOrderMode.listLoop) {
+      if (_playerQueue.length > 1) {
+        _playNext();
+      } else {
+        await _playMobileAudioQueue(queue: _playerQueue, index: _playerIndex);
+      }
+    }
+  }
 
   Future<void> _activateSharedWebAudioTrack(
     Track track, {
@@ -224,10 +515,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     }
     final initialPosition =
         progress != null && progress > 0 && track.durationSeconds > 0
-            ? Duration(
-                milliseconds: (track.durationSeconds * 1000 * progress).round(),
-              )
-            : Duration.zero;
+        ? Duration(
+            milliseconds: (track.durationSeconds * 1000 * progress).round(),
+          )
+        : Duration.zero;
     await _webAudioPlaybackController.activateTrack(
       track: track,
       url: ApiClient().streamAudioUrl(track.id),
@@ -262,7 +553,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _resumeProgress = null;
     });
     _savePlaybackState();
-    if (_playbackMode == PlaybackMode.audio) {
+    if (_isMobilePlaybackSurface) {
+      unawaited(_routeMobileAudioPlaybackForCurrentMode());
+    } else if (_playbackMode == PlaybackMode.audio) {
       unawaited(_activateSharedWebAudioTrack(selectedTrack));
     }
   }
@@ -277,7 +570,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _isPlaying = true;
     });
     _savePlaybackState();
-    if (_canUseSharedWebAudio) {
+    if (_isMobilePlaybackSurface) {
+      unawaited(_routeMobileAudioPlaybackForCurrentMode());
+    } else if (_canUseSharedWebAudio) {
       unawaited(_activateSharedWebAudioTrack(nextTrack));
     }
   }
@@ -296,11 +591,11 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   void _playPrevious() {
     if (_playerQueue.isEmpty) return;
     final nextIndex = switch (_playbackOrderMode) {
-      PlaybackOrderMode.listLoop => _playerIndex > 0
-          ? _playerIndex - 1
-          : (_playerQueue.length > 1 ? _playerQueue.length - 1 : null),
-      PlaybackOrderMode.sequential ||
-      PlaybackOrderMode.singleLoop =>
+      PlaybackOrderMode.listLoop =>
+        _playerIndex > 0
+            ? _playerIndex - 1
+            : (_playerQueue.length > 1 ? _playerQueue.length - 1 : null),
+      PlaybackOrderMode.sequential || PlaybackOrderMode.singleLoop =>
         _playerIndex > 0 ? _playerIndex - 1 : null,
     };
     if (nextIndex == null) return;
@@ -311,7 +606,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _isPlaying = true;
     });
     _savePlaybackState();
-    if (_canUseSharedWebAudio) {
+    if (_isMobilePlaybackSurface) {
+      unawaited(_routeMobileAudioPlaybackForCurrentMode());
+    } else if (_canUseSharedWebAudio) {
       unawaited(_activateSharedWebAudioTrack(nextTrack));
     }
   }
@@ -319,11 +616,11 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   void _playNext() {
     if (_playerQueue.isEmpty) return;
     final nextIndex = switch (_playbackOrderMode) {
-      PlaybackOrderMode.listLoop => _playerIndex < _playerQueue.length - 1
-          ? _playerIndex + 1
-          : (_playerQueue.length > 1 ? 0 : null),
-      PlaybackOrderMode.sequential ||
-      PlaybackOrderMode.singleLoop =>
+      PlaybackOrderMode.listLoop =>
+        _playerIndex < _playerQueue.length - 1
+            ? _playerIndex + 1
+            : (_playerQueue.length > 1 ? 0 : null),
+      PlaybackOrderMode.sequential || PlaybackOrderMode.singleLoop =>
         _playerIndex < _playerQueue.length - 1 ? _playerIndex + 1 : null,
     };
     if (nextIndex == null) return;
@@ -334,13 +631,31 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _isPlaying = true;
     });
     _savePlaybackState();
-    if (_canUseSharedWebAudio) {
+    if (_isMobilePlaybackSurface) {
+      unawaited(_routeMobileAudioPlaybackForCurrentMode());
+    } else if (_canUseSharedWebAudio) {
       unawaited(_activateSharedWebAudioTrack(nextTrack));
     }
   }
 
   Future<void> _togglePlayback() async {
     if (_currentTrack == null) return;
+    if (_canUseMobileAudioPlayback) {
+      if (_restoredNotStarted) {
+        setState(() {
+          _restoredNotStarted = false;
+          _isPlaying = true;
+        });
+        await _playMobileAudioQueue(queue: _playerQueue, index: _playerIndex);
+        return;
+      }
+      if (_isPlaying) {
+        await _mobileAudioPlaybackService.pause();
+      } else {
+        await _mobileAudioPlaybackService.play();
+      }
+      return;
+    }
     if (_restoredNotStarted) {
       // First play after restore — mount the PlayerScreen
       setState(() {
@@ -354,7 +669,27 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
 
   Future<void> _seekPlayback(double value) async {
     if (_currentTrack == null) return;
+    if (_canUseMobileAudioPlayback) {
+      await _seekMobileAudioPlayback(value);
+      return;
+    }
     await _playerSeekToFraction(value);
+  }
+
+  Future<void> _seekMobileAudioPlayback(double value) async {
+    final track = _currentTrack;
+    if (track == null) return;
+    final progress = value.clamp(0.0, 1.0).toDouble();
+    final duration = Duration(seconds: track.durationSeconds);
+    final target = duration * progress;
+    await _mobileAudioPlaybackService.seek(target);
+    if (!mounted) return;
+    setState(() {
+      _playbackProgress = progress;
+      _elapsedLabel = _formatDuration(target.inSeconds);
+      _durationLabel = _formatDuration(track.durationSeconds);
+    });
+    _savePlaybackState();
   }
 
   void _switchPlaybackMode(PlaybackMode mode) {
@@ -365,12 +700,12 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _playbackMode = mode;
       _isPlaying = true;
     });
-    if (mode == PlaybackMode.audio && _webAudioPlaybackController.isAvailable) {
+    if (_isMobilePlaybackSurface) {
+      unawaited(_routeMobileAudioPlaybackForCurrentMode());
+    } else if (mode == PlaybackMode.audio &&
+        _webAudioPlaybackController.isAvailable) {
       unawaited(
-        _activateSharedWebAudioTrack(
-          currentTrack,
-          progress: _playbackProgress,
-        ),
+        _activateSharedWebAudioTrack(currentTrack, progress: _playbackProgress),
       );
     }
   }
@@ -457,9 +792,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         if (dashMatch != null) {
           title = dashMatch.group(1)!.trim();
           final creditsPart = dashMatch.group(2)!.trim();
-          final featMatch =
-              RegExp(r'^(.+?)\s+feat\.?\s+(.+)$', caseSensitive: false)
-                  .firstMatch(creditsPart);
+          final featMatch = RegExp(
+            r'^(.+?)\s+feat\.?\s+(.+)$',
+            caseSensitive: false,
+          ).firstMatch(creditsPart);
           if (featMatch != null) {
             composer = featMatch.group(1)!.trim();
             vocal = featMatch.group(2)!.trim();
@@ -572,21 +908,30 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
 
     // --- Branch: Mobile vs Desktop ---
     if (mobile) {
-      // Mobile: AppShell(child: mainContent) + MobilePlayerSheet overlay
+      // Mobile: three-tab shell + MobilePlayerSheet overlay.
       final bottomPadding = MediaQuery.of(context).padding.bottom + 56;
 
-      final appShell = AppShell(
-        currentRoute: _route,
-        forceSidebarCollapsed: false,
-        onNavigate: (r) => setState(() {
-          _route = r;
-          _selectedAlbum = null;
-          _selectedProducer = null;
-          _selectedVocalist = null;
-          _selectedPlaylistId = null;
-        }),
-        nowPlayingBar: const SizedBox.shrink(),
-        child: mainContent,
+      final showMyMusicContent =
+          _route == ShellRoute.favorites || _route == ShellRoute.playlists;
+      final appShell = MobileAppShell(
+        currentTab: _mobileTab,
+        onTabChanged: _selectMobileTab,
+        discover: DiscoverScreen(
+          currentSection: _discoverSectionForRoute(_route),
+          onSectionChanged: _navigateMobileDiscover,
+          child: mainContent,
+        ),
+        myMusic: showMyMusicContent
+            ? mainContent
+            : MyMusicScreen(
+                onNavigate: _navigateMobileMyMusic,
+                onQueue: _openCurrentPlayer,
+              ),
+        settings: SettingsScreen(
+          serverUrl: ApiConfig.defaultBaseUrl,
+          onEditServer: _openServerSettings,
+          onRescan: _openMobileRescan,
+        ),
       );
 
       return VocalThemeProvider(
@@ -597,8 +942,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
             if (currentTrack != null && !_restoredNotStarted)
               MobilePlayerSheet(
                 track: currentTrack,
-                coverUrl: ApiClient(baseUrl: ApiConfig.defaultBaseUrl)
-                    .albumCoverUrl(currentTrack.albumId.toString()),
+                coverUrl: ApiClient(
+                  baseUrl: ApiConfig.defaultBaseUrl,
+                ).albumCoverUrl(currentTrack.albumId.toString()),
                 isPlaying: _isPlaying,
                 progress: _playbackProgress,
                 onPlayPause: _togglePlayback,
@@ -621,16 +967,23 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
                   playbackOrderMode: _playbackOrderMode,
                   onCyclePlaybackOrderMode: _cyclePlaybackOrderMode,
                   onPlaybackStateChanged: _updatePlaybackUi,
-                  onControlsReady: (
-                      {required togglePlayback, required seekToFraction}) {
-                    _registerPlayerControls(
-                        togglePlayback: togglePlayback,
-                        seekToFraction: seekToFraction);
-                    _resumeProgress = null;
-                  },
+                  onControlsReady:
+                      ({required togglePlayback, required seekToFraction}) {
+                        _registerPlayerControls(
+                          togglePlayback: togglePlayback,
+                          seekToFraction: seekToFraction,
+                        );
+                        _resumeProgress = null;
+                      },
                   initialProgress: _resumeProgress,
                   onVideoControllerChanged: _onVideoControllerChanged,
                   renderVideo: true,
+                  useExternalAudioPlayback: _playbackMode == PlaybackMode.audio,
+                  externalIsPlaying: _isPlaying,
+                  externalProgress: _playbackProgress,
+                  onExternalPlay: _mobileAudioPlaybackService.play,
+                  onExternalPause: _mobileAudioPlaybackService.pause,
+                  onExternalSeekToFraction: _seekMobileAudioPlayback,
                 ),
               ),
           ],
@@ -660,13 +1013,14 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
               playbackOrderMode: _playbackOrderMode,
               onCyclePlaybackOrderMode: _cyclePlaybackOrderMode,
               onPlaybackStateChanged: _updatePlaybackUi,
-              onControlsReady: (
-                  {required togglePlayback, required seekToFraction}) {
-                _registerPlayerControls(
-                    togglePlayback: togglePlayback,
-                    seekToFraction: seekToFraction);
-                _resumeProgress = null;
-              },
+              onControlsReady:
+                  ({required togglePlayback, required seekToFraction}) {
+                    _registerPlayerControls(
+                      togglePlayback: togglePlayback,
+                      seekToFraction: seekToFraction,
+                    );
+                    _resumeProgress = null;
+                  },
               initialProgress: _resumeProgress,
               onVideoControllerChanged: _onVideoControllerChanged,
               renderVideo: _showPlayer,

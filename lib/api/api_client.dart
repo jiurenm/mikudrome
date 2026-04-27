@@ -18,11 +18,25 @@ import 'endpoints.dart';
 /// Single entry point for all backend API communication.
 /// Use [ApiConfig.defaultBaseUrl] or pass a custom [baseUrl].
 class ApiClient {
-  ApiClient({String? baseUrl}) : baseUrl = baseUrl ?? ApiConfig.defaultBaseUrl;
+  ApiClient({String? baseUrl}) : _baseUrl = baseUrl;
 
-  final String baseUrl;
+  final String? _baseUrl;
+
+  String get baseUrl => _baseUrl ?? ApiConfig.defaultBaseUrl;
 
   String _url(String path) => '$baseUrl$path';
+
+  Future<void> checkConnection() async {
+    final res = await http
+        .get(Uri.parse(_url(ApiEndpoints.albums)))
+        .timeout(const Duration(seconds: 5));
+    if (res.statusCode != 200) {
+      throw ApiException(
+        'Failed to connect to Mikudrome server',
+        res.statusCode,
+      );
+    }
+  }
 
   // --- Tracks ---
 
@@ -48,7 +62,9 @@ class ApiClient {
   /// Download MV for a track from [url] (e.g. YouTube) via backend yt-dlp, then associate with track.
   /// Returns the updated track's video_path and video_thumb_path on success.
   Future<({String videoPath, String videoThumbPath})> downloadTrackMv(
-      int trackId, String url) async {
+    int trackId,
+    String url,
+  ) async {
     final res = await http.post(
       Uri.parse(_url(ApiEndpoints.trackDownloadMv(trackId))),
       headers: {'Content-Type': 'application/json'},
@@ -94,9 +110,7 @@ class ApiClient {
   }
 
   Future<({Producer producer, List<Track> tracks, List<Album> albums})?>
-      getProducer(
-    int id,
-  ) async {
+  getProducer(int id) async {
     final res = await http.get(Uri.parse(_url(ApiEndpoints.producer(id))));
     if (res.statusCode == 404) return null;
     if (res.statusCode != 200) {
@@ -147,9 +161,10 @@ class ApiClient {
   }
 
   Future<({String name, List<Track> tracks, List<Album> albums})?>
-      getVocalistTracks(String name) async {
-    final res =
-        await http.get(Uri.parse(_url(ApiEndpoints.vocalistTracks(name))));
+  getVocalistTracks(String name) async {
+    final res = await http.get(
+      Uri.parse(_url(ApiEndpoints.vocalistTracks(name))),
+    );
     if (res.statusCode == 404) return null;
     if (res.statusCode != 200) {
       throw ApiException('Failed to load vocalist tracks', res.statusCode);
@@ -166,7 +181,7 @@ class ApiClient {
     return (
       name: data['name'] as String? ?? name,
       tracks: tracks,
-      albums: albums
+      albums: albums,
     );
   }
 
@@ -238,7 +253,10 @@ class ApiClient {
       Uri.parse(_url(ApiEndpoints.libraryRescanStatus)),
     );
     if (res.statusCode != 200) {
-      throw ApiException('Failed to load library rescan status', res.statusCode);
+      throw ApiException(
+        'Failed to load library rescan status',
+        res.statusCode,
+      );
     }
     return LibraryTaskStatus.fromJson(
       jsonDecode(res.body) as Map<String, dynamic>,
@@ -322,17 +340,16 @@ class ApiClient {
   }
 
   Future<void> deletePlaylist(int id) async {
-    final res = await http.delete(
-      Uri.parse(_url(ApiEndpoints.playlist(id))),
-    );
+    final res = await http.delete(Uri.parse(_url(ApiEndpoints.playlist(id))));
     if (res.statusCode != 204) {
       throw ApiException('Failed to delete playlist', res.statusCode);
     }
   }
 
   Future<List<Track>> getPlaylistTracks(int id) async {
-    final res =
-        await http.get(Uri.parse(_url(ApiEndpoints.playlistTracks(id))));
+    final res = await http.get(
+      Uri.parse(_url(ApiEndpoints.playlistTracks(id))),
+    );
     if (res.statusCode != 200) {
       throw ApiException('Failed to load playlist tracks', res.statusCode);
     }
@@ -376,7 +393,9 @@ class ApiClient {
     final res = await http.Response.fromStream(streamedRes);
     if (res.statusCode != 204) {
       throw ApiException(
-          'Failed to remove tracks from playlist', res.statusCode);
+        'Failed to remove tracks from playlist',
+        res.statusCode,
+      );
     }
   }
 
@@ -467,17 +486,21 @@ class ApiClient {
       'PUT',
       Uri.parse(_url(ApiEndpoints.playlistItemCover(playlistId, itemId))),
     );
-    request.files.add(http.MultipartFile.fromBytes(
-      'file',
-      bytes,
-      filename: filename,
-      contentType: MediaType.parse(contentType),
-    ));
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: filename,
+        contentType: MediaType.parse(contentType),
+      ),
+    );
     final streamedRes = await request.send();
     final res = await http.Response.fromStream(streamedRes);
     if (res.statusCode != 204) {
       throw ApiException(
-          'Failed to upload playlist item cover', res.statusCode);
+        'Failed to upload playlist item cover',
+        res.statusCode,
+      );
     }
   }
 
@@ -500,12 +523,14 @@ class ApiClient {
       'PUT',
       Uri.parse(_url(ApiEndpoints.playlistCover(id))),
     );
-    request.files.add(http.MultipartFile.fromBytes(
-      'file',
-      bytes,
-      filename: filename,
-      contentType: MediaType.parse(contentType),
-    ));
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: filename,
+        contentType: MediaType.parse(contentType),
+      ),
+    );
     final streamedRes = await request.send();
     final res = await http.Response.fromStream(streamedRes);
     if (res.statusCode != 200 && res.statusCode != 204) {
@@ -539,42 +564,30 @@ class ApiException implements Exception {
 }
 
 class PlaylistGroupReorderInput {
-  const PlaylistGroupReorderInput({
-    required this.id,
-    required this.itemIds,
-  });
+  const PlaylistGroupReorderInput({required this.id, required this.itemIds});
 
   final int id;
   final List<int> itemIds;
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'items': itemIds,
-      };
+  Map<String, dynamic> toJson() => {'id': id, 'items': itemIds};
 }
 
 class PlaylistItemsOrderInput {
-  const PlaylistItemsOrderInput({
-    required this.groups,
-  });
+  const PlaylistItemsOrderInput({required this.groups});
 
   final List<PlaylistGroupReorderInput> groups;
 
   Map<String, dynamic> toJson() => {
-        'groups': groups.map((group) => group.toJson()).toList(),
-      };
+    'groups': groups.map((group) => group.toJson()).toList(),
+  };
 }
 
 class PlaylistGroupTitleInput {
-  const PlaylistGroupTitleInput({
-    required this.title,
-  });
+  const PlaylistGroupTitleInput({required this.title});
 
   final String title;
 
-  Map<String, dynamic> toJson() => {
-        'title': title,
-      };
+  Map<String, dynamic> toJson() => {'title': title};
 }
 
 class PlaylistItemUpdateRequest {

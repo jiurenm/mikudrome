@@ -1,14 +1,33 @@
+import 'package:flutter/foundation.dart';
+
+import '../config/server_url.dart';
+
 /// API configuration: base URL and defaults.
 ///
-/// Base URL is read from build-time env via `--dart-define=API_BASE_URL=...`.
-/// - Empty or unset: use relative URLs (same-origin, e.g. Docker production).
-/// - Set to URL: use that base (e.g. `http://127.0.0.1:8080` for local dev).
+/// Web keeps using --dart-define=API_BASE_URL or same-origin relative URLs.
+/// Mobile can set a runtime base URL after reading local server config.
 abstract final class ApiConfig {
   ApiConfig._();
 
-  /// Backend base URL from env API_BASE_URL. Empty = same-origin (relative).
-  static final String defaultBaseUrl = String.fromEnvironment(
+  static const String dartDefineBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: '',
   );
+
+  static String? _runtimeBaseUrl;
+
+  static String get defaultBaseUrl => _runtimeBaseUrl ?? dartDefineBaseUrl;
+
+  static void setRuntimeBaseUrl(String serverUrl) {
+    _runtimeBaseUrl = normalizeServerUrl(serverUrl);
+  }
+
+  static void clearRuntimeBaseUrl() {
+    _runtimeBaseUrl = null;
+  }
+
+  @visibleForTesting
+  static void resetRuntimeBaseUrlForTests() {
+    _runtimeBaseUrl = null;
+  }
 }
