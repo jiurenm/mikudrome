@@ -84,6 +84,11 @@ class AppConfigController extends ChangeNotifier {
 
   Future<void> saveServerUrl(String serverUrl) async {
     final normalized = normalizeServerUrl(serverUrl);
+    final previousServerUrl =
+        _state.status == AppConfigStatus.configured ||
+            _state.status == AppConfigStatus.error
+        ? _state.serverUrl
+        : null;
     _setState(
       AppConfigState(status: AppConfigStatus.loading, serverUrl: normalized),
     );
@@ -101,7 +106,7 @@ class AppConfigController extends ChangeNotifier {
       _setState(
         AppConfigState(
           status: AppConfigStatus.error,
-          serverUrl: normalized,
+          serverUrl: previousServerUrl ?? normalized,
           error: error.toString(),
         ),
       );

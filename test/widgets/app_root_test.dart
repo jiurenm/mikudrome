@@ -57,6 +57,37 @@ void main() {
     expect(find.text('Library Home'), findsOneWidget);
     expect(find.text('Connect to Mikudrome'), findsNothing);
   });
+
+  testWidgets('configured mobile root keeps app home when server edit fails', (
+    tester,
+  ) async {
+    final controller = AppConfigController(
+      store: _FakeStore(serverUrl: 'http://192.168.1.10:8080'),
+      connectionTester: (_) async => throw Exception('offline'),
+    );
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppRoot(
+          controller: controller,
+          requiresServerSetup: true,
+          homeBuilder: (_) => const Text('Library Home'),
+        ),
+      ),
+    );
+
+    await expectLater(
+      controller.saveServerUrl('http://192.168.1.11:8080'),
+      throwsA(isA<Exception>()),
+    );
+    await tester.pump();
+
+    expect(controller.state.status, AppConfigStatus.error);
+    expect(controller.state.serverUrl, 'http://192.168.1.10:8080');
+    expect(find.text('Library Home'), findsOneWidget);
+    expect(find.text('Connect to Mikudrome'), findsNothing);
+  });
 }
 
 class _FakeStore implements AppConfigStore {

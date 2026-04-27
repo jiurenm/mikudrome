@@ -44,6 +44,9 @@ void main() {
     expect(service.currentState.track?.id, 2);
     expect(service.currentState.index, 1);
     expect(service.currentState.isPlaying, isTrue);
+    expect(service.currentState.position, Duration.zero);
+    expect(service.currentState.duration, const Duration(seconds: 120));
+    expect(service.currentState.isCompleted, isFalse);
     expect(states.map((state) => state.isPlaying), contains(true));
 
     await sub.cancel();
@@ -74,6 +77,30 @@ void main() {
       await service.dispose();
     },
   );
+
+  test('just_audio service publishes timeline and completion state', () async {
+    final player = FakeJustAudioPlayer();
+    final service = audio_service.JustAudioMobileAudioPlaybackService(
+      player: player,
+    );
+
+    await service.playQueue(
+      queue: [_track(1)],
+      index: 0,
+      audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+    );
+
+    player.setDuration(const Duration(seconds: 90));
+    player.setPosition(const Duration(seconds: 12));
+    player.setProcessingState(ProcessingState.completed);
+
+    expect(service.currentState.duration, const Duration(seconds: 90));
+    expect(service.currentState.position, const Duration(seconds: 12));
+    expect(service.currentState.isCompleted, isTrue);
+    expect(service.currentState.isPlaying, isFalse);
+
+    await service.dispose();
+  });
 
   test('just_audio service delegates playback commands', () async {
     final player = FakeJustAudioPlayer();
@@ -348,6 +375,7 @@ Track _track(int id) => Track(
   audioPath: '/audio/$id.flac',
   videoPath: '',
   albumId: id,
+  durationSeconds: 120,
 );
 
 class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
@@ -356,6 +384,8 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
   final _processingState = StreamController<ProcessingState>.broadcast(
     sync: true,
   );
+  final _position = StreamController<Duration>.broadcast(sync: true);
+  final _duration = StreamController<Duration?>.broadcast(sync: true);
 
   List<UriAudioSource> sources = [];
   int? initialIndex;
@@ -364,6 +394,10 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
   bool playing = false;
   @override
   int? currentIndex;
+  @override
+  Duration position = Duration.zero;
+  @override
+  Duration? duration;
   int playCalls = 0;
   int pauseCalls = 0;
   int stopCalls = 0;
@@ -382,6 +416,12 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
 
   @override
   Stream<ProcessingState> get processingStateStream => _processingState.stream;
+
+  @override
+  Stream<Duration> get positionStream => _position.stream;
+
+  @override
+  Stream<Duration?> get durationStream => _duration.stream;
 
   @override
   Future<void> setAudioSources(
@@ -446,6 +486,8 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
     await _playing.close();
     await _currentIndex.close();
     await _processingState.close();
+    await _position.close();
+    await _duration.close();
   }
 
   void setPlaying(bool value) {
@@ -456,6 +498,20 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
   void setCurrentIndex(int? value) {
     currentIndex = value;
     _currentIndex.add(value);
+  }
+
+  void setPosition(Duration value) {
+    position = value;
+    _position.add(value);
+  }
+
+  void setDuration(Duration? value) {
+    duration = value;
+    _duration.add(value);
+  }
+
+  void setProcessingState(ProcessingState value) {
+    _processingState.add(value);
   }
 }
 

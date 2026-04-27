@@ -121,7 +121,7 @@ Install it on a device or emulator, then enter the Mikudrome server URL on first
 http://192.168.1.100:8080
 ```
 
-The Android app supports foreground MV playback and basic background audio playback. Local HTTP servers are supported for LAN use.
+The Android app supports foreground MV playback and app-level audio playback through the mobile audio service. Local HTTP servers are supported for LAN use.
 
 ---
 

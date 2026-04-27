@@ -10,6 +10,9 @@ class MobileAudioPlaybackState {
     required this.queue,
     required this.index,
     required this.isPlaying,
+    this.position = Duration.zero,
+    this.duration = Duration.zero,
+    this.isCompleted = false,
     this.audioUrl,
   });
 
@@ -24,6 +27,9 @@ class MobileAudioPlaybackState {
   final List<Track> queue;
   final int index;
   final bool isPlaying;
+  final Duration position;
+  final Duration duration;
+  final bool isCompleted;
   final String? audioUrl;
 
   Track? get track => queue.isEmpty ? null : queue[index];
@@ -32,12 +38,18 @@ class MobileAudioPlaybackState {
     List<Track>? queue,
     int? index,
     bool? isPlaying,
+    Duration? position,
+    Duration? duration,
+    bool? isCompleted,
     String? audioUrl,
   }) {
     return MobileAudioPlaybackState(
       queue: queue ?? this.queue,
       index: index ?? this.index,
       isPlaying: isPlaying ?? this.isPlaying,
+      position: position ?? this.position,
+      duration: duration ?? this.duration,
+      isCompleted: isCompleted ?? this.isCompleted,
       audioUrl: audioUrl ?? this.audioUrl,
     );
   }
@@ -99,6 +111,7 @@ class FakeMobileAudioPlaybackService implements MobileAudioPlaybackService {
         queue: immutableQueue,
         index: clampedIndex,
         isPlaying: true,
+        duration: Duration(seconds: track.durationSeconds),
         audioUrl: audioUrlForTrack(track),
       ),
     );
@@ -116,7 +129,10 @@ class FakeMobileAudioPlaybackService implements MobileAudioPlaybackService {
   }
 
   @override
-  Future<void> seek(Duration position) async {}
+  Future<void> seek(Duration position) async {
+    if (_currentState.queue.isEmpty) return;
+    _emit(_currentState.copyWith(position: position, isCompleted: false));
+  }
 
   @override
   Future<void> stop() async {
@@ -154,6 +170,7 @@ class FakeMobileAudioPlaybackService implements MobileAudioPlaybackService {
         queue: queue,
         index: index,
         isPlaying: _currentState.isPlaying,
+        duration: Duration(seconds: track.durationSeconds),
         audioUrl: _audioUrlForTrack?.call(track) ?? _currentState.audioUrl,
       ),
     );

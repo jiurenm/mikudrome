@@ -65,6 +65,10 @@ class _AppRootState extends State<AppRoot> {
         return const Scaffold(body: Center(child: CircularProgressIndicator()));
       case AppConfigStatus.unconfigured:
       case AppConfigStatus.error:
+        if (state.serverUrl != null) {
+          return widget.homeBuilder?.call(context) ??
+              LibraryHomeScreen(appConfigController: widget.controller);
+        }
         if (widget.requiresServerSetup) {
           return ServerSetupScreen(controller: widget.controller);
         }

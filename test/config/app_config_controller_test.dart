@@ -66,7 +66,7 @@ void main() {
     expect(ApiConfig.defaultBaseUrl, ApiConfig.dartDefineBaseUrl);
   });
 
-  test('save failure preserves previous runtime url', () async {
+  test('save failure preserves previous server url', () async {
     final store = _FakeStore(serverUrl: 'http://192.168.1.10:8080');
     final controller = AppConfigController(
       store: store,
@@ -80,7 +80,7 @@ void main() {
     );
 
     expect(controller.state.status, AppConfigStatus.error);
-    expect(controller.state.serverUrl, 'http://192.168.1.11:8080');
+    expect(controller.state.serverUrl, 'http://192.168.1.10:8080');
     expect(ApiConfig.defaultBaseUrl, 'http://192.168.1.10:8080');
     expect(store.serverUrl, 'http://192.168.1.10:8080');
   });

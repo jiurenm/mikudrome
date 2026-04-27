@@ -435,6 +435,14 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
 
     final previousTrackId = _currentTrack?.id;
     final track = state.track;
+    final effectiveDuration = state.duration > Duration.zero
+        ? state.duration
+        : Duration(seconds: track?.durationSeconds ?? 0);
+    final effectivePosition =
+        effectiveDuration > Duration.zero && state.position > effectiveDuration
+        ? effectiveDuration
+        : state.position;
+    var shouldSavePlaybackState = previousTrackId != track?.id;
     setState(() {
       _playerQueue = state.queue;
       _playerIndex = state.queue.isEmpty
@@ -451,9 +459,50 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         _playbackProgress = 0;
         _elapsedLabel = '00:00';
       }
-      _durationLabel = _formatDuration(track.durationSeconds);
+      if (effectiveDuration > Duration.zero) {
+        _playbackProgress =
+            effectivePosition.inMilliseconds / effectiveDuration.inMilliseconds;
+        _elapsedLabel = _formatDuration(effectivePosition.inSeconds);
+        _durationLabel = _formatDuration(effectiveDuration.inSeconds);
+        shouldSavePlaybackState =
+            shouldSavePlaybackState ||
+            (_playbackProgress - _lastSavedProgress).abs() > 0.05 ||
+            !state.isPlaying ||
+            state.isCompleted;
+      } else {
+        _playbackProgress = 0;
+        _elapsedLabel = '--:--';
+        _durationLabel = '--:--';
+        shouldSavePlaybackState =
+            shouldSavePlaybackState || !state.isPlaying || state.isCompleted;
+      }
     });
-    _savePlaybackState();
+    if (shouldSavePlaybackState) {
+      _lastSavedProgress = _playbackProgress;
+      _savePlaybackState();
+    }
+    if (state.isCompleted) {
+      unawaited(_handleMobileAudioCompletion());
+    }
+  }
+
+  Future<void> _handleMobileAudioCompletion() async {
+    if (!mounted || _playerQueue.isEmpty) return;
+    if (_playbackOrderMode == PlaybackOrderMode.singleLoop) {
+      await _playMobileAudioQueue(queue: _playerQueue, index: _playerIndex);
+      return;
+    }
+    if (_playerIndex < _playerQueue.length - 1) {
+      _playNext();
+      return;
+    }
+    if (_playbackOrderMode == PlaybackOrderMode.listLoop) {
+      if (_playerQueue.length > 1) {
+        _playNext();
+      } else {
+        await _playMobileAudioQueue(queue: _playerQueue, index: _playerIndex);
+      }
+    }
   }
 
   Future<void> _activateSharedWebAudioTrack(

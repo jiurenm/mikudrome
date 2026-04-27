@@ -13,8 +13,12 @@ abstract class MobileAudioPlayerAdapter {
   Stream<bool> get playingStream;
   Stream<int?> get currentIndexStream;
   Stream<ProcessingState> get processingStateStream;
+  Stream<Duration> get positionStream;
+  Stream<Duration?> get durationStream;
   bool get playing;
   int? get currentIndex;
+  Duration get position;
+  Duration? get duration;
 
   Future<void> setAudioSources(
     List<UriAudioSource> sources, {
@@ -45,6 +49,8 @@ class JustAudioMobileAudioPlaybackService
     _subscriptions.add(
       _player.processingStateStream.listen(_handleProcessingStateChanged),
     );
+    _subscriptions.add(_player.positionStream.listen(_handlePositionChanged));
+    _subscriptions.add(_player.durationStream.listen(_handleDurationChanged));
   }
 
   final MobileAudioPlayerAdapter _player;
@@ -53,6 +59,9 @@ class JustAudioMobileAudioPlaybackService
   List<Track> _queue = const [];
   List<String> _audioUrls = const [];
   MobileAudioPlaybackState _currentState = MobileAudioPlaybackState.empty();
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+  bool _isCompleted = false;
   bool _disposed = false;
 
   @override
@@ -93,6 +102,9 @@ class JustAudioMobileAudioPlaybackService
     );
     _queue = nextQueue;
     _audioUrls = nextAudioUrls;
+    _position = Duration.zero;
+    _duration = Duration(seconds: nextQueue[clampedIndex].durationSeconds);
+    _isCompleted = false;
     _emitState(index: clampedIndex, isPlaying: _player.playing);
     unawaited(_startPlaybackSafely(clampedIndex));
   }
@@ -113,6 +125,9 @@ class JustAudioMobileAudioPlaybackService
   Future<void> seek(Duration position) async {
     if (_disposed) return;
     await _player.seek(position);
+    _position = position;
+    _isCompleted = false;
+    _emitState(position: _position, isCompleted: false);
   }
 
   @override
@@ -121,6 +136,9 @@ class JustAudioMobileAudioPlaybackService
     await _player.stop();
     _queue = const [];
     _audioUrls = const [];
+    _position = Duration.zero;
+    _duration = Duration.zero;
+    _isCompleted = false;
     _emit(MobileAudioPlaybackState.empty());
   }
 
@@ -159,21 +177,52 @@ class JustAudioMobileAudioPlaybackService
 
   void _handlePlayingChanged(bool isPlaying) {
     if (_queue.isEmpty) return;
-    _emitState(isPlaying: isPlaying);
+    _emitState(isPlaying: isPlaying, isCompleted: isPlaying ? false : null);
   }
 
   void _handleCurrentIndexChanged(int? index) {
     if (index == null || _queue.isEmpty) return;
-    _emitState(index: index);
+    final effectiveIndex = index.clamp(0, _queue.length - 1);
+    _position = Duration.zero;
+    _duration = Duration(seconds: _queue[effectiveIndex].durationSeconds);
+    _isCompleted = false;
+    _emitState(index: effectiveIndex, position: _position, isCompleted: false);
   }
 
   void _handleProcessingStateChanged(ProcessingState state) {
     if (state == ProcessingState.completed && _queue.isNotEmpty) {
-      _emitState(isPlaying: false);
+      _isCompleted = true;
+      _emitState(isPlaying: false, isCompleted: true);
+    } else if (state == ProcessingState.ready ||
+        state == ProcessingState.loading) {
+      if (_isCompleted) {
+        _isCompleted = false;
+        _emitState(isCompleted: false);
+      }
     }
   }
 
-  void _emitState({int? index, bool? isPlaying}) {
+  void _handlePositionChanged(Duration position) {
+    if (_queue.isEmpty) return;
+    _position = position;
+    _emitState(position: position);
+  }
+
+  void _handleDurationChanged(Duration? duration) {
+    if (_queue.isEmpty) return;
+    _duration =
+        duration ??
+        Duration(seconds: _currentState.track?.durationSeconds ?? 0);
+    _emitState(duration: _duration);
+  }
+
+  void _emitState({
+    int? index,
+    bool? isPlaying,
+    Duration? position,
+    Duration? duration,
+    bool? isCompleted,
+  }) {
     if (_queue.isEmpty) {
       _emit(MobileAudioPlaybackState.empty());
       return;
@@ -184,11 +233,20 @@ class JustAudioMobileAudioPlaybackService
           0,
           _queue.length - 1,
         );
+    final effectivePosition = position ?? _position;
+    final effectiveDuration = duration ?? _duration;
+    final effectiveCompleted = isCompleted ?? _isCompleted;
+    _position = effectivePosition;
+    _duration = effectiveDuration;
+    _isCompleted = effectiveCompleted;
     _emit(
       MobileAudioPlaybackState(
         queue: _queue,
         index: effectiveIndex,
         isPlaying: isPlaying ?? _player.playing,
+        position: effectivePosition,
+        duration: effectiveDuration,
+        isCompleted: effectiveCompleted,
         audioUrl: _audioUrls[effectiveIndex],
       ),
     );
@@ -218,10 +276,22 @@ class JustAudioPlayerAdapter implements MobileAudioPlayerAdapter {
       _player.processingStateStream;
 
   @override
+  Stream<Duration> get positionStream => _player.positionStream;
+
+  @override
+  Stream<Duration?> get durationStream => _player.durationStream;
+
+  @override
   bool get playing => _player.playing;
 
   @override
   int? get currentIndex => _player.currentIndex;
+
+  @override
+  Duration get position => _player.position;
+
+  @override
+  Duration? get duration => _player.duration;
 
   @override
   Future<void> setAudioSources(
