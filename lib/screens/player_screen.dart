@@ -9,6 +9,7 @@ import '../models/track.dart';
 import '../services/lrc_parser.dart';
 import '../services/media_session_action_mapper.dart';
 import '../services/media_session_handler_binding.dart';
+import '../services/playback_timeline.dart';
 import '../services/web_audio_player.dart';
 import '../services/web_audio_player_contract.dart';
 import '../services/web_media_session.dart';
@@ -145,9 +146,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Duration get _position => _usesWebAudioPlayer
       ? _webAudioPlayer.value.position
       : _controller?.value.position ?? Duration.zero;
-  Duration get _duration => _usesWebAudioPlayer
-      ? _webAudioPlayer.value.duration
-      : _controller?.value.duration ?? Duration.zero;
+  Duration get _duration => effectiveTimelineDuration(
+        track: _track,
+        mediaDuration: _usesWebAudioPlayer
+            ? _webAudioPlayer.value.duration
+            : _controller?.value.duration ?? Duration.zero,
+        usesWebAudioPlayer: _usesWebAudioPlayer,
+      );
   bool get _isPlaying => _usesWebAudioPlayer
       ? _webAudioPlayer.value.isPlaying
       : _controller?.value.isPlaying ?? false;
@@ -1732,9 +1737,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget _buildFooter(BuildContext context) {
     final accentColor = VocalThemeProvider.of(context);
     final modeLabel = _isVideoMode ? 'Local MV Active' : 'Audio Stream Active';
-    final vocalists = _track.vocalists.isNotEmpty
-        ? _track.vocalists.join(', ')
-        : '-';
+    final vocalists =
+        _track.vocalists.isNotEmpty ? _track.vocalists.join(', ') : '-';
     return Container(
       height: 24,
       color: accentColor,
