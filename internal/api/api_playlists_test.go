@@ -2,13 +2,16 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -50,6 +53,110 @@ func doReq(h http.Handler, method, path, body string) *httptest.ResponseRecorder
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	return rr
+}
+
+func TestServeStreamSetsM4AAudioContentType(t *testing.T) {
+	h := newTestHandler(t)
+
+	audioPath := filepath.Join(h.mediaRoot, "track.M4A")
+	if err := os.WriteFile(audioPath, []byte("m4a audio"), 0o644); err != nil {
+		t.Fatalf("write m4a audio: %v", err)
+	}
+	pid, err := h.store.UpsertProducer("TestProducer", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	aid, err := h.store.UpsertAlbum("TestAlbum", "", pid, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.store.UpsertTrack("Track", audioPath, "", "", aid, 1, 1, "", 2024, 180, "M4A"); err != nil {
+		t.Fatal(err)
+	}
+	tracks, err := h.store.ListTracks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tracks) != 1 {
+		t.Fatalf("tracks = %d, want 1", len(tracks))
+	}
+
+	rr := doReq(h, http.MethodGet, "/api/stream/"+strconv.FormatInt(tracks[0].ID, 10)+"/audio", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "audio/mp4") {
+		t.Fatalf("Content-Type = %q, want audio/mp4", ct)
+	}
+}
+
+func TestCORSAllowsRangeHeader(t *testing.T) {
+	h := newTestHandler(t)
+
+	req := httptest.NewRequest(http.MethodOptions, "/api/stream/1/audio", nil)
+	req.Header.Set("Origin", "http://localhost:3000")
+	req.Header.Set("Access-Control-Request-Headers", "Range")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusNoContent)
+	}
+	if allowed := rr.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(allowed, "Range") {
+		t.Fatalf("Access-Control-Allow-Headers = %q, want Range", allowed)
+	}
+	if exposed := rr.Header().Get("Access-Control-Expose-Headers"); !strings.Contains(exposed, "Content-Range") {
+		t.Fatalf("Access-Control-Expose-Headers = %q, want Content-Range", exposed)
+	}
+}
+
+func TestServeStreamTranscodesALACAudioForBrowser(t *testing.T) {
+	h := newTestHandler(t)
+
+	audioPath := filepath.Join(h.mediaRoot, "track.m4a")
+	if err := os.WriteFile(audioPath, []byte("alac audio"), 0o644); err != nil {
+		t.Fatalf("write alac audio: %v", err)
+	}
+	pid, err := h.store.UpsertProducer("TestProducer", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	aid, err := h.store.UpsertAlbum("TestAlbum", "", pid, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.store.UpsertTrack("Track", audioPath, "", "", aid, 1, 1, "", 2024, 180, "16bit ALAC"); err != nil {
+		t.Fatal(err)
+	}
+	tracks, err := h.store.ListTracks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tracks) != 1 {
+		t.Fatalf("tracks = %d, want 1", len(tracks))
+	}
+	origTranscoder := browserAudioTranscoder
+	t.Cleanup(func() { browserAudioTranscoder = origTranscoder })
+	var gotPath string
+	browserAudioTranscoder = func(_ context.Context, w io.Writer, path string) error {
+		gotPath = path
+		_, err := w.Write([]byte("browser mp3 stream"))
+		return err
+	}
+
+	rr := doReq(h, http.MethodGet, "/api/stream/"+strconv.FormatInt(tracks[0].ID, 10)+"/audio", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "audio/mpeg") {
+		t.Fatalf("Content-Type = %q, want audio/mpeg", ct)
+	}
+	if gotPath != audioPath {
+		t.Fatalf("transcoder path = %q, want %q", gotPath, audioPath)
+	}
+	if body := rr.Body.String(); body != "browser mp3 stream" {
+		t.Fatalf("body = %q, want transcoded stream", body)
+	}
 }
 
 // seedTrack inserts a minimal producer+album+track and returns the track ID.

@@ -1,7 +1,10 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,6 +18,8 @@ import (
 	"github.com/mikudrome/mikudrome/internal/scanner"
 	"github.com/mikudrome/mikudrome/internal/store"
 )
+
+var browserAudioTranscoder = streamBrowserAudioTranscode
 
 // Handler serves the REST API, static file streaming, and Flutter web static files.
 type Handler struct {
@@ -710,6 +715,17 @@ func (h *Handler) serveStream(w http.ResponseWriter, r *http.Request) {
 	switch parts[1] {
 	case "audio":
 		path = track.AudioPath
+		if shouldTranscodeForBrowserAudio(track) {
+			w.Header().Set("Content-Type", "audio/mpeg")
+			w.Header().Set("Cache-Control", "no-store")
+			if err := browserAudioTranscoder(r.Context(), w, path); err != nil {
+				log.Printf("api: browser audio transcode failed for %s: %v", path, err)
+			}
+			return
+		}
+		if contentType := audioContentType(path); contentType != "" {
+			w.Header().Set("Content-Type", contentType)
+		}
 	case "video":
 		path = track.VideoPath
 	case "thumb":
@@ -723,6 +739,55 @@ func (h *Handler) serveStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.ServeFile(w, r, path)
+}
+
+func shouldTranscodeForBrowserAudio(track store.Track) bool {
+	if !strings.EqualFold(filepath.Ext(track.AudioPath), ".m4a") {
+		return false
+	}
+	return strings.Contains(strings.ToUpper(track.Format), "ALAC")
+}
+
+func streamBrowserAudioTranscode(ctx context.Context, w io.Writer, path string) error {
+	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-v", "error",
+		"-i", path,
+		"-vn",
+		"-f", "mp3",
+		"-codec:a", "libmp3lame",
+		"-b:a", "320k",
+		"pipe:1",
+	)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	_, copyErr := io.Copy(w, stdout)
+	waitErr := cmd.Wait()
+	if copyErr != nil {
+		return copyErr
+	}
+	return waitErr
+}
+
+func audioContentType(path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".m4a":
+		return "audio/mp4"
+	case ".mp3":
+		return "audio/mpeg"
+	case ".flac":
+		return "audio/flac"
+	case ".ogg":
+		return "audio/ogg"
+	case ".wav":
+		return "audio/wav"
+	default:
+		return ""
+	}
 }
 
 // serveDBBackup streams a consistent copy of the database for download (avoids "busy or locked" when copying the file directly).
@@ -784,5 +849,6 @@ func addCORSHeaders(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Access-Control-Allow-Origin", origin)
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Range")
+	w.Header().Set("Access-Control-Expose-Headers", "Accept-Ranges, Content-Length, Content-Range")
 }
