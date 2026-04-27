@@ -11,6 +11,8 @@ import '../theme/vocal_theme.dart';
 import '../widgets/now_playing_bar.dart';
 import '../widgets/player/pip_mini_player.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/discover_screen.dart';
+import '../widgets/mobile_app_shell.dart';
 import 'album_detail_screen.dart';
 import 'albums_screen.dart';
 import 'player_screen.dart';
@@ -25,6 +27,8 @@ import '../models/vocalist.dart';
 import '../utils/responsive.dart';
 import '../widgets/mobile_player_sheet.dart';
 import '../widgets/mobile_more_screen.dart';
+import '../widgets/my_music_screen.dart';
+import '../widgets/settings_screen.dart';
 import '../services/playlist_repository.dart';
 import '../services/web_audio_playback_controller.dart';
 import 'playlists_screen.dart';
@@ -52,6 +56,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   Producer? _selectedProducer;
   Vocalist? _selectedVocalist;
   int? _selectedPlaylistId;
+  MobileAppTab _mobileTab = MobileAppTab.discover;
   List<Track> _playerQueue = const [];
   int _playerIndex = 0;
   bool _showPlayer = false;
@@ -92,13 +97,15 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   void _restorePlaybackState() {
     final saved = PlaybackStorage.load();
     if (saved == null) return;
-    final track = saved.queue.isNotEmpty &&
+    final track =
+        saved.queue.isNotEmpty &&
             saved.index >= 0 &&
             saved.index < saved.queue.length
         ? saved.queue[saved.index]
         : null;
-    final elapsed =
-        track != null ? (track.durationSeconds * saved.progress).round() : 0;
+    final elapsed = track != null
+        ? (track.durationSeconds * saved.progress).round()
+        : 0;
     setState(() {
       _playerQueue = saved.queue;
       _playerIndex = saved.index;
@@ -195,9 +202,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           isPlaying: _isPlaying,
         );
       case ShellRoute.localMv:
-        return MvGalleryScreen(
-          onVideoTap: _playVideo,
-        );
+        return MvGalleryScreen(onVideoTap: _playVideo);
       case ShellRoute.more:
         return MobileMoreScreen(
           onNavigate: (r) => setState(() {
@@ -205,6 +210,66 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           }),
         );
     }
+  }
+
+  DiscoverSection _discoverSectionForRoute(ShellRoute route) {
+    return switch (route) {
+      ShellRoute.producers => DiscoverSection.producers,
+      ShellRoute.vocalists => DiscoverSection.vocalists,
+      ShellRoute.localMv => DiscoverSection.mv,
+      _ => DiscoverSection.albums,
+    };
+  }
+
+  ShellRoute _routeForDiscoverSection(DiscoverSection section) {
+    return switch (section) {
+      DiscoverSection.albums => ShellRoute.albums,
+      DiscoverSection.producers => ShellRoute.producers,
+      DiscoverSection.vocalists => ShellRoute.vocalists,
+      DiscoverSection.mv => ShellRoute.localMv,
+    };
+  }
+
+  void _clearSelection() {
+    _selectedAlbum = null;
+    _selectedProducer = null;
+    _selectedVocalist = null;
+    _selectedPlaylistId = null;
+  }
+
+  void _navigateMobileDiscover(DiscoverSection section) {
+    setState(() {
+      _mobileTab = MobileAppTab.discover;
+      _route = _routeForDiscoverSection(section);
+      _clearSelection();
+      _showPlayer = false;
+    });
+  }
+
+  void _navigateMobileMyMusic(ShellRoute route) {
+    setState(() {
+      _mobileTab = MobileAppTab.myMusic;
+      _route = route;
+      _clearSelection();
+      _showPlayer = false;
+    });
+  }
+
+  void _selectMobileTab(MobileAppTab tab) {
+    setState(() {
+      _mobileTab = tab;
+      if (tab == MobileAppTab.discover) {
+        _route = ShellRoute.albums;
+        _clearSelection();
+      }
+      _showPlayer = false;
+    });
+  }
+
+  void _showMobileRescanPlaceholder() {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('媒体库重扫将在设置中接入')));
   }
 
   PlaybackMode _defaultModeForTrack(Track track) =>
@@ -224,10 +289,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     }
     final initialPosition =
         progress != null && progress > 0 && track.durationSeconds > 0
-            ? Duration(
-                milliseconds: (track.durationSeconds * 1000 * progress).round(),
-              )
-            : Duration.zero;
+        ? Duration(
+            milliseconds: (track.durationSeconds * 1000 * progress).round(),
+          )
+        : Duration.zero;
     await _webAudioPlaybackController.activateTrack(
       track: track,
       url: ApiClient().streamAudioUrl(track.id),
@@ -296,11 +361,11 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   void _playPrevious() {
     if (_playerQueue.isEmpty) return;
     final nextIndex = switch (_playbackOrderMode) {
-      PlaybackOrderMode.listLoop => _playerIndex > 0
-          ? _playerIndex - 1
-          : (_playerQueue.length > 1 ? _playerQueue.length - 1 : null),
-      PlaybackOrderMode.sequential ||
-      PlaybackOrderMode.singleLoop =>
+      PlaybackOrderMode.listLoop =>
+        _playerIndex > 0
+            ? _playerIndex - 1
+            : (_playerQueue.length > 1 ? _playerQueue.length - 1 : null),
+      PlaybackOrderMode.sequential || PlaybackOrderMode.singleLoop =>
         _playerIndex > 0 ? _playerIndex - 1 : null,
     };
     if (nextIndex == null) return;
@@ -319,11 +384,11 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   void _playNext() {
     if (_playerQueue.isEmpty) return;
     final nextIndex = switch (_playbackOrderMode) {
-      PlaybackOrderMode.listLoop => _playerIndex < _playerQueue.length - 1
-          ? _playerIndex + 1
-          : (_playerQueue.length > 1 ? 0 : null),
-      PlaybackOrderMode.sequential ||
-      PlaybackOrderMode.singleLoop =>
+      PlaybackOrderMode.listLoop =>
+        _playerIndex < _playerQueue.length - 1
+            ? _playerIndex + 1
+            : (_playerQueue.length > 1 ? 0 : null),
+      PlaybackOrderMode.sequential || PlaybackOrderMode.singleLoop =>
         _playerIndex < _playerQueue.length - 1 ? _playerIndex + 1 : null,
     };
     if (nextIndex == null) return;
@@ -367,10 +432,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     });
     if (mode == PlaybackMode.audio && _webAudioPlaybackController.isAvailable) {
       unawaited(
-        _activateSharedWebAudioTrack(
-          currentTrack,
-          progress: _playbackProgress,
-        ),
+        _activateSharedWebAudioTrack(currentTrack, progress: _playbackProgress),
       );
     }
   }
@@ -457,9 +519,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         if (dashMatch != null) {
           title = dashMatch.group(1)!.trim();
           final creditsPart = dashMatch.group(2)!.trim();
-          final featMatch =
-              RegExp(r'^(.+?)\s+feat\.?\s+(.+)$', caseSensitive: false)
-                  .firstMatch(creditsPart);
+          final featMatch = RegExp(
+            r'^(.+?)\s+feat\.?\s+(.+)$',
+            caseSensitive: false,
+          ).firstMatch(creditsPart);
           if (featMatch != null) {
             composer = featMatch.group(1)!.trim();
             vocal = featMatch.group(2)!.trim();
@@ -572,21 +635,29 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
 
     // --- Branch: Mobile vs Desktop ---
     if (mobile) {
-      // Mobile: AppShell(child: mainContent) + MobilePlayerSheet overlay
+      // Mobile: three-tab shell + MobilePlayerSheet overlay.
       final bottomPadding = MediaQuery.of(context).padding.bottom + 56;
 
-      final appShell = AppShell(
-        currentRoute: _route,
-        forceSidebarCollapsed: false,
-        onNavigate: (r) => setState(() {
-          _route = r;
-          _selectedAlbum = null;
-          _selectedProducer = null;
-          _selectedVocalist = null;
-          _selectedPlaylistId = null;
-        }),
-        nowPlayingBar: const SizedBox.shrink(),
-        child: mainContent,
+      final showMyMusicContent =
+          _route == ShellRoute.favorites || _route == ShellRoute.playlists;
+      final appShell = MobileAppShell(
+        currentTab: _mobileTab,
+        onTabChanged: _selectMobileTab,
+        discover: DiscoverScreen(
+          currentSection: _discoverSectionForRoute(_route),
+          onSectionChanged: _navigateMobileDiscover,
+          child: mainContent,
+        ),
+        myMusic: showMyMusicContent
+            ? mainContent
+            : MyMusicScreen(
+                onNavigate: _navigateMobileMyMusic,
+                onQueue: _openCurrentPlayer,
+              ),
+        settings: SettingsScreen(
+          serverUrl: ApiConfig.defaultBaseUrl,
+          onRescan: _showMobileRescanPlaceholder,
+        ),
       );
 
       return VocalThemeProvider(
@@ -597,8 +668,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
             if (currentTrack != null && !_restoredNotStarted)
               MobilePlayerSheet(
                 track: currentTrack,
-                coverUrl: ApiClient(baseUrl: ApiConfig.defaultBaseUrl)
-                    .albumCoverUrl(currentTrack.albumId.toString()),
+                coverUrl: ApiClient(
+                  baseUrl: ApiConfig.defaultBaseUrl,
+                ).albumCoverUrl(currentTrack.albumId.toString()),
                 isPlaying: _isPlaying,
                 progress: _playbackProgress,
                 onPlayPause: _togglePlayback,
@@ -621,13 +693,14 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
                   playbackOrderMode: _playbackOrderMode,
                   onCyclePlaybackOrderMode: _cyclePlaybackOrderMode,
                   onPlaybackStateChanged: _updatePlaybackUi,
-                  onControlsReady: (
-                      {required togglePlayback, required seekToFraction}) {
-                    _registerPlayerControls(
-                        togglePlayback: togglePlayback,
-                        seekToFraction: seekToFraction);
-                    _resumeProgress = null;
-                  },
+                  onControlsReady:
+                      ({required togglePlayback, required seekToFraction}) {
+                        _registerPlayerControls(
+                          togglePlayback: togglePlayback,
+                          seekToFraction: seekToFraction,
+                        );
+                        _resumeProgress = null;
+                      },
                   initialProgress: _resumeProgress,
                   onVideoControllerChanged: _onVideoControllerChanged,
                   renderVideo: true,
@@ -660,13 +733,14 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
               playbackOrderMode: _playbackOrderMode,
               onCyclePlaybackOrderMode: _cyclePlaybackOrderMode,
               onPlaybackStateChanged: _updatePlaybackUi,
-              onControlsReady: (
-                  {required togglePlayback, required seekToFraction}) {
-                _registerPlayerControls(
-                    togglePlayback: togglePlayback,
-                    seekToFraction: seekToFraction);
-                _resumeProgress = null;
-              },
+              onControlsReady:
+                  ({required togglePlayback, required seekToFraction}) {
+                    _registerPlayerControls(
+                      togglePlayback: togglePlayback,
+                      seekToFraction: seekToFraction,
+                    );
+                    _resumeProgress = null;
+                  },
               initialProgress: _resumeProgress,
               onVideoControllerChanged: _onVideoControllerChanged,
               renderVideo: _showPlayer,
