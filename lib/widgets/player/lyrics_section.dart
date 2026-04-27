@@ -22,23 +22,17 @@ class LyricsSection extends StatefulWidget {
   State<LyricsSection> createState() => _LyricsSectionState();
 }
 
-class _LyricsSectionState extends State<LyricsSection>
-    with SingleTickerProviderStateMixin {
-  static const _desktopLyricsBreakpoint = 600.0;
-  static const _lineSpacing = 18.0;
+class _LyricsSectionState extends State<LyricsSection> {
+  static const _lineSpacing = 12.0;
   static const _mobileLineSpacing = 8.0;
   static const _stageAnimationDuration = Duration(milliseconds: 320);
   static const _stageAnimationCurve = Curves.easeInOut;
   static const _stageAnchor = 0.49;
-  static const _estimatedLineHeight = 74.0;
+  static const _estimatedLineHeight = 68.0;
   static const _lyricsAnimationDuration = Duration(milliseconds: 200);
   static const _lyricsAnimationCurve = Curves.easeOutCubic;
-  static const _ambientBreathingDuration = Duration(milliseconds: 2600);
 
   late final ScrollController _scrollController;
-  late final AnimationController _ambientBreathingController;
-  late final Animation<double> _activeLineOpacity;
-  late final Animation<double> _activeLineScale;
   final Map<int, GlobalKey> _lineKeys = <int, GlobalKey>{};
   final Map<int, double> _lineHeights = <int, double>{};
   final Map<int, double> _pendingLineHeights = <int, double>{};
@@ -46,7 +40,6 @@ class _LyricsSectionState extends State<LyricsSection>
 
   int _displayedActiveIndex = -1;
   double _stageOffset = 0;
-  double? _timedLyricsWidth;
   bool? _lastTimedLyricsDesktopMode;
   int _lastAutoScrolledIndex = -1;
   bool _isAutoScrolling = false;
@@ -63,23 +56,6 @@ class _LyricsSectionState extends State<LyricsSection>
   void initState() {
     super.initState();
     _scrollController = ScrollController();
-    _ambientBreathingController = AnimationController(
-      vsync: this,
-      duration: _ambientBreathingDuration,
-      value: 1.0,
-    );
-    final breathingCurve = CurvedAnimation(
-      parent: _ambientBreathingController,
-      curve: Curves.easeInOutSine,
-    );
-    _activeLineOpacity = Tween<double>(
-      begin: 0.95,
-      end: 1.0,
-    ).animate(breathingCurve);
-    _activeLineScale = Tween<double>(
-      begin: 0.95,
-      end: 1.1,
-    ).animate(breathingCurve);
     _displayedActiveIndex = widget.activeIndex;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _usesDesktopStageInCurrentContext()) return;
@@ -92,7 +68,6 @@ class _LyricsSectionState extends State<LyricsSection>
     super.didUpdateWidget(oldWidget);
     final usesDesktopStage = _usesDesktopStageInCurrentContext();
     if (!_hasTimedLyrics) {
-      _syncAmbientBreathing(false);
       _lineKeys.clear();
       _lineHeights.clear();
       _pendingLineHeights.clear();
@@ -140,7 +115,6 @@ class _LyricsSectionState extends State<LyricsSection>
   @override
   void dispose() {
     _highlightSyncTimer?.cancel();
-    _ambientBreathingController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -178,22 +152,15 @@ class _LyricsSectionState extends State<LyricsSection>
       _lineKeys.putIfAbsent(index, GlobalKey.new);
 
   bool _usesDesktopStageInCurrentContext() {
-    final width = _timedLyricsWidth ?? MediaQuery.maybeOf(context)?.size.width;
-    if (width == null) return false;
-    return _usesDesktopStageForWidth(width);
+    return _usesDesktopStage;
   }
 
-  bool _usesDesktopStageForWidth(double width) {
-    return _hasTimedLyrics &&
-        _hasActiveTimedLine &&
-        _isDesktopPlatform(Theme.of(context).platform) &&
-        width >= _desktopLyricsBreakpoint;
+  bool get _usesDesktopStage {
+    return _hasTimedLyrics && _isDesktopPlatform(Theme.of(context).platform);
   }
 
-  void _trackTimedLyricsLayoutMode(double width) {
-    _timedLyricsWidth = width;
-    final usesDesktopStage = _usesDesktopStageForWidth(width);
-    _syncAmbientBreathing(usesDesktopStage);
+  void _trackTimedLyricsLayoutMode() {
+    final usesDesktopStage = _usesDesktopStage;
     final previousMode = _lastTimedLyricsDesktopMode;
     _lastTimedLyricsDesktopMode = usesDesktopStage;
 
@@ -246,18 +213,6 @@ class _LyricsSectionState extends State<LyricsSection>
     });
   }
 
-  void _syncAmbientBreathing(bool enabled) {
-    if (enabled) {
-      if (_ambientBreathingController.isAnimating) return;
-      _ambientBreathingController.repeat(reverse: true);
-      return;
-    }
-
-    _ambientBreathingController
-      ..stop()
-      ..value = 1.0;
-  }
-
   _StageMetrics _buildStageMetrics() {
     final lineTops = <double>[];
     var top = 0.0;
@@ -273,13 +228,19 @@ class _LyricsSectionState extends State<LyricsSection>
     _StageMetrics metrics,
     double viewportHeight,
   ) {
-    final activeIndex = _displayedActiveIndex;
-    if (activeIndex < 0 || activeIndex >= widget.timedLyrics.length) return 0;
+    final focusIndex = _stageFocusIndex;
+    if (focusIndex == null) return 0;
 
-    final lineTop = metrics.lineTops[activeIndex];
-    final lineHeight = _lineHeights[activeIndex] ?? _estimatedLineHeight;
+    final lineTop = metrics.lineTops[focusIndex];
+    final lineHeight = _lineHeights[focusIndex] ?? _estimatedLineHeight;
     final lineCenter = lineTop + lineHeight / 2;
     return viewportHeight * _stageAnchor - lineCenter;
+  }
+
+  int? get _stageFocusIndex {
+    if (!_hasTimedLyrics) return null;
+    if (_hasActiveTimedLine) return _displayedActiveIndex;
+    return 0;
   }
 
   void _syncStageOffset(_StageMetrics metrics, double viewportHeight) {
@@ -304,7 +265,8 @@ class _LyricsSectionState extends State<LyricsSection>
     return switch (platform) {
       TargetPlatform.linux ||
       TargetPlatform.macOS ||
-      TargetPlatform.windows => true,
+      TargetPlatform.windows =>
+        true,
       _ => false,
     };
   }
@@ -421,6 +383,80 @@ class _LyricsSectionState extends State<LyricsSection>
 
   @override
   Widget build(BuildContext context) {
+    if (!_hasLyrics) {
+      return _buildFramedContainer(
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Text(
+            'No lyrics available',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppTheme.textMuted,
+                  fontStyle: FontStyle.italic,
+                ),
+          ),
+        ),
+      );
+    }
+
+    if (_hasTimedLyrics) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          _trackTimedLyricsLayoutMode();
+          if (_usesDesktopStage) {
+            return _buildDesktopStage(constraints);
+          }
+
+          return _buildFramedContainer(
+            child: Scrollbar(
+              controller: _scrollController,
+              thumbVisibility: true,
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                itemCount: widget.timedLyrics.length,
+                itemBuilder: (context, index) {
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      top: index == 0 ? 0 : _mobileLineSpacing,
+                    ),
+                    child: _LyricLineItem(
+                      lineKey: _keyForLine(index),
+                      activeMarkerKey: null,
+                      activeGlowKey: null,
+                      line: widget.timedLyrics[index],
+                      isActive: index == _displayedActiveIndex,
+                      visualStyle: _mobileVisualStyleForIndex(index),
+                      animationDuration: _lyricsAnimationDuration,
+                      animationCurve: _lyricsAnimationCurve,
+                    ),
+                  );
+                },
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    return _buildFramedContainer(
+      child: Scrollbar(
+        controller: _scrollController,
+        thumbVisibility: true,
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          child: SelectableText(
+            widget.lyrics.trim(),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppTheme.textPrimary,
+                  height: 1.7,
+                ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFramedContainer({required Widget child}) {
     return Container(
       width: double.infinity,
       height: double.infinity,
@@ -430,177 +466,89 @@ class _LyricsSectionState extends State<LyricsSection>
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
-      child: !_hasLyrics
-          ? Align(
-              alignment: Alignment.topLeft,
-              child: Text(
-                'No lyrics available',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.textMuted,
-                      fontStyle: FontStyle.italic,
-                    ),
-              ),
-            )
-          : _hasTimedLyrics
-              ? LayoutBuilder(
-                  builder: (context, constraints) {
-                    _trackTimedLyricsLayoutMode(constraints.maxWidth);
-                    if (_usesDesktopStageForWidth(constraints.maxWidth)) {
-                      final metrics = _buildStageMetrics();
-                      _syncStageOffset(metrics, constraints.maxHeight);
-                      return Stack(
-                        children: [
-                          Positioned.fill(
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Colors.white.withValues(alpha: 0.06),
-                                    Colors.white.withValues(alpha: 0.01),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                          Positioned.fill(
-                            child: ShaderMask(
-                              key: const ValueKey<String>('lyrics-stage-mask'),
-                              shaderCallback: (bounds) {
-                                return const LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Colors.transparent,
-                                    Colors.white,
-                                    Colors.white,
-                                    Colors.transparent,
-                                  ],
-                                  stops: [0.0, 0.12, 0.84, 1.0],
-                                ).createShader(bounds);
-                              },
-                              blendMode: BlendMode.dstIn,
-                              child: ClipRect(
-                                child: AnimatedContainer(
-                                  duration: _stageAnimationDuration,
-                                  curve: _stageAnimationCurve,
-                                  transform: Matrix4.translationValues(
-                                    0,
-                                    _stageOffset,
-                                    0,
-                                  ),
-                                  child: SizedBox(
-                                    key: const ValueKey<String>('lyrics-stage'),
-                                    width: double.infinity,
-                                    height: metrics.contentHeight,
-                                    child: Stack(
-                                      clipBehavior: Clip.none,
-                                      children: [
-                                        for (var index = 0;
-                                            index < widget.timedLyrics.length;
-                                            index++)
-                                          Positioned(
-                                            top: metrics.lineTops[index],
-                                            left: 0,
-                                            right: 0,
-                                            child: _StageLineSizeListener(
-                                              onSizeChanged: (size) =>
-                                                  _queueLineHeight(
-                                                index,
-                                                size.height,
-                                              ),
-                                              child: _LyricLineItem(
-                                                lineKey: ValueKey<String>(
-                                                  'lyrics-line-$index',
-                                                ),
-                                                activeMarkerKey: index ==
-                                                        _displayedActiveIndex
-                                                    ? ValueKey<String>(
-                                                        'lyrics-line-active-$index',
-                                                      )
-                                                    : null,
-                                                activeGlowKey: index ==
-                                                        _displayedActiveIndex
-                                                    ? ValueKey<String>(
-                                                        'lyrics-line-glow-$index',
-                                                      )
-                                                    : null,
-                                                line: widget.timedLyrics[index],
-                                                isActive: index ==
-                                                    _displayedActiveIndex,
-                                                visualStyle:
-                                                    _desktopVisualStyleForIndex(
-                                                      index,
-                                                    ),
-                                                focusOpacity: index ==
-                                                        _displayedActiveIndex
-                                                    ? _activeLineOpacity
-                                                    : null,
-                                                focusScale: index ==
-                                                        _displayedActiveIndex
-                                                    ? _activeLineScale
-                                                    : null,
-                                                animationDuration:
-                                                    _lyricsAnimationDuration,
-                                                animationCurve:
-                                                    _lyricsAnimationCurve,
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    }
+      child: child,
+    );
+  }
 
-                    return Scrollbar(
-                      controller: _scrollController,
-                      thumbVisibility: true,
-                      child: ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        itemCount: widget.timedLyrics.length,
-                        itemBuilder: (context, index) {
-                          return Padding(
-                            padding: EdgeInsets.only(
-                              top: index == 0 ? 0 : _mobileLineSpacing,
-                            ),
-                            child: _LyricLineItem(
-                              lineKey: _keyForLine(index),
-                              activeMarkerKey: null,
-                              activeGlowKey: null,
-                              line: widget.timedLyrics[index],
-                              isActive: index == _displayedActiveIndex,
-                              visualStyle: _mobileVisualStyleForIndex(index),
-                              animationDuration: _lyricsAnimationDuration,
-                              animationCurve: _lyricsAnimationCurve,
-                            ),
-                          );
-                        },
-                      ),
-                    );
-                  },
-                )
-              : Scrollbar(
-                  controller: _scrollController,
-                  thumbVisibility: true,
-                  child: SingleChildScrollView(
-                    controller: _scrollController,
-                    child: SelectableText(
-                      widget.lyrics.trim(),
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppTheme.textPrimary,
-                            height: 1.7,
+  Widget _buildDesktopStage(BoxConstraints constraints) {
+    final metrics = _buildStageMetrics();
+    _syncStageOffset(metrics, constraints.maxHeight);
+    return SizedBox.expand(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: ShaderMask(
+          key: const ValueKey<String>('lyrics-stage-mask'),
+          shaderCallback: (bounds) {
+            return const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.transparent,
+                Colors.white,
+                Colors.white,
+                Colors.transparent,
+              ],
+              stops: [0.0, 0.18, 0.82, 1.0],
+            ).createShader(bounds);
+          },
+          blendMode: BlendMode.dstIn,
+          child: ClipRect(
+            child: AnimatedContainer(
+              duration: _stageAnimationDuration,
+              curve: _stageAnimationCurve,
+              transform: Matrix4.translationValues(
+                0,
+                _stageOffset,
+                0,
+              ),
+              child: SizedBox(
+                key: const ValueKey<String>('lyrics-stage'),
+                width: double.infinity,
+                height: metrics.contentHeight,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    for (var index = 0;
+                        index < widget.timedLyrics.length;
+                        index++)
+                      Positioned(
+                        top: metrics.lineTops[index],
+                        left: 0,
+                        right: 0,
+                        child: _StageLineSizeListener(
+                          onSizeChanged: (size) => _queueLineHeight(
+                            index,
+                            size.height,
                           ),
-                    ),
-                  ),
+                          child: _LyricLineItem(
+                            lineKey: ValueKey<String>(
+                              'lyrics-line-$index',
+                            ),
+                            activeMarkerKey: index == _displayedActiveIndex
+                                ? ValueKey<String>(
+                                    'lyrics-line-active-$index',
+                                  )
+                                : null,
+                            activeGlowKey: index == _displayedActiveIndex
+                                ? ValueKey<String>(
+                                    'lyrics-line-glow-$index',
+                                  )
+                                : null,
+                            line: widget.timedLyrics[index],
+                            isActive: index == _displayedActiveIndex,
+                            visualStyle: _desktopVisualStyleForIndex(index),
+                            animationDuration: _lyricsAnimationDuration,
+                            animationCurve: _lyricsAnimationCurve,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -614,30 +562,50 @@ class _LyricsSectionState extends State<LyricsSection>
           secondaryAlpha: 0.43,
           primaryFontWeight: FontWeight.w400,
           secondaryFontWeight: FontWeight.w400,
+          primaryFontSize: 22,
+          secondaryFontSize: 15,
+          primaryLineHeight: 1.45,
+          secondaryLineHeight: 1.12,
         ),
       0 => const _LyricLineVisualStyle(
           primaryAlpha: 1.0,
           secondaryAlpha: 0.72,
-          primaryFontWeight: FontWeight.w700,
+          primaryFontWeight: FontWeight.w500,
           secondaryFontWeight: FontWeight.w400,
+          primaryFontSize: 28,
+          secondaryFontSize: 15,
+          primaryLineHeight: 1.38,
+          secondaryLineHeight: 1.08,
         ),
       1 => const _LyricLineVisualStyle(
           primaryAlpha: 0.68,
           secondaryAlpha: 0.38,
           primaryFontWeight: FontWeight.w500,
           secondaryFontWeight: FontWeight.w400,
+          primaryFontSize: 22,
+          secondaryFontSize: 15,
+          primaryLineHeight: 1.45,
+          secondaryLineHeight: 1.12,
         ),
       2 => const _LyricLineVisualStyle(
           primaryAlpha: 0.58,
           secondaryAlpha: 0.32,
           primaryFontWeight: FontWeight.w400,
           secondaryFontWeight: FontWeight.w400,
+          primaryFontSize: 21,
+          secondaryFontSize: 14,
+          primaryLineHeight: 1.45,
+          secondaryLineHeight: 1.12,
         ),
       _ => const _LyricLineVisualStyle(
           primaryAlpha: 0.36,
           secondaryAlpha: 0.2,
           primaryFontWeight: FontWeight.w400,
           secondaryFontWeight: FontWeight.w400,
+          primaryFontSize: 20,
+          secondaryFontSize: 14,
+          primaryLineHeight: 1.45,
+          secondaryLineHeight: 1.12,
         ),
     };
   }
@@ -652,30 +620,50 @@ class _LyricsSectionState extends State<LyricsSection>
           secondaryAlpha: 0.4264,
           primaryFontWeight: FontWeight.w400,
           secondaryFontWeight: FontWeight.w400,
+          primaryFontSize: 22,
+          secondaryFontSize: 15,
+          primaryLineHeight: 1.7,
+          secondaryLineHeight: 1.18,
         ),
       0 => const _LyricLineVisualStyle(
           primaryAlpha: 1.0,
           secondaryAlpha: 0.62,
           primaryFontWeight: FontWeight.w700,
           secondaryFontWeight: FontWeight.w400,
+          primaryFontSize: 22,
+          secondaryFontSize: 15,
+          primaryLineHeight: 1.7,
+          secondaryLineHeight: 1.18,
         ),
       1 => const _LyricLineVisualStyle(
           primaryAlpha: 0.72,
           secondaryAlpha: 0.3744,
           primaryFontWeight: FontWeight.w500,
           secondaryFontWeight: FontWeight.w500,
+          primaryFontSize: 22,
+          secondaryFontSize: 15,
+          primaryLineHeight: 1.7,
+          secondaryLineHeight: 1.18,
         ),
       2 => const _LyricLineVisualStyle(
           primaryAlpha: 0.56,
           secondaryAlpha: 0.2912,
           primaryFontWeight: FontWeight.w400,
           secondaryFontWeight: FontWeight.w400,
+          primaryFontSize: 22,
+          secondaryFontSize: 15,
+          primaryLineHeight: 1.7,
+          secondaryLineHeight: 1.18,
         ),
       _ => const _LyricLineVisualStyle(
           primaryAlpha: 0.36,
           secondaryAlpha: 0.1872,
           primaryFontWeight: FontWeight.w400,
           secondaryFontWeight: FontWeight.w400,
+          primaryFontSize: 22,
+          secondaryFontSize: 15,
+          primaryLineHeight: 1.7,
+          secondaryLineHeight: 1.18,
         ),
     };
   }
@@ -697,12 +685,20 @@ class _LyricLineVisualStyle {
     required this.secondaryAlpha,
     required this.primaryFontWeight,
     required this.secondaryFontWeight,
+    required this.primaryFontSize,
+    required this.secondaryFontSize,
+    required this.primaryLineHeight,
+    required this.secondaryLineHeight,
   });
 
   final double primaryAlpha;
   final double secondaryAlpha;
   final FontWeight primaryFontWeight;
   final FontWeight secondaryFontWeight;
+  final double primaryFontSize;
+  final double secondaryFontSize;
+  final double primaryLineHeight;
+  final double secondaryLineHeight;
 }
 
 class _LyricLineItem extends StatelessWidget {
@@ -715,12 +711,7 @@ class _LyricLineItem extends StatelessWidget {
     required this.visualStyle,
     required this.animationDuration,
     required this.animationCurve,
-    this.focusOpacity,
-    this.focusScale,
   });
-
-  static const _primaryFontSize = 22.0;
-  static const _translationFontSize = 15.0;
 
   final Key lineKey;
   final Key? activeMarkerKey;
@@ -730,21 +721,27 @@ class _LyricLineItem extends StatelessWidget {
   final _LyricLineVisualStyle visualStyle;
   final Duration animationDuration;
   final Curve animationCurve;
-  final Animation<double>? focusOpacity;
-  final Animation<double>? focusScale;
 
   @override
   Widget build(BuildContext context) {
     final baseStyle = Theme.of(context).textTheme.bodyLarge!;
     final showFocusGlow = isActive && activeGlowKey != null;
+    final activeHighlight = Color.lerp(AppTheme.mikuGreen, Colors.white, 0.18)!;
     final glow = <Shadow>[
       Shadow(
-        color: AppTheme.mikuGreen.withValues(alpha: 0.38),
-        blurRadius: 22,
+        color: Colors.white.withValues(alpha: 0.28),
+        blurRadius: 3,
+        offset: const Offset(0.6, 0),
       ),
       Shadow(
-        color: AppTheme.mikuGreen.withValues(alpha: 0.16),
-        blurRadius: 42,
+        color: activeHighlight.withValues(alpha: 0.42),
+        blurRadius: 8,
+        offset: const Offset(1.0, 0),
+      ),
+      Shadow(
+        color: AppTheme.mikuGreen.withValues(alpha: 0.24),
+        blurRadius: 14,
+        offset: const Offset(1.4, 0),
       ),
     ];
     Widget content = Column(
@@ -756,7 +753,7 @@ class _LyricLineItem extends StatelessWidget {
             curve: animationCurve,
             tween: ColorTween(
               end: isActive
-                  ? AppTheme.mikuGreen.withValues(
+                  ? activeHighlight.withValues(
                       alpha: textIndex == 0
                           ? visualStyle.primaryAlpha
                           : visualStyle.secondaryAlpha,
@@ -773,13 +770,16 @@ class _LyricLineItem extends StatelessWidget {
                 style: baseStyle.copyWith(
                   color: color,
                   height: line.texts.length > 1
-                      ? (textIndex == 0 ? 1.58 : 1.18)
-                      : 1.7,
+                      ? (textIndex == 0
+                          ? visualStyle.primaryLineHeight
+                          : visualStyle.secondaryLineHeight)
+                      : visualStyle.primaryLineHeight,
                   fontWeight: textIndex == 0
                       ? visualStyle.primaryFontWeight
                       : visualStyle.secondaryFontWeight,
-                  fontSize:
-                      textIndex == 0 ? _primaryFontSize : _translationFontSize,
+                  fontSize: textIndex == 0
+                      ? visualStyle.primaryFontSize
+                      : visualStyle.secondaryFontSize,
                   shadows: showFocusGlow ? glow : null,
                 ),
               );
@@ -788,26 +788,16 @@ class _LyricLineItem extends StatelessWidget {
       ],
     );
 
-    if (showFocusGlow &&
-        activeGlowKey != null &&
-        focusOpacity != null &&
-        focusScale != null) {
-      content = AnimatedBuilder(
-        animation: Listenable.merge([focusOpacity!, focusScale!]),
-        child: content,
-        builder: (context, child) {
-          return Opacity(
-            opacity: focusOpacity!.value,
-            child: Transform.scale(
-              alignment: Alignment.centerLeft,
-              scale: focusScale!.value,
-              child: Container(
-                key: activeGlowKey,
-                child: child,
-              ),
-            ),
-          );
-        },
+    if (showFocusGlow && activeGlowKey != null) {
+      content = Container(
+        key: activeGlowKey,
+        child: AnimatedScale(
+          duration: animationDuration,
+          curve: animationCurve,
+          alignment: Alignment.centerLeft,
+          scale: 1.1,
+          child: content,
+        ),
       );
     }
 

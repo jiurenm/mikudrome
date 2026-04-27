@@ -134,6 +134,130 @@ void main() {
   );
 
   testWidgets(
+    'desktop timed lyrics render the active line with a larger font size',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: _timedLyrics(8),
+          activeIndex: 4,
+          width: desktopWidth,
+          height: desktopHeight,
+        ),
+      );
+      await _pumpDesktopStage(tester);
+
+      final activeLineText = tester.widget<Text>(find.text('Line 4'));
+      final nearbyLineText = tester.widget<Text>(find.text('Line 3'));
+
+      expect(
+        activeLineText.style?.fontSize,
+        greaterThan(nearbyLineText.style?.fontSize ?? 0),
+      );
+    },
+  );
+
+  testWidgets(
+    'desktop timed lyrics render the active line with a lighter font weight',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: _timedLyrics(8),
+          activeIndex: 4,
+          width: desktopWidth,
+          height: desktopHeight,
+        ),
+      );
+      await _pumpDesktopStage(tester);
+
+      final activeLineText = tester.widget<Text>(find.text('Line 4'));
+
+      expect(activeLineText.style?.fontWeight, FontWeight.w500);
+    },
+  );
+
+  testWidgets(
+    'desktop timed lyrics render the active line with a brighter highlight tint',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: _timedLyrics(8),
+          activeIndex: 4,
+          width: desktopWidth,
+          height: desktopHeight,
+        ),
+      );
+      await _pumpDesktopStage(tester);
+
+      final activeLineText = tester.widget<Text>(find.text('Line 4'));
+      final expectedHighlight =
+          Color.lerp(AppTheme.mikuGreen, Colors.white, 0.18)!
+              .withValues(alpha: 1.0);
+
+      expect(activeLineText.style?.color, expectedHighlight);
+    },
+  );
+
+  testWidgets(
+    'desktop timed lyrics keep the active line glow away from the leading gutter',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: _timedLyrics(8),
+          activeIndex: 4,
+          width: desktopWidth,
+          height: desktopHeight,
+        ),
+      );
+      await _pumpDesktopStage(tester);
+
+      final activeLineText = tester.widget<Text>(find.text('Line 4'));
+      final shadows = activeLineText.style?.shadows;
+
+      expect(shadows, isNotNull);
+      expect(shadows, isNotEmpty);
+      expect(
+        shadows!.every((shadow) => shadow.offset.dx > 0),
+        isTrue,
+      );
+      expect(
+        shadows.every((shadow) => shadow.blurRadius <= 14),
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets(
+    'desktop timed lyrics render the translation line with a smaller font size',
+    (tester) async {
+      final timedLyrics = <TimedLyricLine>[
+        const TimedLyricLine(
+          start: Duration.zero,
+          texts: <String>['Primary line', 'Translated line'],
+        ),
+      ];
+
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: timedLyrics,
+          activeIndex: 0,
+          width: desktopWidth,
+          height: desktopHeight,
+        ),
+      );
+      await _pumpDesktopStage(tester);
+
+      final primaryText = tester.widget<Text>(find.text('Primary line'));
+      final translatedText = tester.widget<Text>(find.text('Translated line'));
+
+      expect(translatedText.style?.fontSize, 15);
+      expect(
+        translatedText.style?.fontSize,
+        lessThan(primaryText.style?.fontSize ?? 0),
+      );
+    },
+  );
+
+  testWidgets(
     'desktop timed lyrics update the active marker after large index jumps',
     (tester) async {
       final timedLyrics = _timedLyrics(40);
@@ -212,7 +336,7 @@ void main() {
   );
 
   testWidgets(
-    'desktop timed lyrics with no active line stay on the scrollable list path',
+    'desktop timed lyrics with no active line still render the stage path',
     (tester) async {
       await tester.pumpWidget(
         _buildLyricsSection(
@@ -222,68 +346,56 @@ void main() {
           height: desktopHeight,
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpDesktopStage(tester);
 
-      expect(find.byKey(const ValueKey<String>('lyrics-stage')), findsNothing);
+      final maskFinder =
+          find.byKey(const ValueKey<String>('lyrics-stage-mask'));
+      final lineFinder = find.byKey(const ValueKey<String>('lyrics-line-0'));
+
       expect(
-        find.byKey(const ValueKey<String>('lyrics-stage-mask')),
-        findsNothing,
+          find.byKey(const ValueKey<String>('lyrics-stage')), findsOneWidget);
+      expect(
+        maskFinder,
+        findsOneWidget,
       );
-      expect(find.byType(ListView), findsOneWidget);
+      expect(find.byType(ListView), findsNothing);
       expect(find.text('Line 0'), findsOneWidget);
+      expect(lineFinder, findsOneWidget);
       expect(
-        find.byKey(const ValueKey<String>('lyrics-line-0')),
+        find.byKey(const ValueKey<String>('lyrics-line-active-0')),
         findsNothing,
       );
-      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
-      expect(scrollable.position.maxScrollExtent, greaterThan(0));
+
+      final stageCenter = tester.getCenter(maskFinder).dy;
+      final lineCenter = tester.getCenter(lineFinder).dy;
+      expect((lineCenter - stageCenter).abs(), lessThan(160));
     },
   );
 
   testWidgets(
-    'width-only transition from desktop stage to mobile list keeps the active line in view',
+    'narrow desktop timed lyrics still render the stage path',
     (tester) async {
-      final timedLyrics = _timedLyrics(80);
-
       await tester.pumpWidget(
         _buildLyricsSection(
-          timedLyrics: timedLyrics,
-          activeIndex: 40,
-          width: desktopWidth,
-          height: desktopHeight,
-        ),
-      );
-      await _pumpDesktopStage(tester);
-
-      expect(
-        find.byKey(const ValueKey<String>('lyrics-line-glow-40')),
-        findsOneWidget,
-      );
-
-      await tester.pumpWidget(
-        _buildLyricsSection(
-          timedLyrics: timedLyrics,
+          timedLyrics: _timedLyrics(80),
           activeIndex: 40,
           width: 420,
           height: 320,
         ),
       );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 250));
-      await tester.pumpAndSettle();
+      await _pumpDesktopStage(tester);
 
-      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
-      final position = scrollable.position;
-
-      expect(find.text('Line 40'), findsOneWidget);
+      expect(
+          find.byKey(const ValueKey<String>('lyrics-stage')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('lyrics-stage-mask')),
+        findsOneWidget,
+      );
       expect(
         find.byKey(const ValueKey<String>('lyrics-line-glow-40')),
-        findsNothing,
+        findsOneWidget,
       );
-      final activeLineText = tester.widget<Text>(find.text('Line 40'));
-      expect(activeLineText.style?.shadows, isNull);
-      expect(position.pixels, greaterThan(0));
-      expect(position.pixels, lessThan(position.maxScrollExtent));
+      expect(find.byType(ListView), findsNothing);
     },
   );
 
@@ -325,6 +437,7 @@ void main() {
           activeIndex: 4,
           width: 420,
           height: 320,
+          platform: TargetPlatform.android,
         ),
       );
       await tester.pumpAndSettle();
@@ -381,12 +494,20 @@ void main() {
       final timedLyrics = _timedLyrics(80);
 
       await tester.pumpWidget(
-        _buildLyricsSection(timedLyrics: timedLyrics, activeIndex: 0),
+        _buildLyricsSection(
+          timedLyrics: timedLyrics,
+          activeIndex: 0,
+          platform: TargetPlatform.android,
+        ),
       );
       await tester.pumpAndSettle();
 
       await tester.pumpWidget(
-        _buildLyricsSection(timedLyrics: timedLyrics, activeIndex: 40),
+        _buildLyricsSection(
+          timedLyrics: timedLyrics,
+          activeIndex: 40,
+          platform: TargetPlatform.android,
+        ),
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 250));

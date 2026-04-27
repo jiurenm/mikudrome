@@ -755,7 +755,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   String _formatDuration(Duration value) {
     final totalSeconds = value.inSeconds;
-    if (totalSeconds <= 0) return '--:--';
+    if (totalSeconds <= 0) return '00:00';
     final hours = totalSeconds ~/ 3600;
     final minutes = (totalSeconds % 3600) ~/ 60;
     final seconds = totalSeconds % 60;
@@ -1217,6 +1217,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               children: [
                                 Text(
                                   _formatDuration(position),
+                                  key: const ValueKey('player-elapsed-label'),
                                   style: Theme.of(context)
                                       .textTheme
                                       .labelSmall
@@ -1224,6 +1225,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 ),
                                 Text(
                                   _formatDuration(duration),
+                                  key: const ValueKey('player-duration-label'),
                                   style: Theme.of(context)
                                       .textTheme
                                       .labelSmall
@@ -1476,12 +1478,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
             children: [
               Text(
                 _formatDuration(position),
+                key: const ValueKey('player-elapsed-label'),
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: AppTheme.textMuted,
                     ),
               ),
               Text(
                 _formatDuration(duration),
+                key: const ValueKey('player-duration-label'),
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: AppTheme.textMuted,
                     ),
@@ -1681,10 +1685,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
             children: [
               Text(
                 _formatDuration(position),
+                key: const ValueKey('player-elapsed-label'),
                 style: const TextStyle(color: Colors.white70),
               ),
               Text(
                 _formatDuration(duration),
+                key: const ValueKey('player-duration-label'),
                 style: const TextStyle(color: Colors.white70),
               ),
             ],

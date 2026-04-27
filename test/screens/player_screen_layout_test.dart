@@ -165,4 +165,20 @@ void main() {
     expect(find.text('Unknown credits'), findsNothing);
     expect(find.text('-'), findsWidgets);
   });
+
+  testWidgets('initial playback labels start at 00:00 instead of placeholders',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1600, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpPlayer(tester, surfaceSize: const Size(1600, 900));
+
+    final elapsedFinder = find.byKey(const ValueKey('player-elapsed-label'));
+    final durationFinder = find.byKey(const ValueKey('player-duration-label'));
+
+    expect(elapsedFinder, findsOneWidget);
+    expect(durationFinder, findsOneWidget);
+    expect(tester.widget<Text>(elapsedFinder).data, '00:00');
+    expect(tester.widget<Text>(durationFinder).data, '00:00');
+  });
 }
