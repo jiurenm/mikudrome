@@ -25,10 +25,11 @@ import 'player_playback_policy.dart';
 
 typedef PlayerTogglePlayback = Future<void> Function();
 typedef PlayerSeekToFraction = Future<void> Function(double value);
-typedef PlayerControlsReady = void Function({
-  required PlayerTogglePlayback togglePlayback,
-  required PlayerSeekToFraction seekToFraction,
-});
+typedef PlayerControlsReady =
+    void Function({
+      required PlayerTogglePlayback togglePlayback,
+      required PlayerSeekToFraction seekToFraction,
+    });
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
@@ -54,6 +55,12 @@ class PlayerScreen extends StatefulWidget {
     this.initialProgress,
     this.onVideoControllerChanged,
     this.renderVideo = true,
+    this.useExternalAudioPlayback = false,
+    this.externalIsPlaying,
+    this.externalProgress,
+    this.onExternalPlay,
+    this.onExternalPause,
+    this.onExternalSeekToFraction,
   });
 
   final Track track;
@@ -73,7 +80,8 @@ class PlayerScreen extends StatefulWidget {
     required double progress,
     required String elapsedLabel,
     required String durationLabel,
-  }) onPlaybackStateChanged;
+  })
+  onPlaybackStateChanged;
   final PlayerControlsReady? onControlsReady;
   final String baseUrl;
   final WebMediaSessionService? mediaSessionService;
@@ -82,6 +90,12 @@ class PlayerScreen extends StatefulWidget {
   final double? initialProgress;
   final ValueChanged<VideoPlayerController?>? onVideoControllerChanged;
   final bool renderVideo;
+  final bool useExternalAudioPlayback;
+  final bool? externalIsPlaying;
+  final double? externalProgress;
+  final Future<void> Function()? onExternalPlay;
+  final Future<void> Function()? onExternalPause;
+  final PlayerSeekToFraction? onExternalSeekToFraction;
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
@@ -123,7 +137,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   bool get _isVideoMode => widget.playbackMode == PlaybackMode.video;
-  bool get _usesWebAudioPlayer => !_isVideoMode && _webAudioPlayer.isAvailable;
+  bool get _usesExternalAudioPlayback =>
+      widget.useExternalAudioPlayback && !_isVideoMode;
+  bool get _usesWebAudioPlayer =>
+      !_isVideoMode &&
+      !_usesExternalAudioPlayback &&
+      _webAudioPlayer.isAvailable;
   bool get _canSwitchMode => _track.hasVideo && _track.hasAudio;
   String get _mediaUrl {
     if (_isVideoMode && _track.videoStreamOverrideUrl != null) {
@@ -143,17 +162,31 @@ class _PlayerScreenState extends State<PlayerScreen> {
         : '';
   }
 
-  Duration get _position => _usesWebAudioPlayer
-      ? _webAudioPlayer.value.position
-      : _controller?.value.position ?? Duration.zero;
-  Duration get _duration => effectiveTimelineDuration(
-        track: _track,
-        mediaDuration: _usesWebAudioPlayer
-            ? _webAudioPlayer.value.duration
-            : _controller?.value.duration ?? Duration.zero,
-        usesWebAudioPlayer: _usesWebAudioPlayer,
-      );
-  bool get _isPlaying => _usesWebAudioPlayer
+  Duration get _position {
+    if (_usesExternalAudioPlayback) {
+      return _duration * (widget.externalProgress ?? 0);
+    }
+    return _usesWebAudioPlayer
+        ? _webAudioPlayer.value.position
+        : _controller?.value.position ?? Duration.zero;
+  }
+
+  Duration get _duration {
+    if (_usesExternalAudioPlayback) {
+      return Duration(seconds: _track.durationSeconds);
+    }
+    return effectiveTimelineDuration(
+      track: _track,
+      mediaDuration: _usesWebAudioPlayer
+          ? _webAudioPlayer.value.duration
+          : _controller?.value.duration ?? Duration.zero,
+      usesWebAudioPlayer: _usesWebAudioPlayer,
+    );
+  }
+
+  bool get _isPlaying => _usesExternalAudioPlayback
+      ? widget.externalIsPlaying ?? false
+      : _usesWebAudioPlayer
       ? _webAudioPlayer.value.isPlaying
       : _controller?.value.isPlaying ?? false;
   bool get _hasTimedLyrics => _timedLyrics.isNotEmpty;
@@ -161,6 +194,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final injected = widget.mediaSessionCanSeek;
     if (injected != null) {
       return injected();
+    }
+    if (_usesExternalAudioPlayback) {
+      return widget.onExternalSeekToFraction != null &&
+          _duration > Duration.zero;
     }
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) {
@@ -170,16 +207,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   IconData get _playbackOrderIcon => switch (widget.playbackOrderMode) {
-        PlaybackOrderMode.sequential => Icons.arrow_right_alt,
-        PlaybackOrderMode.listLoop => Icons.repeat,
-        PlaybackOrderMode.singleLoop => Icons.repeat_one,
-      };
+    PlaybackOrderMode.sequential => Icons.arrow_right_alt,
+    PlaybackOrderMode.listLoop => Icons.repeat,
+    PlaybackOrderMode.singleLoop => Icons.repeat_one,
+  };
 
   String get _playbackOrderLabel => switch (widget.playbackOrderMode) {
-        PlaybackOrderMode.sequential => '顺序播放',
-        PlaybackOrderMode.listLoop => '列表循环',
-        PlaybackOrderMode.singleLoop => '单曲循环',
-      };
+    PlaybackOrderMode.sequential => '顺序播放',
+    PlaybackOrderMode.listLoop => '列表循环',
+    PlaybackOrderMode.singleLoop => '单曲循环',
+  };
 
   String get _playbackOrderTooltip => '播放顺序：$_playbackOrderLabel';
 
@@ -233,15 +270,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _syncLyricsForTrack();
     }
 
-    final shouldReinitializeController = trackChanged ||
+    final shouldReinitializeController =
+        trackChanged ||
         oldWidget.playbackMode != widget.playbackMode ||
-        oldWidget.baseUrl != widget.baseUrl;
+        oldWidget.baseUrl != widget.baseUrl ||
+        oldWidget.useExternalAudioPlayback != widget.useExternalAudioPlayback;
     if (shouldReinitializeController) {
       _initializePlayback();
       return;
     }
 
-    final shouldRebindMediaSession = trackChanged ||
+    final shouldRebindMediaSession =
+        trackChanged ||
         oldWidget.currentIndex != widget.currentIndex ||
         oldWidget.queue.length != widget.queue.length ||
         oldWidget.playbackOrderMode != widget.playbackOrderMode ||
@@ -274,6 +314,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
       await _webAudioPlayer.pause();
     }
 
+    if (_usesExternalAudioPlayback) {
+      _bindMediaSessionHandlers();
+      _syncMediaSessionMetadata();
+      if (!mounted) return;
+      setState(() {
+        _isInitializing = false;
+        _error = null;
+      });
+      _emitPlaybackState();
+      return;
+    }
+
     if (mounted) {
       setState(() {
         _isInitializing = true;
@@ -285,11 +337,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
       final pendingSeek = _pendingSeekProgress;
       final initialPosition =
           pendingSeek != null && pendingSeek > 0 && _track.durationSeconds > 0
-              ? Duration(
-                  milliseconds:
-                      (_track.durationSeconds * 1000 * pendingSeek).round(),
-                )
-              : Duration.zero;
+          ? Duration(
+              milliseconds: (_track.durationSeconds * 1000 * pendingSeek)
+                  .round(),
+            )
+          : Duration.zero;
       _pendingSeekProgress = null;
 
       await _webAudioPlayer.load(
@@ -315,9 +367,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     final controller = VideoPlayerController.networkUrl(
       Uri.parse(_mediaUrl),
-      videoPlayerOptions: VideoPlayerOptions(
-        allowBackgroundPlayback: true,
-      ),
+      videoPlayerOptions: VideoPlayerOptions(allowBackgroundPlayback: true),
     );
     _controller = controller;
 
@@ -439,11 +489,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return null;
     }
     final previousIndex = switch (widget.playbackOrderMode) {
-      PlaybackOrderMode.listLoop => widget.currentIndex > 0
-          ? widget.currentIndex - 1
-          : (widget.queue.length > 1 ? widget.queue.length - 1 : null),
-      PlaybackOrderMode.sequential ||
-      PlaybackOrderMode.singleLoop =>
+      PlaybackOrderMode.listLoop =>
+        widget.currentIndex > 0
+            ? widget.currentIndex - 1
+            : (widget.queue.length > 1 ? widget.queue.length - 1 : null),
+      PlaybackOrderMode.sequential || PlaybackOrderMode.singleLoop =>
         widget.currentIndex > 0 ? widget.currentIndex - 1 : null,
     };
     if (previousIndex == null) {
@@ -461,8 +511,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         widget.currentIndex < widget.queue.length - 1
             ? widget.currentIndex + 1
             : (widget.queue.length > 1 ? 0 : null),
-      PlaybackOrderMode.sequential ||
-      PlaybackOrderMode.singleLoop =>
+      PlaybackOrderMode.sequential || PlaybackOrderMode.singleLoop =>
         widget.currentIndex < widget.queue.length - 1
             ? widget.currentIndex + 1
             : null,
@@ -506,8 +555,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
             break;
         }
       }
-      final nextActiveIndex =
-          findActiveLyricIndex(_timedLyrics, value.position);
+      final nextActiveIndex = findActiveLyricIndex(
+        _timedLyrics,
+        value.position,
+      );
       _emitPlaybackState();
       if (nextActiveIndex == _activeLyricIndex) {
         return;
@@ -588,12 +639,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
       togglePlayback: _noopTogglePlayback,
       seekToFraction: _noopSeekToFraction,
     );
-    widget.onPlaybackStateChanged(
-      isPlaying: false,
-      progress: 0,
-      elapsedLabel: '--:--',
-      durationLabel: '--:--',
-    );
+    if (!_usesExternalAudioPlayback) {
+      widget.onPlaybackStateChanged(
+        isPlaying: false,
+        progress: 0,
+        elapsedLabel: '--:--',
+        durationLabel: '--:--',
+      );
+    }
     _controller?.dispose();
     _webAudioPlayer.removeListener(_handleWebAudioPlayerChanged);
     super.dispose();
@@ -604,6 +657,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _noopSeekToFraction(double _) async {}
 
   Future<void> _play() async {
+    if (_usesExternalAudioPlayback) {
+      await widget.onExternalPlay?.call();
+      _emitPlaybackState();
+      if (mounted) setState(() {});
+      return;
+    }
     if (_usesWebAudioPlayer) {
       await _webAudioPlayer.play();
       _emitPlaybackState();
@@ -618,6 +677,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _pause() async {
+    if (_usesExternalAudioPlayback) {
+      await widget.onExternalPause?.call();
+      _emitPlaybackState();
+      if (mounted) setState(() {});
+      return;
+    }
     if (_usesWebAudioPlayer) {
       await _webAudioPlayer.pause();
       _emitPlaybackState();
@@ -640,6 +705,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _seekTo(double value) async {
+    if (_usesExternalAudioPlayback) {
+      await widget.onExternalSeekToFraction?.call(value);
+      _emitPlaybackState();
+      return;
+    }
     if (_usesWebAudioPlayer) {
       final target = _duration * value;
       await _webAudioPlayer.seekTo(target);
@@ -774,7 +844,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget build(BuildContext context) {
     final accentColor = VocalThemeProvider.of(context);
     final width = MediaQuery.sizeOf(context).width;
-    final queueVisible = !isMobile(context) &&
+    final queueVisible =
+        !isMobile(context) &&
         _showQueue &&
         width >= (_isVideoMode ? 1280 : 1440);
     final queuePanelWidth = _isVideoMode ? 320.0 : 280.0;
@@ -796,7 +867,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
               children: [
                 Positioned.fill(
                   child: Center(
-                      child: _buildVideoArea(context, isFullscreen: true)),
+                    child: _buildVideoArea(context, isFullscreen: true),
+                  ),
                 ),
                 AnimatedPositioned(
                   duration: const Duration(milliseconds: 180),
@@ -877,7 +949,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                   Expanded(
                                     child: Padding(
                                       padding: const EdgeInsets.fromLTRB(
-                                          28, 28, 28, 12),
+                                        28,
+                                        28,
+                                        28,
+                                        12,
+                                      ),
                                       child: LayoutBuilder(
                                         builder: (context, constraints) {
                                           final lyricsPanelWidth =
@@ -886,36 +962,41 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
                                           return Row(
                                             key: const ValueKey(
-                                                'player-audio-layout'),
+                                              'player-audio-layout',
+                                            ),
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.stretch,
                                             children: [
                                               Expanded(
                                                 child: AnimatedSlide(
                                                   duration: const Duration(
-                                                      milliseconds: 260),
+                                                    milliseconds: 260,
+                                                  ),
                                                   curve: Curves.easeOutCubic,
                                                   offset: _showLyrics
                                                       ? const Offset(-0.04, 0)
                                                       : Offset.zero,
                                                   child: AnimatedAlign(
                                                     duration: const Duration(
-                                                        milliseconds: 260),
+                                                      milliseconds: 260,
+                                                    ),
                                                     curve: Curves.easeOutCubic,
                                                     alignment: Alignment.center,
                                                     child: Column(
                                                       key: const ValueKey(
-                                                          'player-audio-left-column'),
+                                                        'player-audio-left-column',
+                                                      ),
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
                                                         Padding(
                                                           key: const ValueKey(
-                                                              'player-audio-title-block'),
+                                                            'player-audio-title-block',
+                                                          ),
                                                           padding:
-                                                              const EdgeInsets
-                                                                  .only(
-                                                                  bottom: 16),
+                                                              const EdgeInsets.only(
+                                                                bottom: 16,
+                                                              ),
                                                           child: Text(
                                                             _track.title,
                                                             textAlign: TextAlign
@@ -924,8 +1005,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                             overflow:
                                                                 TextOverflow
                                                                     .ellipsis,
-                                                            style: Theme.of(
-                                                                    context)
+                                                            style: Theme.of(context)
                                                                 .textTheme
                                                                 .headlineMedium
                                                                 ?.copyWith(
@@ -939,10 +1019,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                         ),
                                                         KeyedSubtree(
                                                           key: const ValueKey(
-                                                              'player-audio-cover-block'),
+                                                            'player-audio-cover-block',
+                                                          ),
                                                           child:
                                                               _buildMediaArea(
-                                                                  context),
+                                                                context,
+                                                              ),
                                                         ),
                                                         TrackInfoSection(
                                                           track: _track,
@@ -954,37 +1036,45 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                               ),
                                               AnimatedContainer(
                                                 duration: const Duration(
-                                                    milliseconds: 260),
+                                                  milliseconds: 260,
+                                                ),
                                                 curve: Curves.easeOutCubic,
                                                 width: _showLyrics ? 24 : 0,
                                               ),
                                               TweenAnimationBuilder<double>(
                                                 duration: const Duration(
-                                                    milliseconds: 260),
+                                                  milliseconds: 260,
+                                                ),
                                                 curve: Curves.easeOutCubic,
                                                 tween: Tween<double>(
                                                   begin: _showLyrics ? 0 : 1,
                                                   end: _showLyrics ? 1 : 0,
                                                 ),
-                                                builder: (context, widthFactor,
-                                                    child) {
-                                                  return SizedBox(
-                                                    width: lyricsPanelWidth *
-                                                        widthFactor,
-                                                    child: ClipRect(
-                                                      child: Align(
-                                                        alignment: Alignment
-                                                            .centerRight,
-                                                        child: child,
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
+                                                builder:
+                                                    (
+                                                      context,
+                                                      widthFactor,
+                                                      child,
+                                                    ) {
+                                                      return SizedBox(
+                                                        width:
+                                                            lyricsPanelWidth *
+                                                            widthFactor,
+                                                        child: ClipRect(
+                                                          child: Align(
+                                                            alignment: Alignment
+                                                                .centerRight,
+                                                            child: child,
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
                                                 child: IgnorePointer(
                                                   ignoring: !_showLyrics,
                                                   child: AnimatedSlide(
                                                     duration: const Duration(
-                                                        milliseconds: 260),
+                                                      milliseconds: 260,
+                                                    ),
                                                     curve: Curves.easeOutCubic,
                                                     offset: _showLyrics
                                                         ? Offset.zero
@@ -993,12 +1083,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                       width: lyricsPanelWidth,
                                                       child: KeyedSubtree(
                                                         key: const ValueKey(
-                                                            'player-audio-lyrics-panel'),
+                                                          'player-audio-lyrics-panel',
+                                                        ),
                                                         child: LyricsSection(
                                                           lyrics: _track.lyrics,
                                                           timedLyrics:
                                                               _timedLyrics,
-                                                          activeIndex: _showLyrics &&
+                                                          activeIndex:
+                                                              _showLyrics &&
                                                                   _hasTimedLyrics
                                                               ? _activeLyricIndex
                                                               : -1,
@@ -1086,16 +1178,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   children: [
                     IconButton(
                       onPressed: widget.onClose,
-                      icon: const Icon(Icons.keyboard_arrow_down,
-                          color: AppTheme.textPrimary, size: 28),
+                      icon: const Icon(
+                        Icons.keyboard_arrow_down,
+                        color: AppTheme.textPrimary,
+                        size: 28,
+                      ),
                     ),
                     Expanded(
                       child: Text(
                         widget.contextLabel,
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppTheme.textMuted,
-                            ),
+                          color: AppTheme.textMuted,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1128,7 +1223,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     // Media area (cover / video)
                     Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 32, vertical: 8),
+                        horizontal: 32,
+                        vertical: 8,
+                      ),
                       child: _isVideoMode
                           ? _buildVideoArea(context)
                           : SizedBox(
@@ -1139,38 +1236,41 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 child: _isInitializing
                                     ? Center(
                                         child: CircularProgressIndicator(
-                                            color: accentColor))
+                                          color: accentColor,
+                                        ),
+                                      )
                                     : _error != null
-                                        ? Container(
-                                            color: AppTheme.cardBg,
-                                            child: const Icon(
-                                                Icons.error_outline,
-                                                color: Colors.redAccent,
-                                                size: 48),
-                                          )
-                                        : _albumCoverUrl.isNotEmpty
-                                            ? Image.network(
-                                                _albumCoverUrl,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (_, __, ___) =>
-                                                    _audioPlaceholder(),
-                                              )
-                                            : _audioPlaceholder(),
+                                    ? Container(
+                                        color: AppTheme.cardBg,
+                                        child: const Icon(
+                                          Icons.error_outline,
+                                          color: Colors.redAccent,
+                                          size: 48,
+                                        ),
+                                      )
+                                    : _albumCoverUrl.isNotEmpty
+                                    ? Image.network(
+                                        _albumCoverUrl,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) =>
+                                            _audioPlaceholder(),
+                                      )
+                                    : _audioPlaceholder(),
                               ),
                             ),
                     ),
                     // Track title + vocal
                     Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 8),
+                        horizontal: 24,
+                        vertical: 8,
+                      ),
                       child: Column(
                         children: [
                           Text(
                             _track.title,
                             textAlign: TextAlign.center,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
+                            style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(
                                   color: AppTheme.textPrimary,
                                   fontWeight: FontWeight.w900,
@@ -1182,10 +1282,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           Text(
                             _queueSubtitle,
                             textAlign: TextAlign.center,
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: AppTheme.textMuted,
-                                    ),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: AppTheme.textMuted),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1211,8 +1309,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             ),
                             child: Slider(
                               value: progress.clamp(0.0, 1.0),
-                              onChanged:
-                                  duration == Duration.zero ? null : _seekTo,
+                              onChanged: duration == Duration.zero
+                                  ? null
+                                  : _seekTo,
                             ),
                           ),
                           Padding(
@@ -1223,17 +1322,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 Text(
                                   _formatDuration(position),
                                   key: const ValueKey('player-elapsed-label'),
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelSmall
+                                  style: Theme.of(context).textTheme.labelSmall
                                       ?.copyWith(color: AppTheme.textMuted),
                                 ),
                                 Text(
                                   _formatDuration(duration),
                                   key: const ValueKey('player-duration-label'),
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelSmall
+                                  style: Theme.of(context).textTheme.labelSmall
                                       ?.copyWith(color: AppTheme.textMuted),
                                 ),
                               ],
@@ -1249,8 +1344,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
                           _buildPlaybackOrderButton(
-                              baseColor: AppTheme.textMuted,
-                              accentColor: accentColor),
+                            baseColor: AppTheme.textMuted,
+                            accentColor: accentColor,
+                          ),
                           IconButton(
                             icon: const Icon(Icons.skip_previous, size: 32),
                             onPressed: _hasPrevious ? widget.onPrevious : null,
@@ -1300,12 +1396,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               const SizedBox(width: 4),
                               Text(
                                 _showLyrics ? '隐藏歌词' : '显示歌词',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
-                                    ?.copyWith(
-                                      color: AppTheme.textMuted,
-                                    ),
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(color: AppTheme.textMuted),
                               ),
                             ],
                           ),
@@ -1318,8 +1410,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             child: LyricsSection(
                               lyrics: _track.lyrics,
                               timedLyrics: _timedLyrics,
-                              activeIndex:
-                                  _hasTimedLyrics ? _activeLyricIndex : -1,
+                              activeIndex: _hasTimedLyrics
+                                  ? _activeLyricIndex
+                                  : -1,
                             ),
                           ),
                         ),
@@ -1337,9 +1430,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget _buildMediaArea(BuildContext context) {
     final accentColor = VocalThemeProvider.of(context);
     if (_isInitializing) {
-      return Center(
-        child: CircularProgressIndicator(color: accentColor),
-      );
+      return Center(child: CircularProgressIndicator(color: accentColor));
     }
 
     if (_error != null) {
@@ -1352,9 +1443,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
             const SizedBox(height: 16),
             Text(
               _error!,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.textPrimary,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppTheme.textPrimary),
               textAlign: TextAlign.center,
             ),
           ],
@@ -1376,8 +1467,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return const SizedBox.shrink();
     }
     final borderRadius = isFullscreen ? 0.0 : 16.0;
-    final padding =
-        isFullscreen ? EdgeInsets.zero : const EdgeInsets.fromLTRB(8, 4, 8, 8);
+    final padding = isFullscreen
+        ? EdgeInsets.zero
+        : const EdgeInsets.fromLTRB(8, 4, 8, 8);
     return Padding(
       padding: padding,
       child: AspectRatio(
@@ -1416,19 +1508,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _audioPlaceholder() => Container(
-        height: 320,
-        width: 320,
-        color: AppTheme.cardBg,
-        alignment: Alignment.center,
-        child: const Icon(
-          Icons.music_note,
-          color: AppTheme.textMuted,
-          size: 64,
-        ),
-      );
+    height: 320,
+    width: 320,
+    color: AppTheme.cardBg,
+    alignment: Alignment.center,
+    child: const Icon(Icons.music_note, color: AppTheme.textMuted, size: 64),
+  );
 
-  Widget _buildPlaybackOrderButton(
-      {required Color baseColor, required Color accentColor}) {
+  Widget _buildPlaybackOrderButton({
+    required Color baseColor,
+    required Color accentColor,
+  }) {
     final isActive = widget.playbackOrderMode != PlaybackOrderMode.sequential;
     return IconButton(
       onPressed: widget.onCyclePlaybackOrderMode,
@@ -1438,9 +1528,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         color: isActive ? accentColor : baseColor,
       ),
       tooltip: _playbackOrderTooltip,
-      style: IconButton.styleFrom(
-        minimumSize: const Size(50, 50),
-      ),
+      style: IconButton.styleFrom(minimumSize: const Size(50, 50)),
     );
   }
 
@@ -1484,16 +1572,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
               Text(
                 _formatDuration(position),
                 key: const ValueKey('player-elapsed-label'),
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppTheme.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(color: AppTheme.textMuted),
               ),
               Text(
                 _formatDuration(duration),
                 key: const ValueKey('player-duration-label'),
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppTheme.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(color: AppTheme.textMuted),
               ),
             ],
           ),
@@ -1567,8 +1655,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       ),
                       const SizedBox(width: 4),
                       _buildPlaybackOrderButton(
-                          baseColor: AppTheme.textMuted,
-                          accentColor: accentColor),
+                        baseColor: AppTheme.textMuted,
+                        accentColor: accentColor,
+                      ),
                       if (!_isVideoMode)
                         IconButton(
                           onPressed: () {
@@ -1581,8 +1670,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 ? Icons.visibility
                                 : Icons.visibility_off,
                             size: 26,
-                            color:
-                                _showLyrics ? accentColor : AppTheme.textMuted,
+                            color: _showLyrics
+                                ? accentColor
+                                : AppTheme.textMuted,
                           ),
                           tooltip: 'Lyrics',
                           style: IconButton.styleFrom(
@@ -1627,9 +1717,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
             child: Text(
               _track.title,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppTheme.textPrimary,
-                    fontWeight: FontWeight.w800,
-                  ),
+                color: AppTheme.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -1659,10 +1749,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            Colors.transparent,
-            Colors.black.withValues(alpha: 0.8),
-          ],
+          colors: [Colors.transparent, Colors.black.withValues(alpha: 0.8)],
         ),
       ),
       child: Column(
@@ -1726,7 +1813,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
               ),
               const SizedBox(width: 12),
               _buildPlaybackOrderButton(
-                  baseColor: Colors.white70, accentColor: accentColor),
+                baseColor: Colors.white70,
+                accentColor: accentColor,
+              ),
             ],
           ),
         ],
@@ -1737,8 +1826,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget _buildFooter(BuildContext context) {
     final accentColor = VocalThemeProvider.of(context);
     final modeLabel = _isVideoMode ? 'Local MV Active' : 'Audio Stream Active';
-    final vocalists =
-        _track.vocalists.isNotEmpty ? _track.vocalists.join(', ') : '-';
+    final vocalists = _track.vocalists.isNotEmpty
+        ? _track.vocalists.join(', ')
+        : '-';
     return Container(
       height: 24,
       color: accentColor,

@@ -98,6 +98,12 @@ class JustAudioMobileAudioPlaybackService
   }
 
   @override
+  Future<void> play() async {
+    if (_disposed || _queue.isEmpty) return;
+    await _startPlaybackSafely(_currentState.index);
+  }
+
+  @override
   Future<void> pause() async {
     if (_disposed) return;
     await _player.pause();

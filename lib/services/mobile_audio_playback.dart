@@ -53,6 +53,7 @@ abstract class MobileAudioPlaybackService {
     required AudioUrlForTrack audioUrlForTrack,
   });
 
+  Future<void> play();
   Future<void> pause();
   Future<void> seek(Duration position);
   Future<void> stop();
@@ -101,6 +102,12 @@ class FakeMobileAudioPlaybackService implements MobileAudioPlaybackService {
         audioUrl: audioUrlForTrack(track),
       ),
     );
+  }
+
+  @override
+  Future<void> play() async {
+    if (_currentState.queue.isEmpty) return;
+    _emit(_currentState.copyWith(isPlaying: true));
   }
 
   @override
@@ -182,6 +189,9 @@ class NoopMobileAudioPlaybackService implements MobileAudioPlaybackService {
     required int index,
     required AudioUrlForTrack audioUrlForTrack,
   }) async {}
+
+  @override
+  Future<void> play() async {}
 
   @override
   Future<void> pause() async {}

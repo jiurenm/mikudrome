@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:mikudrome/models/track.dart';
+import 'package:mikudrome/screens/library_home_screen.dart';
 import 'package:mikudrome/services/mobile_audio_playback.dart';
 import 'package:mikudrome/services/mobile_audio_playback_audio_service.dart'
     as audio_service;
@@ -85,6 +86,7 @@ void main() {
       audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
     );
     await service.pause();
+    await service.play();
     await service.seek(const Duration(seconds: 12));
     await service.next();
     await service.previous();
@@ -92,6 +94,7 @@ void main() {
     await service.dispose();
 
     expect(player.pauseCalls, 1);
+    expect(player.playCalls, 2);
     expect(player.seekPositions, [const Duration(seconds: 12)]);
     expect(player.nextCalls, 1);
     expect(player.previousCalls, 1);
@@ -188,8 +191,12 @@ void main() {
       audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
     );
     await service.pause();
+    await service.play();
 
-    expect(states.map((s) => s.isPlaying), containsAllInOrder([true, false]));
+    expect(
+      states.map((s) => s.isPlaying),
+      containsAllInOrder([true, false, true]),
+    );
     expect(service.currentState.track?.id, 1);
 
     await sub.cancel();
@@ -316,6 +323,23 @@ void main() {
 
     await service.dispose();
   });
+
+  test('mobile audio routing stops service when entering video mode', () async {
+    final service = RecordingMobileAudioPlaybackService();
+    var playQueueCalls = 0;
+
+    await routeMobileAudioPlaybackForMode(
+      isMobile: true,
+      playbackMode: PlaybackMode.video,
+      service: service,
+      playAudioQueue: () async {
+        playQueueCalls += 1;
+      },
+    );
+
+    expect(service.stopCalls, 1);
+    expect(playQueueCalls, 0);
+  });
 }
 
 Track _track(int id) => Track(
@@ -432,5 +456,15 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
   void setCurrentIndex(int? value) {
     currentIndex = value;
     _currentIndex.add(value);
+  }
+}
+
+class RecordingMobileAudioPlaybackService
+    extends NoopMobileAudioPlaybackService {
+  int stopCalls = 0;
+
+  @override
+  Future<void> stop() async {
+    stopCalls += 1;
   }
 }

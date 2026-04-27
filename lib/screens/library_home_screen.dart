@@ -7,6 +7,9 @@ import '../api/api.dart';
 import '../config/app_config_controller.dart';
 import '../models/track.dart';
 import '../models/video.dart';
+import '../services/mobile_audio_playback.dart'
+    hide createMobileAudioPlaybackService;
+import '../services/mobile_audio_playback_service.dart';
 import '../services/playback_storage.dart';
 import '../theme/vocal_theme.dart';
 import '../widgets/now_playing_bar.dart';
@@ -41,6 +44,21 @@ enum PlaybackMode { video, audio }
 
 enum PlaybackOrderMode { sequential, listLoop, singleLoop }
 
+@visibleForTesting
+Future<void> routeMobileAudioPlaybackForMode({
+  required bool isMobile,
+  required PlaybackMode playbackMode,
+  required MobileAudioPlaybackService service,
+  required Future<void> Function() playAudioQueue,
+}) async {
+  if (!isMobile) return;
+  if (playbackMode == PlaybackMode.audio) {
+    await playAudioQueue();
+    return;
+  }
+  await service.stop();
+}
+
 /// Root screen: app shell + route-based content. Album detail is shown in-shell (sidebar stays).
 class LibraryHomeScreen extends StatefulWidget {
   const LibraryHomeScreen({super.key, this.appConfigController});
@@ -74,6 +92,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   PlayerTogglePlayback _playerTogglePlayback = _noopTogglePlayback;
   PlayerSeekToFraction _playerSeekToFraction = _noopSeekToFraction;
   late final WebAudioPlaybackController _webAudioPlaybackController;
+  late final MobileAudioPlaybackService _mobileAudioPlaybackService;
+  StreamSubscription<MobileAudioPlaybackState>? _mobileAudioSubscription;
 
   bool _restoredNotStarted = false;
   double? _resumeProgress;
@@ -83,8 +103,19 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   void initState() {
     super.initState();
     _webAudioPlaybackController = WebAudioPlaybackController();
+    _mobileAudioPlaybackService = createMobileAudioPlaybackService();
+    _mobileAudioSubscription = _mobileAudioPlaybackService.states.listen(
+      _handleMobileAudioState,
+    );
     _restorePlaybackState();
     PlaylistRepository.instance.initialize(ApiClient());
+  }
+
+  @override
+  void dispose() {
+    unawaited(_mobileAudioSubscription?.cancel());
+    unawaited(_mobileAudioPlaybackService.dispose());
+    super.dispose();
   }
 
   String _formatDuration(int totalSeconds) {
@@ -359,7 +390,71 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
 
   bool get _canUseSharedWebAudio =>
       _playbackMode == PlaybackMode.audio &&
+      !_canUseMobileAudioPlayback &&
       _webAudioPlaybackController.isAvailable;
+
+  bool get _canUseMobileAudioPlayback {
+    if (!mounted) return false;
+    return isMobile(context) && _playbackMode == PlaybackMode.audio;
+  }
+
+  bool get _isMobilePlaybackSurface {
+    if (!mounted) return false;
+    return isMobile(context);
+  }
+
+  String _mobileAudioUrlForTrack(Track track) {
+    return ApiClient().streamAudioUrl(track.id);
+  }
+
+  Future<void> _playMobileAudioQueue({
+    required List<Track> queue,
+    required int index,
+  }) {
+    return _mobileAudioPlaybackService.playQueue(
+      queue: queue,
+      index: index,
+      audioUrlForTrack: _mobileAudioUrlForTrack,
+    );
+  }
+
+  Future<void> _routeMobileAudioPlaybackForCurrentMode() {
+    return routeMobileAudioPlaybackForMode(
+      isMobile: _isMobilePlaybackSurface,
+      playbackMode: _playbackMode,
+      service: _mobileAudioPlaybackService,
+      playAudioQueue: () =>
+          _playMobileAudioQueue(queue: _playerQueue, index: _playerIndex),
+    );
+  }
+
+  void _handleMobileAudioState(MobileAudioPlaybackState state) {
+    if (!mounted || !isMobile(context) || _playbackMode != PlaybackMode.audio) {
+      return;
+    }
+
+    final previousTrackId = _currentTrack?.id;
+    final track = state.track;
+    setState(() {
+      _playerQueue = state.queue;
+      _playerIndex = state.queue.isEmpty
+          ? 0
+          : state.index.clamp(0, state.queue.length - 1);
+      _isPlaying = state.isPlaying;
+      if (track == null) {
+        _playbackProgress = 0;
+        _elapsedLabel = '--:--';
+        _durationLabel = '--:--';
+        return;
+      }
+      if (previousTrackId != track.id) {
+        _playbackProgress = 0;
+        _elapsedLabel = '00:00';
+      }
+      _durationLabel = _formatDuration(track.durationSeconds);
+    });
+    _savePlaybackState();
+  }
 
   Future<void> _activateSharedWebAudioTrack(
     Track track, {
@@ -409,7 +504,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _resumeProgress = null;
     });
     _savePlaybackState();
-    if (_playbackMode == PlaybackMode.audio) {
+    if (_isMobilePlaybackSurface) {
+      unawaited(_routeMobileAudioPlaybackForCurrentMode());
+    } else if (_playbackMode == PlaybackMode.audio) {
       unawaited(_activateSharedWebAudioTrack(selectedTrack));
     }
   }
@@ -424,7 +521,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _isPlaying = true;
     });
     _savePlaybackState();
-    if (_canUseSharedWebAudio) {
+    if (_isMobilePlaybackSurface) {
+      unawaited(_routeMobileAudioPlaybackForCurrentMode());
+    } else if (_canUseSharedWebAudio) {
       unawaited(_activateSharedWebAudioTrack(nextTrack));
     }
   }
@@ -458,7 +557,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _isPlaying = true;
     });
     _savePlaybackState();
-    if (_canUseSharedWebAudio) {
+    if (_isMobilePlaybackSurface) {
+      unawaited(_routeMobileAudioPlaybackForCurrentMode());
+    } else if (_canUseSharedWebAudio) {
       unawaited(_activateSharedWebAudioTrack(nextTrack));
     }
   }
@@ -481,13 +582,31 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _isPlaying = true;
     });
     _savePlaybackState();
-    if (_canUseSharedWebAudio) {
+    if (_isMobilePlaybackSurface) {
+      unawaited(_routeMobileAudioPlaybackForCurrentMode());
+    } else if (_canUseSharedWebAudio) {
       unawaited(_activateSharedWebAudioTrack(nextTrack));
     }
   }
 
   Future<void> _togglePlayback() async {
     if (_currentTrack == null) return;
+    if (_canUseMobileAudioPlayback) {
+      if (_restoredNotStarted) {
+        setState(() {
+          _restoredNotStarted = false;
+          _isPlaying = true;
+        });
+        await _playMobileAudioQueue(queue: _playerQueue, index: _playerIndex);
+        return;
+      }
+      if (_isPlaying) {
+        await _mobileAudioPlaybackService.pause();
+      } else {
+        await _mobileAudioPlaybackService.play();
+      }
+      return;
+    }
     if (_restoredNotStarted) {
       // First play after restore — mount the PlayerScreen
       setState(() {
@@ -501,7 +620,27 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
 
   Future<void> _seekPlayback(double value) async {
     if (_currentTrack == null) return;
+    if (_canUseMobileAudioPlayback) {
+      await _seekMobileAudioPlayback(value);
+      return;
+    }
     await _playerSeekToFraction(value);
+  }
+
+  Future<void> _seekMobileAudioPlayback(double value) async {
+    final track = _currentTrack;
+    if (track == null) return;
+    final progress = value.clamp(0.0, 1.0).toDouble();
+    final duration = Duration(seconds: track.durationSeconds);
+    final target = duration * progress;
+    await _mobileAudioPlaybackService.seek(target);
+    if (!mounted) return;
+    setState(() {
+      _playbackProgress = progress;
+      _elapsedLabel = _formatDuration(target.inSeconds);
+      _durationLabel = _formatDuration(track.durationSeconds);
+    });
+    _savePlaybackState();
   }
 
   void _switchPlaybackMode(PlaybackMode mode) {
@@ -512,7 +651,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _playbackMode = mode;
       _isPlaying = true;
     });
-    if (mode == PlaybackMode.audio && _webAudioPlaybackController.isAvailable) {
+    if (_isMobilePlaybackSurface) {
+      unawaited(_routeMobileAudioPlaybackForCurrentMode());
+    } else if (mode == PlaybackMode.audio &&
+        _webAudioPlaybackController.isAvailable) {
       unawaited(
         _activateSharedWebAudioTrack(currentTrack, progress: _playbackProgress),
       );
@@ -787,6 +929,12 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
                   initialProgress: _resumeProgress,
                   onVideoControllerChanged: _onVideoControllerChanged,
                   renderVideo: true,
+                  useExternalAudioPlayback: _playbackMode == PlaybackMode.audio,
+                  externalIsPlaying: _isPlaying,
+                  externalProgress: _playbackProgress,
+                  onExternalPlay: _mobileAudioPlaybackService.play,
+                  onExternalPause: _mobileAudioPlaybackService.pause,
+                  onExternalSeekToFraction: _seekMobileAudioPlayback,
                 ),
               ),
           ],
