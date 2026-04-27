@@ -26,6 +26,18 @@ class ApiClient {
 
   String _url(String path) => '$baseUrl$path';
 
+  Future<void> checkConnection() async {
+    final res = await http
+        .get(Uri.parse(_url(ApiEndpoints.albums)))
+        .timeout(const Duration(seconds: 5));
+    if (res.statusCode != 200) {
+      throw ApiException(
+        'Failed to connect to Mikudrome server',
+        res.statusCode,
+      );
+    }
+  }
+
   // --- Tracks ---
 
   Future<List<Track>> getTracks() async {
