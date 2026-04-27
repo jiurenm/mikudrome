@@ -5,12 +5,12 @@ import '../theme/app_theme.dart';
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({
     super.key,
-    required this.serverUrl,
+    this.serverUrl,
     this.onEditServer,
     this.onRescan,
   });
 
-  final String serverUrl;
+  final String? serverUrl;
   final VoidCallback? onEditServer;
   final VoidCallback? onRescan;
 
@@ -29,7 +29,7 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           subtitle: Text(
-            serverUrl,
+            serverUrl ?? '未配置',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(color: AppTheme.textMuted),

@@ -56,7 +56,8 @@ class _AppRootState extends State<AppRoot> {
 
     switch (state.status) {
       case AppConfigStatus.configured:
-        return widget.homeBuilder?.call(context) ?? const LibraryHomeScreen();
+        return widget.homeBuilder?.call(context) ??
+            LibraryHomeScreen(appConfigController: widget.controller);
       case AppConfigStatus.loading:
         if (state.serverUrl != null) {
           return ServerSetupScreen(controller: widget.controller);
@@ -67,7 +68,8 @@ class _AppRootState extends State<AppRoot> {
         if (widget.requiresServerSetup) {
           return ServerSetupScreen(controller: widget.controller);
         }
-        return widget.homeBuilder?.call(context) ?? const LibraryHomeScreen();
+        return widget.homeBuilder?.call(context) ??
+            LibraryHomeScreen(appConfigController: widget.controller);
     }
   }
 }

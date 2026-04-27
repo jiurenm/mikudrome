@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../api/api.dart';
+import '../config/app_config_controller.dart';
 import '../models/track.dart';
 import '../models/video.dart';
 import '../services/playback_storage.dart';
@@ -34,6 +35,7 @@ import '../services/web_audio_playback_controller.dart';
 import 'playlists_screen.dart';
 import 'playlist_detail_screen.dart';
 import 'favorites_screen.dart';
+import 'server_setup_screen.dart';
 
 enum PlaybackMode { video, audio }
 
@@ -41,7 +43,9 @@ enum PlaybackOrderMode { sequential, listLoop, singleLoop }
 
 /// Root screen: app shell + route-based content. Album detail is shown in-shell (sidebar stays).
 class LibraryHomeScreen extends StatefulWidget {
-  const LibraryHomeScreen({super.key});
+  const LibraryHomeScreen({super.key, this.appConfigController});
+
+  final AppConfigController? appConfigController;
 
   @override
   State<LibraryHomeScreen> createState() => _LibraryHomeScreenState();
@@ -266,10 +270,88 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     });
   }
 
-  void _showMobileRescanPlaceholder() {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('媒体库重扫将在设置中接入')));
+  void _openMobileRescan() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: 'mobile-library-rescan'),
+        builder: (routeContext) => Scaffold(
+          appBar: AppBar(title: const Text('媒体库重扫')),
+          body: SafeArea(
+            child: MobileMoreScreen(
+              onNavigate: (route) {
+                Navigator.of(routeContext).pop();
+                if (!mounted) return;
+                setState(() {
+                  _mobileTab = switch (route) {
+                    ShellRoute.favorites ||
+                    ShellRoute.playlists => MobileAppTab.myMusic,
+                    _ => MobileAppTab.discover,
+                  };
+                  _route = route;
+                  _clearSelection();
+                  _showPlayer = false;
+                });
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _clearPlaybackForServerChange() {
+    setState(() {
+      _playerQueue = const [];
+      _playerIndex = 0;
+      _showPlayer = false;
+      _isPlaying = false;
+      _playbackProgress = 0;
+      _elapsedLabel = '--:--';
+      _durationLabel = '--:--';
+      _playerContextLabel = 'Now Playing';
+      _playbackMode = PlaybackMode.audio;
+      _playbackOrderMode = PlaybackOrderMode.sequential;
+      _playerTogglePlayback = _noopTogglePlayback;
+      _playerSeekToFraction = _noopSeekToFraction;
+      _restoredNotStarted = false;
+      _resumeProgress = null;
+      _videoController = null;
+      _lastSavedProgress = 0;
+    });
+    PlaybackStorage.clear();
+  }
+
+  Future<void> _openServerSettings() async {
+    final controller = widget.appConfigController;
+    if (controller == null) return;
+
+    var previousStatus = controller.state.status;
+    var clearedForSave = false;
+    late final VoidCallback listener;
+    listener = () {
+      final state = controller.state;
+      if (!clearedForSave &&
+          previousStatus == AppConfigStatus.loading &&
+          state.status == AppConfigStatus.configured) {
+        clearedForSave = true;
+        _clearPlaybackForServerChange();
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+      }
+      previousStatus = state.status;
+    };
+
+    controller.addListener(listener);
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => ServerSetupScreen(controller: controller),
+        ),
+      );
+    } finally {
+      controller.removeListener(listener);
+    }
   }
 
   PlaybackMode _defaultModeForTrack(Track track) =>
@@ -656,7 +738,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
               ),
         settings: SettingsScreen(
           serverUrl: ApiConfig.defaultBaseUrl,
-          onRescan: _showMobileRescanPlaceholder,
+          onEditServer: _openServerSettings,
+          onRescan: _openMobileRescan,
         ),
       );
 
