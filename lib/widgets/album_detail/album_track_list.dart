@@ -33,7 +33,7 @@ class AlbumTrackList extends StatelessWidget {
   Widget build(BuildContext context) {
     final mobile = isMobile(context);
     return SliverPadding(
-      padding: EdgeInsets.fromLTRB(mobile ? 8 : 40, 0, mobile ? 8 : 40, 80),
+      padding: EdgeInsets.fromLTRB(mobile ? 16 : 40, 0, mobile ? 12 : 40, 80),
       sliver: SliverList(
         delegate: SliverChildListDelegate([
           if (isMultiDisc)
@@ -46,42 +46,41 @@ class AlbumTrackList extends StatelessWidget {
                   child: Text(
                     'Disc $discNumber',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: AppTheme.mikuGreen,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      color: AppTheme.mikuGreen,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
                 if (!mobile) const _TrackListHeader(),
                 ...discTracks.asMap().entries.map(
-                      (e) => AlbumTrackRow(
-                        index: e.key + 1,
-                        track: e.value,
-                        baseUrl: baseUrl,
-                        onDownloadComplete: onDownloadComplete,
-                        onPlay: () =>
-                            onPlayTrack(e.value, e.key, queue: discTracks),
-                        showTopMessage: showTopMessage,
-                        isCurrentlyPlaying:
-                            e.value.id == currentPlayingTrackId,
-                        isPlaying: e.value.id == currentPlayingTrackId && isPlaying,
-                      ),
-                    ),
-              ];
-            })
-          else ...[
-            if (!mobile) const _TrackListHeader(),
-            ...tracks.asMap().entries.map(
                   (e) => AlbumTrackRow(
                     index: e.key + 1,
                     track: e.value,
                     baseUrl: baseUrl,
                     onDownloadComplete: onDownloadComplete,
-                    onPlay: () => onPlayTrack(e.value, e.key),
+                    onPlay: () =>
+                        onPlayTrack(e.value, e.key, queue: discTracks),
                     showTopMessage: showTopMessage,
                     isCurrentlyPlaying: e.value.id == currentPlayingTrackId,
                     isPlaying: e.value.id == currentPlayingTrackId && isPlaying,
                   ),
                 ),
+              ];
+            })
+          else ...[
+            if (!mobile) const _TrackListHeader(),
+            ...tracks.asMap().entries.map(
+              (e) => AlbumTrackRow(
+                index: e.key + 1,
+                track: e.value,
+                baseUrl: baseUrl,
+                onDownloadComplete: onDownloadComplete,
+                onPlay: () => onPlayTrack(e.value, e.key),
+                showTopMessage: showTopMessage,
+                isCurrentlyPlaying: e.value.id == currentPlayingTrackId,
+                isPlaying: e.value.id == currentPlayingTrackId && isPlaying,
+              ),
+            ),
           ],
         ]),
       ),
@@ -106,16 +105,20 @@ class _TrackListHeader extends StatelessWidget {
           ),
           Expanded(
             flex: 3,
-            child:
-                Center(child: Text('Tags / MV', style: _headerStyle(context))),
+            child: Center(
+              child: Text('Tags / MV', style: _headerStyle(context)),
+            ),
           ),
           const SizedBox(width: 16),
           SizedBox(
             width: 48,
             child: Align(
               alignment: Alignment.centerRight,
-              child:
-                  Icon(Icons.access_time, size: 12, color: AppTheme.textMuted),
+              child: Icon(
+                Icons.access_time,
+                size: 12,
+                color: AppTheme.textMuted,
+              ),
             ),
           ),
         ],
@@ -124,8 +127,8 @@ class _TrackListHeader extends StatelessWidget {
   }
 
   TextStyle? _headerStyle(BuildContext context) {
-    return Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: AppTheme.textMuted,
-        );
+    return Theme.of(
+      context,
+    ).textTheme.labelSmall?.copyWith(color: AppTheme.textMuted);
   }
 }

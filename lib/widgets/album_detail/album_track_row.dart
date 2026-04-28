@@ -9,8 +9,8 @@ import '../add_to_playlist_sheet.dart';
 import '../animated_equalizer.dart';
 import 'download_mv_dialog.dart';
 
-typedef AlbumTopMessage = void Function(String message,
-    {required bool isError});
+typedef AlbumTopMessage =
+    void Function(String message, {required bool isError});
 
 class AlbumTrackRow extends StatefulWidget {
   const AlbumTrackRow({
@@ -118,10 +118,12 @@ class _AlbumTrackRowState extends State<AlbumTrackRow> {
     final index = widget.index;
     final isActive = widget.isCurrentlyPlaying;
     final mobile = isMobile(context);
-    final numberColor =
-        isActive || _hovering ? AppTheme.mikuGreen : AppTheme.textMuted;
-    final titleColor =
-        isActive || _hovering ? AppTheme.mikuGreen : AppTheme.textPrimary;
+    final numberColor = isActive || _hovering
+        ? AppTheme.mikuGreen
+        : AppTheme.textMuted;
+    final titleColor = isActive || _hovering
+        ? AppTheme.mikuGreen
+        : AppTheme.textPrimary;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
@@ -134,26 +136,32 @@ class _AlbumTrackRowState extends State<AlbumTrackRow> {
           hoverColor: Colors.white.withValues(alpha: 0.03),
           child: Padding(
             padding: EdgeInsets.symmetric(
-                horizontal: mobile ? 8 : 16, vertical: mobile ? 10 : 14),
+              horizontal: mobile ? 0 : 16,
+              vertical: mobile ? 8 : 14,
+            ),
             child: Row(
               children: [
                 SizedBox(
-                  width: 28,
+                  width: mobile ? 24 : 28,
                   child: isActive
                       ? (widget.isPlaying
-                          ? AnimatedEqualizer(
-                              size: 18, color: AppTheme.mikuGreen)
-                          : const Icon(Icons.graphic_eq,
-                              size: 18, color: AppTheme.mikuGreen))
+                            ? AnimatedEqualizer(
+                                size: mobile ? 16 : 18,
+                                color: AppTheme.mikuGreen,
+                              )
+                            : const Icon(
+                                Icons.graphic_eq,
+                                size: 18,
+                                color: AppTheme.mikuGreen,
+                              ))
                       : Text(
                           track.displayNumber(index),
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: numberColor,
-                                  ),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodyMedium?.copyWith(color: numberColor),
                         ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: mobile ? 10 : 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -164,20 +172,23 @@ class _AlbumTrackRowState extends State<AlbumTrackRow> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: titleColor,
-                              fontWeight: FontWeight.w700,
-                            ),
+                          color: titleColor,
+                          fontSize: mobile ? 14 : null,
+                          fontWeight: mobile
+                              ? FontWeight.w600
+                              : FontWeight.w700,
+                        ),
                       ),
                       if (_vocalLine.isNotEmpty)
                         Text(
                           _vocalLine,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: AppTheme.textMuted,
-                                    fontSize: 12,
-                                  ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: AppTheme.textMuted,
+                                fontSize: 12,
+                              ),
                         ),
                     ],
                   ),
@@ -191,26 +202,30 @@ class _AlbumTrackRowState extends State<AlbumTrackRow> {
                         if (track.hasVideo)
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: AppTheme.mikuGreen.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(4),
                               border: Border.all(
-                                color:
-                                    AppTheme.mikuGreen.withValues(alpha: 0.2),
+                                color: AppTheme.mikuGreen.withValues(
+                                  alpha: 0.2,
+                                ),
                               ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.movie,
-                                    size: 10, color: AppTheme.mikuGreen),
+                                const Icon(
+                                  Icons.movie,
+                                  size: 10,
+                                  color: AppTheme.mikuGreen,
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
                                   'LOCAL MV',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelSmall
+                                  style: Theme.of(context).textTheme.labelSmall
                                       ?.copyWith(
                                         color: AppTheme.mikuGreen,
                                         fontSize: 8,
@@ -225,19 +240,19 @@ class _AlbumTrackRowState extends State<AlbumTrackRow> {
                         if (track.format.isNotEmpty)
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFF1F2937),
                               borderRadius: BorderRadius.circular(4),
                               border: Border.all(
-                                  color:
-                                      Colors.white.withValues(alpha: 0.05)),
+                                color: Colors.white.withValues(alpha: 0.05),
+                              ),
                             ),
                             child: Text(
                               track.format,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelSmall
+                              style: Theme.of(context).textTheme.labelSmall
                                   ?.copyWith(
                                     color: const Color(0xFF9CA3AF),
                                     fontSize: 8,
@@ -250,30 +265,38 @@ class _AlbumTrackRowState extends State<AlbumTrackRow> {
                             const SizedBox(width: 12),
                           IconButton(
                             onPressed: () => _openDownloadMvDialog(context),
-                            style: IconButton.styleFrom(
-                              foregroundColor: AppTheme.textMuted,
-                              minimumSize: Size.zero,
-                              padding: const EdgeInsets.all(8),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ).copyWith(
-                              overlayColor:
-                                  MaterialStateProperty.resolveWith<Color?>(
-                                      (states) {
-                                if (states.contains(MaterialState.hovered)) {
-                                  return AppTheme.textPrimary
-                                      .withValues(alpha: 0.08);
-                                }
-                                return null;
-                              }),
-                              foregroundColor:
-                                  MaterialStateProperty.resolveWith<Color>(
-                                      (states) {
-                                if (states.contains(MaterialState.hovered)) {
-                                  return AppTheme.textPrimary;
-                                }
-                                return AppTheme.textMuted;
-                              }),
-                            ),
+                            style:
+                                IconButton.styleFrom(
+                                  foregroundColor: AppTheme.textMuted,
+                                  minimumSize: Size.zero,
+                                  padding: const EdgeInsets.all(8),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ).copyWith(
+                                  overlayColor:
+                                      MaterialStateProperty.resolveWith<Color?>(
+                                        (states) {
+                                          if (states.contains(
+                                            MaterialState.hovered,
+                                          )) {
+                                            return AppTheme.textPrimary
+                                                .withValues(alpha: 0.08);
+                                          }
+                                          return null;
+                                        },
+                                      ),
+                                  foregroundColor:
+                                      MaterialStateProperty.resolveWith<Color>((
+                                        states,
+                                      ) {
+                                        if (states.contains(
+                                          MaterialState.hovered,
+                                        )) {
+                                          return AppTheme.textPrimary;
+                                        }
+                                        return AppTheme.textMuted;
+                                      }),
+                                ),
                             icon: const Icon(Icons.download, size: 20),
                           ),
                         ],
@@ -282,7 +305,7 @@ class _AlbumTrackRowState extends State<AlbumTrackRow> {
                   ),
                 SizedBox(width: mobile ? 8 : 16),
                 SizedBox(
-                  width: 48,
+                  width: mobile ? 42 : 48,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
@@ -316,7 +339,7 @@ class _AlbumTrackRowState extends State<AlbumTrackRow> {
                     onPressed: () => _showTrackMenu(context),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(
-                      minWidth: 32,
+                      minWidth: 28,
                       minHeight: 32,
                     ),
                   ),
