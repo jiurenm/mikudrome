@@ -1055,6 +1055,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         discover: DiscoverScreen(
           currentSection: _discoverSectionForRoute(_route),
           onSectionChanged: _navigateMobileDiscover,
+          showSectionTabs:
+              _selectedAlbum == null &&
+              _selectedProducer == null &&
+              _selectedVocalist == null,
           child: mainContent,
         ),
         myMusic: showMyMusicContent

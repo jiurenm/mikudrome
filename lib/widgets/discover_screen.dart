@@ -14,11 +14,13 @@ class DiscoverScreen extends StatefulWidget {
     this.currentSection,
     this.onSectionChanged,
     this.child,
+    this.showSectionTabs = true,
   });
 
   final DiscoverSection? currentSection;
   final ValueChanged<DiscoverSection>? onSectionChanged;
   final Widget? child;
+  final bool showSectionTabs;
 
   @override
   State<DiscoverScreen> createState() => _DiscoverScreenState();
@@ -53,38 +55,39 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-          child: SegmentedButton<DiscoverSection>(
-            segments: const [
-              ButtonSegment<DiscoverSection>(
-                value: DiscoverSection.albums,
-                icon: Icon(Icons.album_outlined),
-                label: Text('专辑'),
-              ),
-              ButtonSegment<DiscoverSection>(
-                value: DiscoverSection.producers,
-                icon: Icon(Icons.person_search_outlined),
-                label: Text('P主'),
-              ),
-              ButtonSegment<DiscoverSection>(
-                value: DiscoverSection.vocalists,
-                icon: Icon(Icons.record_voice_over_outlined),
-                label: Text('歌手'),
-              ),
-              ButtonSegment<DiscoverSection>(
-                value: DiscoverSection.mv,
-                icon: Icon(Icons.movie_outlined),
-                label: Text('MV'),
-              ),
-            ],
-            selected: {_currentSection},
-            showSelectedIcon: false,
-            onSelectionChanged: _selectSection,
-            style: _segmentStyle(),
+        if (widget.showSectionTabs)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            child: SegmentedButton<DiscoverSection>(
+              segments: const [
+                ButtonSegment<DiscoverSection>(
+                  value: DiscoverSection.albums,
+                  icon: Icon(Icons.album_outlined),
+                  label: Text('专辑'),
+                ),
+                ButtonSegment<DiscoverSection>(
+                  value: DiscoverSection.producers,
+                  icon: Icon(Icons.person_search_outlined),
+                  label: Text('P主'),
+                ),
+                ButtonSegment<DiscoverSection>(
+                  value: DiscoverSection.vocalists,
+                  icon: Icon(Icons.record_voice_over_outlined),
+                  label: Text('歌手'),
+                ),
+                ButtonSegment<DiscoverSection>(
+                  value: DiscoverSection.mv,
+                  icon: Icon(Icons.movie_outlined),
+                  label: Text('MV'),
+                ),
+              ],
+              selected: {_currentSection},
+              showSelectedIcon: false,
+              onSelectionChanged: _selectSection,
+              style: _segmentStyle(),
+            ),
           ),
-        ),
         Expanded(child: widget.child ?? _defaultContent()),
       ],
     );
