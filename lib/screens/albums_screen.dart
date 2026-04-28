@@ -10,14 +10,11 @@ import 'album_detail_screen.dart';
 /// Main library: album grid from API (media/Artist/Album), with search.
 /// When [onAlbumTap] is set, opens album in-shell; otherwise pushes a new route.
 class AlbumsScreen extends StatefulWidget {
-  AlbumsScreen({
-    super.key,
-    this.baseUrl = '',
-    this.onAlbumTap,
-  });
+  AlbumsScreen({super.key, this.baseUrl = '', this.onAlbumTap});
 
   final String baseUrl;
-  String get _effectiveBaseUrl => baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
+  String get _effectiveBaseUrl =>
+      baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
   final ValueChanged<Album>? onAlbumTap;
 
   @override
@@ -42,7 +39,9 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
       _error = null;
     });
     try {
-      final list = await ApiClient(baseUrl: widget._effectiveBaseUrl).getAlbums();
+      final list = await ApiClient(
+        baseUrl: widget._effectiveBaseUrl,
+      ).getAlbums();
       setState(() {
         _albums = list;
         _loading = false;
@@ -68,16 +67,16 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
         Text(
           'Albums',
           style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                color: AppTheme.textPrimary,
-                fontWeight: FontWeight.w700,
-              ),
+            color: AppTheme.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
           'Total $albumCount albums',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppTheme.textMuted,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AppTheme.textMuted),
         ),
       ],
     );
@@ -117,9 +116,11 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
     final q = _searchController.text.trim().toLowerCase();
     if (q.isEmpty) return _albums;
     return _albums
-        .where((a) =>
-            a.title.toLowerCase().contains(q) ||
-            a.producerName.toLowerCase().contains(q))
+        .where(
+          (a) =>
+              a.title.toLowerCase().contains(q) ||
+              a.producerName.toLowerCase().contains(q),
+        )
         .toList();
   }
 
@@ -151,9 +152,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
             padding: EdgeInsets.all(isMobile(context) ? 12.0 : 32.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(context, list.length),
-              ],
+              children: [_buildHeader(context, list.length)],
             ),
           ),
         ),
@@ -174,29 +173,26 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
                     crossAxisSpacing: 12,
                     childAspectRatio: 0.80,
                   ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final album = list[index];
-                      return _AlbumCard(
-                        album: album,
-                        onTap: () {
-                          if (widget.onAlbumTap != null) {
-                            widget.onAlbumTap!(album);
-                          } else {
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (context) => AlbumDetailScreen(
-                                  album: album,
-                                  baseUrl: widget._effectiveBaseUrl,
-                                ),
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final album = list[index];
+                    return _AlbumCard(
+                      album: album,
+                      onTap: () {
+                        if (widget.onAlbumTap != null) {
+                          widget.onAlbumTap!(album);
+                        } else {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (context) => AlbumDetailScreen(
+                                album: album,
+                                baseUrl: widget._effectiveBaseUrl,
                               ),
-                            );
-                          }
-                        },
-                      );
-                    },
-                    childCount: list.length,
-                  ),
+                            ),
+                          );
+                        }
+                      },
+                    );
+                  }, childCount: list.length),
                 ),
               ),
       ],
@@ -240,6 +236,7 @@ class _AlbumCardState extends State<_AlbumCard> {
                         borderRadius: BorderRadius.circular(8),
                         child: Image.network(
                           widget.album.coverUrl,
+                          headers: ApiConfig.defaultHeaders,
                           width: size,
                           height: size,
                           fit: BoxFit.cover,
@@ -248,7 +245,11 @@ class _AlbumCardState extends State<_AlbumCard> {
                             width: size,
                             height: size,
                             color: AppTheme.cardBg,
-                            child: const Icon(Icons.album, color: AppTheme.textMuted, size: 48),
+                            child: const Icon(
+                              Icons.album,
+                              color: AppTheme.textMuted,
+                              size: 48,
+                            ),
                           ),
                         ),
                       ),
@@ -278,31 +279,31 @@ class _AlbumCardState extends State<_AlbumCard> {
                 },
               ),
             ),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 20,
-            child: AutoScrollText(
-              text: widget.album.title,
-              style: Theme.of(context).textTheme.titleMedium!.copyWith(
-                    color: AppTheme.textPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
-              active: _hovering,
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 20,
+              child: AutoScrollText(
+                text: widget.album.title,
+                style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                  color: AppTheme.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+                active: _hovering,
+              ),
             ),
-          ),
-          const SizedBox(height: 2),
-          SizedBox(
-            height: 16,
-            child: AutoScrollText(
-              text: widget.album.producerName,
-              style: Theme.of(context).textTheme.bodySmall!.copyWith(
-                    color: AppTheme.textMuted,
-                  ),
-              active: _hovering,
+            const SizedBox(height: 2),
+            SizedBox(
+              height: 16,
+              child: AutoScrollText(
+                text: widget.album.producerName,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall!.copyWith(color: AppTheme.textMuted),
+                active: _hovering,
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }

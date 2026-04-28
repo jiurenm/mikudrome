@@ -63,7 +63,7 @@ void main() {
   ) async {
     final controller = AppConfigController(
       store: _FakeStore(serverUrl: 'http://192.168.1.10:8080'),
-      connectionTester: (_) async => throw Exception('offline'),
+      connectionTester: (_, {serverCookie}) async => throw Exception('offline'),
     );
     await controller.load();
 
@@ -94,9 +94,13 @@ class _FakeStore implements AppConfigStore {
   _FakeStore({this.serverUrl});
 
   String? serverUrl;
+  String? _serverCookie;
 
   @override
   Future<String?> loadServerUrl() async => serverUrl;
+
+  @override
+  Future<String?> loadServerCookie() async => _serverCookie;
 
   @override
   Future<void> saveServerUrl(String serverUrl) async {
@@ -104,7 +108,17 @@ class _FakeStore implements AppConfigStore {
   }
 
   @override
+  Future<void> saveServerCookie(String? serverCookie) async {
+    _serverCookie = serverCookie;
+  }
+
+  @override
   Future<void> clearServerUrl() async {
     serverUrl = null;
+  }
+
+  @override
+  Future<void> clearServerCookie() async {
+    _serverCookie = null;
   }
 }

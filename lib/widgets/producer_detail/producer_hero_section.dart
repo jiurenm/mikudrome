@@ -21,8 +21,9 @@ class ProducerHeroSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avatarUrl =
-        ApiClient(baseUrl: baseUrl).producerAvatarUrl(producer.id);
+    final avatarUrl = ApiClient(
+      baseUrl: baseUrl,
+    ).producerAvatarUrl(producer.id);
     final mobile = isMobile(context);
     final avatarSize = mobile ? 120.0 : 192.0;
 
@@ -46,11 +47,15 @@ class ProducerHeroSection extends StatelessWidget {
       child: ClipOval(
         child: Image.network(
           avatarUrl,
+          headers: ApiConfig.defaultHeaders,
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => Container(
             color: AppTheme.cardBg,
-            child: Icon(Icons.person,
-                color: AppTheme.textMuted, size: mobile ? 40 : 64),
+            child: Icon(
+              Icons.person,
+              color: AppTheme.textMuted,
+              size: mobile ? 40 : 64,
+            ),
           ),
         ),
       ),
@@ -59,19 +64,19 @@ class ProducerHeroSection extends StatelessWidget {
     Widget nameWidget = SelectableText(
       producer.name,
       style: Theme.of(context).textTheme.displayLarge?.copyWith(
-            color: AppTheme.textPrimary,
-            fontWeight: FontWeight.w900,
-            letterSpacing: -1,
-            fontSize: mobile ? 24 : null,
-          ),
+        color: AppTheme.textPrimary,
+        fontWeight: FontWeight.w900,
+        letterSpacing: -1,
+        fontSize: mobile ? 24 : null,
+      ),
       textAlign: mobile ? TextAlign.center : TextAlign.start,
     );
 
     Widget statsWidget = Text(
       '${producer.trackCount} Tracks across ${producer.albumCount} Albums in your NAS.',
-      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppTheme.textMuted,
-          ),
+      style: Theme.of(
+        context,
+      ).textTheme.bodySmall?.copyWith(color: AppTheme.textMuted),
       textAlign: mobile ? TextAlign.center : TextAlign.start,
     );
 
@@ -81,10 +86,10 @@ class ProducerHeroSection extends StatelessWidget {
         backgroundColor: AppTheme.mikuGreen,
         foregroundColor: Colors.black,
         padding: EdgeInsets.symmetric(
-            horizontal: mobile ? 24 : 32, vertical: mobile ? 14 : 18),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
+          horizontal: mobile ? 24 : 32,
+          vertical: mobile ? 14 : 18,
         ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       ),
       icon: const Icon(Icons.shuffle),
       label: const Text('SHUFFLE CREATOR'),
@@ -97,6 +102,7 @@ class ProducerHeroSection extends StatelessWidget {
             width: double.infinity,
             child: Image.network(
               avatarUrl,
+              headers: ApiConfig.defaultHeaders,
               fit: BoxFit.cover,
               height: 200,
               errorBuilder: (_, __, ___) =>
@@ -141,6 +147,7 @@ class ProducerHeroSection extends StatelessWidget {
           width: double.infinity,
           child: Image.network(
             avatarUrl,
+            headers: ApiConfig.defaultHeaders,
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => Container(color: AppTheme.cardBg),
           ),

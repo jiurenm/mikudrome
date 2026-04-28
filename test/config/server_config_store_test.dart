@@ -13,6 +13,7 @@ void main() {
     final store = ServerConfigStore();
 
     expect(await store.loadServerUrl(), isNull);
+    expect(await store.loadServerCookie(), isNull);
   });
 
   test('normalizes stored server url on load', () async {
@@ -45,6 +46,23 @@ void main() {
     expect(await store.loadServerUrl(), 'http://192.168.1.10:8080');
   });
 
+  test('saves trimmed server cookie', () async {
+    final store = ServerConfigStore();
+
+    await store.saveServerCookie(' session=abc; token=xyz ');
+
+    expect(await store.loadServerCookie(), 'session=abc; token=xyz');
+  });
+
+  test('clears blank server cookie', () async {
+    final store = ServerConfigStore();
+    await store.saveServerCookie('session=abc');
+
+    await store.saveServerCookie('   ');
+
+    expect(await store.loadServerCookie(), isNull);
+  });
+
   test('clears server url', () async {
     final store = ServerConfigStore();
     await store.saveServerUrl('http://192.168.1.10:8080');
@@ -52,5 +70,14 @@ void main() {
     await store.clearServerUrl();
 
     expect(await store.loadServerUrl(), isNull);
+  });
+
+  test('clears server cookie', () async {
+    final store = ServerConfigStore();
+    await store.saveServerCookie('session=abc');
+
+    await store.clearServerCookie();
+
+    expect(await store.loadServerCookie(), isNull);
   });
 }

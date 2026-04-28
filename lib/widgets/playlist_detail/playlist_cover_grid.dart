@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../api/config.dart';
 import '../../models/playlist_item.dart';
 import '../../theme/app_theme.dart';
 
@@ -127,7 +128,9 @@ class _PlaylistCoverCardState extends State<_PlaylistCoverCard> {
               ),
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                  color: borderColor, width: widget.selected ? 1.6 : 1),
+                color: borderColor,
+                width: widget.selected ? 1.6 : 1,
+              ),
               boxShadow: [
                 if (widget.selected)
                   BoxShadow(
@@ -150,6 +153,7 @@ class _PlaylistCoverCardState extends State<_PlaylistCoverCard> {
                           borderRadius: BorderRadius.circular(14),
                           child: Image.network(
                             _coverUrl,
+                            headers: ApiConfig.defaultHeaders,
                             fit: BoxFit.cover,
                             cacheWidth: 420,
                             cacheHeight: 420,
@@ -157,6 +161,7 @@ class _PlaylistCoverCardState extends State<_PlaylistCoverCard> {
                               if (item.track.albumId > 0) {
                                 return Image.network(
                                   '${widget.baseUrl}/api/albums/${item.track.albumId}/cover',
+                                  headers: ApiConfig.defaultHeaders,
                                   fit: BoxFit.cover,
                                   cacheWidth: 420,
                                   cacheHeight: 420,
@@ -194,8 +199,9 @@ class _PlaylistCoverCardState extends State<_PlaylistCoverCard> {
                               end: Alignment.bottomCenter,
                               colors: [
                                 Colors.black.withValues(
-                                  alpha:
-                                      _hovering || widget.selected ? 0.04 : 0,
+                                  alpha: _hovering || widget.selected
+                                      ? 0.04
+                                      : 0,
                                 ),
                                 Colors.black.withValues(
                                   alpha: _hovering || widget.selected
@@ -226,9 +232,7 @@ class _PlaylistCoverCardState extends State<_PlaylistCoverCard> {
                                 item.track.title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
+                                style: Theme.of(context).textTheme.bodySmall
                                     ?.copyWith(
                                       color: Colors.white,
                                       fontWeight: FontWeight.w700,
@@ -247,8 +251,9 @@ class _PlaylistCoverCardState extends State<_PlaylistCoverCard> {
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
-                                  color: AppTheme.mikuGreen
-                                      .withValues(alpha: 0.45),
+                                  color: AppTheme.mikuGreen.withValues(
+                                    alpha: 0.45,
+                                  ),
                                   width: 2,
                                 ),
                               ),
@@ -294,11 +299,11 @@ class _PlaylistCoverCardState extends State<_PlaylistCoverCard> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: widget.selected
-                              ? AppTheme.textPrimary
-                              : AppTheme.textPrimary.withValues(alpha: 0.92),
-                          fontWeight: FontWeight.w700,
-                        ),
+                      color: widget.selected
+                          ? AppTheme.textPrimary
+                          : AppTheme.textPrimary.withValues(alpha: 0.92),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ],

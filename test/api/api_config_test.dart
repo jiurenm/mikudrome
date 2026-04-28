@@ -3,10 +3,10 @@ import 'package:mikudrome/api/api_client.dart';
 import 'package:mikudrome/api/config.dart';
 
 void main() {
-  tearDown(ApiConfig.resetRuntimeBaseUrlForTests);
+  tearDown(ApiConfig.resetRuntimeConfigForTests);
 
   test('ApiClient uses dart define default when no runtime url is set', () {
-    ApiConfig.resetRuntimeBaseUrlForTests();
+    ApiConfig.resetRuntimeConfigForTests();
 
     expect(ApiClient().baseUrl, ApiConfig.dartDefineBaseUrl);
   });
@@ -31,6 +31,27 @@ void main() {
     expect(
       ApiClient(baseUrl: 'http://example.test').baseUrl,
       'http://example.test',
+    );
+  });
+
+  test('default headers include trimmed runtime cookie when configured', () {
+    ApiConfig.setRuntimeCookie(' session=abc; token=xyz ');
+
+    expect(ApiConfig.defaultHeaders, {'Cookie': 'session=abc; token=xyz'});
+  });
+
+  test('default headers omit cookie when runtime cookie is blank', () {
+    ApiConfig.setRuntimeCookie('   ');
+
+    expect(ApiConfig.defaultHeaders, isEmpty);
+  });
+
+  test('ApiClient request headers merge cookie with content type', () {
+    ApiConfig.setRuntimeCookie('session=abc');
+
+    expect(
+      ApiClient().headersForRequest({'Content-Type': 'application/json'}),
+      {'Cookie': 'session=abc', 'Content-Type': 'application/json'},
     );
   });
 }

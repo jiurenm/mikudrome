@@ -8,14 +8,11 @@ import 'producer_detail_screen.dart';
 
 /// Producers index: grid of circular avatars + stats, alphabet scroller (miku_produce.html).
 class ProducersScreen extends StatefulWidget {
-  ProducersScreen({
-    super.key,
-    this.baseUrl = '',
-    this.onProducerTap,
-  });
+  ProducersScreen({super.key, this.baseUrl = '', this.onProducerTap});
 
   final String baseUrl;
-  String get _effectiveBaseUrl => baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
+  String get _effectiveBaseUrl =>
+      baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
   final ValueChanged<Producer>? onProducerTap;
 
   @override
@@ -39,7 +36,9 @@ class _ProducersScreenState extends State<ProducersScreen> {
       _error = null;
     });
     try {
-      final list = await ApiClient(baseUrl: widget._effectiveBaseUrl).getProducers();
+      final list = await ApiClient(
+        baseUrl: widget._effectiveBaseUrl,
+      ).getProducers();
       setState(() {
         _producers = list;
         _loading = false;
@@ -66,9 +65,9 @@ class _ProducersScreenState extends State<ProducersScreen> {
             children: [
               Text(
                 _error!,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppTheme.textMuted),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
@@ -88,7 +87,12 @@ class _ProducersScreenState extends State<ProducersScreen> {
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
-            padding: EdgeInsets.fromLTRB(edgePad, edgePad, edgePad, mobile ? 24 : 48),
+            padding: EdgeInsets.fromLTRB(
+              edgePad,
+              edgePad,
+              edgePad,
+              mobile ? 24 : 48,
+            ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -99,17 +103,17 @@ class _ProducersScreenState extends State<ProducersScreen> {
                     Text(
                       'Producers',
                       style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                            color: AppTheme.textPrimary,
-                            fontWeight: FontWeight.w900,
-                          ),
+                        color: AppTheme.textPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Text.rich(
                       TextSpan(
                         text: 'Tracking ',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AppTheme.textMuted,
-                            ),
+                          color: AppTheme.textMuted,
+                        ),
                         children: [
                           TextSpan(
                             text: '${list.length}',
@@ -127,9 +131,15 @@ class _ProducersScreenState extends State<ProducersScreen> {
                     _IndexChar(label: 'A'),
                     _IndexChar(label: 'B'),
                     _IndexChar(label: 'C'),
-                    Text('...', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                    Text(
+                      '...',
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 10),
+                    ),
                     _IndexChar(label: 'P'),
-                    Text('...', style: TextStyle(color: AppTheme.textMuted, fontSize: 10)),
+                    Text(
+                      '...',
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 10),
+                    ),
                     _IndexChar(label: 'Z'),
                     _IndexChar(label: '#'),
                   ],
@@ -147,30 +157,27 @@ class _ProducersScreenState extends State<ProducersScreen> {
               crossAxisSpacing: mobile ? 12 : 40,
               childAspectRatio: 0.75,
             ),
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final p = list[index];
-                return _ProducerCard(
-                  producer: p,
-                  baseUrl: widget._effectiveBaseUrl,
-                  onTap: () {
-                    if (widget.onProducerTap != null) {
-                      widget.onProducerTap!(p);
-                    } else {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (context) => ProducerDetailScreen(
-                            producer: p,
-                            baseUrl: widget._effectiveBaseUrl,
-                          ),
+            delegate: SliverChildBuilderDelegate((context, index) {
+              final p = list[index];
+              return _ProducerCard(
+                producer: p,
+                baseUrl: widget._effectiveBaseUrl,
+                onTap: () {
+                  if (widget.onProducerTap != null) {
+                    widget.onProducerTap!(p);
+                  } else {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (context) => ProducerDetailScreen(
+                          producer: p,
+                          baseUrl: widget._effectiveBaseUrl,
                         ),
-                      );
-                    }
-                  },
-                );
-              },
-              childCount: list.length,
-            ),
+                      ),
+                    );
+                  }
+                },
+              );
+            }, childCount: list.length),
           ),
         ),
       ],
@@ -193,9 +200,9 @@ class _IndexChar extends StatelessWidget {
         child: Text(
           label,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: active ? AppTheme.mikuGreen : AppTheme.textMuted,
-                fontWeight: FontWeight.w700,
-              ),
+            color: active ? AppTheme.mikuGreen : AppTheme.textMuted,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     );
@@ -231,10 +238,7 @@ class _ProducerCardState extends State<_ProducerCard> {
             height: 128,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.transparent,
-                width: 4,
-              ),
+              border: Border.all(color: Colors.transparent, width: 4),
               boxShadow: [
                 BoxShadow(
                   color: AppTheme.mikuGreen.withValues(alpha: 0),
@@ -250,7 +254,10 @@ class _ProducerCardState extends State<_ProducerCard> {
                 customBorder: const CircleBorder(),
                 child: ClipOval(
                   child: Image.network(
-                    ApiClient(baseUrl: widget.baseUrl).producerAvatarUrl(widget.producer.id),
+                    ApiClient(
+                      baseUrl: widget.baseUrl,
+                    ).producerAvatarUrl(widget.producer.id),
+                    headers: ApiConfig.defaultHeaders,
                     width: 128,
                     height: 128,
                     fit: BoxFit.cover,
@@ -258,7 +265,11 @@ class _ProducerCardState extends State<_ProducerCard> {
                       width: 128,
                       height: 128,
                       color: AppTheme.cardBg,
-                      child: const Icon(Icons.person, color: AppTheme.textMuted, size: 48),
+                      child: const Icon(
+                        Icons.person,
+                        color: AppTheme.textMuted,
+                        size: 48,
+                      ),
                     ),
                   ),
                 ),
@@ -269,9 +280,9 @@ class _ProducerCardState extends State<_ProducerCard> {
           Text(
             widget.producer.name,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppTheme.textPrimary,
-                  fontWeight: FontWeight.w700,
-                ),
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -283,9 +294,9 @@ class _ProducerCardState extends State<_ProducerCard> {
               Text(
                 '${widget.producer.trackCount} TRACKS',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppTheme.textMuted,
-                      fontSize: 9,
-                    ),
+                  color: AppTheme.textMuted,
+                  fontSize: 9,
+                ),
               ),
               const SizedBox(width: 4),
               Container(
@@ -300,9 +311,9 @@ class _ProducerCardState extends State<_ProducerCard> {
               Text(
                 '${widget.producer.albumCount} ALBUMS',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppTheme.textMuted,
-                      fontSize: 9,
-                    ),
+                  color: AppTheme.textMuted,
+                  fontSize: 9,
+                ),
               ),
             ],
           ),

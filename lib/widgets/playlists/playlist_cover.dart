@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../api/config.dart';
 import '../../api/api_client.dart';
 import '../../models/playlist.dart';
 import '../../theme/app_theme.dart';
@@ -21,6 +22,7 @@ class PlaylistCover extends StatelessWidget {
     if (playlist.coverPath.isNotEmpty) {
       return Image.network(
         client.baseUrl + playlist.coverPath,
+        headers: ApiConfig.defaultHeaders,
         width: size,
         height: size,
         fit: BoxFit.cover,
@@ -32,7 +34,9 @@ class PlaylistCover extends StatelessWidget {
     final trackIds = playlist.coverTrackIds;
     final albumIds = playlist.coverAlbumIds;
     if (trackIds.isEmpty) return _fallbackIcon();
-    if (trackIds.length == 1) return _singleCover(trackIds[0], albumIds.isNotEmpty ? albumIds[0] : 0);
+    if (trackIds.length == 1) {
+      return _singleCover(trackIds[0], albumIds.isNotEmpty ? albumIds[0] : 0);
+    }
     if (trackIds.length == 2) return _twoCover(trackIds, albumIds);
     if (trackIds.length == 3) return _threeCover(trackIds, albumIds);
     return _fourCover(trackIds, albumIds);
@@ -43,13 +47,18 @@ class PlaylistCover extends StatelessWidget {
       width: size,
       height: size,
       color: AppTheme.mikuGreen.withValues(alpha: 0.1),
-      child: Icon(Icons.queue_music, size: size * 0.4, color: AppTheme.mikuGreen),
+      child: Icon(
+        Icons.queue_music,
+        size: size * 0.4,
+        color: AppTheme.mikuGreen,
+      ),
     );
   }
 
   Widget _singleCover(int trackId, int albumId) {
     return Image.network(
       client.streamThumbUrl(trackId),
+      headers: ApiConfig.defaultHeaders,
       width: size,
       height: size,
       fit: BoxFit.cover,
@@ -58,6 +67,7 @@ class PlaylistCover extends StatelessWidget {
         if (albumId > 0) {
           return Image.network(
             client.albumCoverUrl(albumId.toString()),
+            headers: ApiConfig.defaultHeaders,
             width: size,
             height: size,
             fit: BoxFit.cover,
@@ -75,8 +85,12 @@ class PlaylistCover extends StatelessWidget {
       height: size,
       child: Row(
         children: [
-          Expanded(child: _coverTile(ids[0], albumIds.isNotEmpty ? albumIds[0] : 0)),
-          Expanded(child: _coverTile(ids[1], albumIds.length > 1 ? albumIds[1] : 0)),
+          Expanded(
+            child: _coverTile(ids[0], albumIds.isNotEmpty ? albumIds[0] : 0),
+          ),
+          Expanded(
+            child: _coverTile(ids[1], albumIds.length > 1 ? albumIds[1] : 0),
+          ),
         ],
       ),
     );
@@ -88,12 +102,24 @@ class PlaylistCover extends StatelessWidget {
       height: size,
       child: Row(
         children: [
-          Expanded(child: _coverTile(ids[0], albumIds.isNotEmpty ? albumIds[0] : 0)),
+          Expanded(
+            child: _coverTile(ids[0], albumIds.isNotEmpty ? albumIds[0] : 0),
+          ),
           Expanded(
             child: Column(
               children: [
-                Expanded(child: _coverTile(ids[1], albumIds.length > 1 ? albumIds[1] : 0)),
-                Expanded(child: _coverTile(ids[2], albumIds.length > 2 ? albumIds[2] : 0)),
+                Expanded(
+                  child: _coverTile(
+                    ids[1],
+                    albumIds.length > 1 ? albumIds[1] : 0,
+                  ),
+                ),
+                Expanded(
+                  child: _coverTile(
+                    ids[2],
+                    albumIds.length > 2 ? albumIds[2] : 0,
+                  ),
+                ),
               ],
             ),
           ),
@@ -111,16 +137,36 @@ class PlaylistCover extends StatelessWidget {
           Expanded(
             child: Row(
               children: [
-                Expanded(child: _coverTile(ids[0], albumIds.isNotEmpty ? albumIds[0] : 0)),
-                Expanded(child: _coverTile(ids[1], albumIds.length > 1 ? albumIds[1] : 0)),
+                Expanded(
+                  child: _coverTile(
+                    ids[0],
+                    albumIds.isNotEmpty ? albumIds[0] : 0,
+                  ),
+                ),
+                Expanded(
+                  child: _coverTile(
+                    ids[1],
+                    albumIds.length > 1 ? albumIds[1] : 0,
+                  ),
+                ),
               ],
             ),
           ),
           Expanded(
             child: Row(
               children: [
-                Expanded(child: _coverTile(ids[2], albumIds.length > 2 ? albumIds[2] : 0)),
-                Expanded(child: _coverTile(ids[3], albumIds.length > 3 ? albumIds[3] : 0)),
+                Expanded(
+                  child: _coverTile(
+                    ids[2],
+                    albumIds.length > 2 ? albumIds[2] : 0,
+                  ),
+                ),
+                Expanded(
+                  child: _coverTile(
+                    ids[3],
+                    albumIds.length > 3 ? albumIds[3] : 0,
+                  ),
+                ),
               ],
             ),
           ),
@@ -132,12 +178,14 @@ class PlaylistCover extends StatelessWidget {
   Widget _coverTile(int trackId, int albumId) {
     return Image.network(
       client.streamThumbUrl(trackId),
+      headers: ApiConfig.defaultHeaders,
       fit: BoxFit.cover,
       errorBuilder: (_, __, ___) {
         // Fallback to album cover if MV thumb not available
         if (albumId > 0) {
           return Image.network(
             client.albumCoverUrl(albumId.toString()),
+            headers: ApiConfig.defaultHeaders,
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => Container(color: AppTheme.cardBg),
           );

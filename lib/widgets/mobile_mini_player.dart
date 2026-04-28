@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../api/config.dart';
 import '../models/track.dart';
 import '../theme/app_theme.dart';
 
@@ -39,6 +40,7 @@ class MobileMiniPlayer extends StatelessWidget {
                       borderRadius: BorderRadius.circular(6),
                       child: Image.network(
                         coverUrl,
+                        headers: ApiConfig.defaultHeaders,
                         width: 48,
                         height: 48,
                         fit: BoxFit.cover,
@@ -46,8 +48,11 @@ class MobileMiniPlayer extends StatelessWidget {
                           width: 48,
                           height: 48,
                           color: AppTheme.cardBg,
-                          child: const Icon(Icons.music_note,
-                              color: AppTheme.textMuted, size: 24),
+                          child: const Icon(
+                            Icons.music_note,
+                            color: AppTheme.textMuted,
+                            size: 24,
+                          ),
                         ),
                       ),
                     ),
@@ -95,8 +100,9 @@ class MobileMiniPlayer extends StatelessWidget {
             LinearProgressIndicator(
               value: progress.clamp(0.0, 1.0),
               backgroundColor: Colors.transparent,
-              valueColor:
-                  const AlwaysStoppedAnimation<Color>(AppTheme.mikuGreen),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                AppTheme.mikuGreen,
+              ),
               minHeight: 2,
             ),
           ],

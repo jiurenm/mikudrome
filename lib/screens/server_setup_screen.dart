@@ -13,6 +13,7 @@ class ServerSetupScreen extends StatefulWidget {
 
 class _ServerSetupScreenState extends State<ServerSetupScreen> {
   late final TextEditingController _urlController;
+  late final TextEditingController _cookieController;
   String? _localError;
 
   @override
@@ -20,6 +21,9 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
     super.initState();
     _urlController = TextEditingController(
       text: widget.controller.state.serverUrl ?? '',
+    );
+    _cookieController = TextEditingController(
+      text: widget.controller.state.serverCookie ?? '',
     );
   }
 
@@ -29,12 +33,14 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
     if (oldWidget.controller != widget.controller &&
         widget.controller.state.serverUrl != null) {
       _urlController.text = widget.controller.state.serverUrl!;
+      _cookieController.text = widget.controller.state.serverCookie ?? '';
     }
   }
 
   @override
   void dispose() {
     _urlController.dispose();
+    _cookieController.dispose();
     super.dispose();
   }
 
@@ -44,7 +50,10 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
     });
 
     try {
-      await widget.controller.saveServerUrl(_urlController.text);
+      await widget.controller.saveServerConfig(
+        serverUrl: _urlController.text,
+        serverCookie: _cookieController.text,
+      );
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -83,11 +92,22 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                     controller: _urlController,
                     enabled: !isSaving,
                     keyboardType: TextInputType.url,
-                    textInputAction: TextInputAction.done,
+                    textInputAction: TextInputAction.next,
                     decoration: InputDecoration(
                       labelText: 'Server URL',
                       hintText: 'http://192.168.1.10:8080',
                       errorText: errorText,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _cookieController,
+                    enabled: !isSaving,
+                    keyboardType: TextInputType.text,
+                    textInputAction: TextInputAction.done,
+                    decoration: const InputDecoration(
+                      labelText: 'Cookie（可选）',
+                      hintText: 'a=b; c=d',
                     ),
                     onSubmitted: isSaving ? null : (_) => _save(),
                   ),

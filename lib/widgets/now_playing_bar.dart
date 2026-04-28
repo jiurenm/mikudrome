@@ -53,7 +53,8 @@ class NowPlayingBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.footerBg,
         border: Border(
-            top: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
+          top: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+        ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       child: Row(
@@ -74,9 +75,9 @@ class NowPlayingBar extends StatelessWidget {
         : currentTrack.vocalLine;
     final coverUrl = currentTrack != null
         ? (currentTrack.coverOverrideUrl ??
-            (currentTrack.albumId > 0
-                ? ApiClient().albumCoverUrl(currentTrack.albumId.toString())
-                : ''))
+              (currentTrack.albumId > 0
+                  ? ApiClient().albumCoverUrl(currentTrack.albumId.toString())
+                  : ''))
         : '';
 
     return SizedBox(
@@ -97,9 +98,9 @@ class NowPlayingBar extends StatelessWidget {
                     Text(
                       title,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: AppTheme.textPrimary,
-                            fontWeight: FontWeight.w700,
-                          ),
+                        color: AppTheme.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -107,12 +108,12 @@ class NowPlayingBar extends StatelessWidget {
                     Text(
                       subtitle,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: currentTrack != null
-                                ? accentColor
-                                : AppTheme.textMuted,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 0,
-                          ),
+                        color: currentTrack != null
+                            ? accentColor
+                            : AppTheme.textMuted,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -152,6 +153,7 @@ class NowPlayingBar extends StatelessWidget {
               )
             : Image.network(
                 coverUrl,
+                headers: ApiConfig.defaultHeaders,
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => Icon(
                   playbackMode == PlaybackMode.video
@@ -174,8 +176,11 @@ class NowPlayingBar extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               IconButton(
-                icon: const Icon(Icons.skip_previous,
-                    color: AppTheme.textPrimary, size: 28),
+                icon: const Icon(
+                  Icons.skip_previous,
+                  color: AppTheme.textPrimary,
+                  size: 28,
+                ),
                 onPressed: _hasTrack ? onPrevious : null,
               ),
               const SizedBox(width: 16),
@@ -198,8 +203,11 @@ class NowPlayingBar extends StatelessWidget {
               ),
               const SizedBox(width: 16),
               IconButton(
-                icon: const Icon(Icons.skip_next,
-                    color: AppTheme.textPrimary, size: 28),
+                icon: const Icon(
+                  Icons.skip_next,
+                  color: AppTheme.textPrimary,
+                  size: 28,
+                ),
                 onPressed: _hasTrack ? onNext : null,
               ),
             ],
@@ -209,9 +217,9 @@ class NowPlayingBar extends StatelessWidget {
             children: [
               Text(
                 elapsedLabel,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppTheme.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(color: AppTheme.textMuted),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -226,8 +234,9 @@ class NowPlayingBar extends StatelessWidget {
                       image: AssetImage('lib/assets/thumb.png'),
                       size: 12,
                     ),
-                    overlayShape:
-                        const RoundSliderOverlayShape(overlayRadius: 10),
+                    overlayShape: const RoundSliderOverlayShape(
+                      overlayRadius: 10,
+                    ),
                     padding: EdgeInsets.zero,
                   ),
                   child: Slider(
@@ -239,9 +248,9 @@ class NowPlayingBar extends StatelessWidget {
               const SizedBox(width: 12),
               Text(
                 durationLabel,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppTheme.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(color: AppTheme.textMuted),
               ),
             ],
           ),
@@ -250,14 +259,19 @@ class NowPlayingBar extends StatelessWidget {
     );
   }
 
-  Future<void> _showQueuePopover(BuildContext buttonContext, Color accentColor) async {
+  Future<void> _showQueuePopover(
+    BuildContext buttonContext,
+    Color accentColor,
+  ) async {
     if (!_hasTrack || queue.isEmpty || onSelectQueueTrack == null) return;
     final buttonBox = buttonContext.findRenderObject();
     final overlayBox = Overlay.of(buttonContext).context.findRenderObject();
     if (buttonBox is! RenderBox || overlayBox is! RenderBox) return;
 
-    final buttonOffset =
-        buttonBox.localToGlobal(Offset.zero, ancestor: overlayBox);
+    final buttonOffset = buttonBox.localToGlobal(
+      Offset.zero,
+      ancestor: overlayBox,
+    );
     final buttonRect = Rect.fromLTWH(
       buttonOffset.dx,
       buttonOffset.dy,
@@ -270,9 +284,13 @@ class NowPlayingBar extends StatelessWidget {
     final estimatedMenuHeight = 45.0 + contentHeight;
     final desiredTop = buttonRect.top - estimatedMenuHeight - 8;
     final top = desiredTop.clamp(
-        12.0, overlayBox.size.height - estimatedMenuHeight - 12);
-    final left = (buttonRect.right - menuWidth)
-        .clamp(12.0, overlayBox.size.width - menuWidth - 12);
+      12.0,
+      overlayBox.size.height - estimatedMenuHeight - 12,
+    );
+    final left = (buttonRect.right - menuWidth).clamp(
+      12.0,
+      overlayBox.size.width - menuWidth - 12,
+    );
 
     final selectedIndex = await showMenu<int>(
       context: buttonContext,
@@ -286,8 +304,10 @@ class NowPlayingBar extends StatelessWidget {
         left,
         top,
         (overlayBox.size.width - left - menuWidth).clamp(12.0, double.infinity),
-        (overlayBox.size.height - top - estimatedMenuHeight)
-            .clamp(12.0, double.infinity),
+        (overlayBox.size.height - top - estimatedMenuHeight).clamp(
+          12.0,
+          double.infinity,
+        ),
       ),
       items: [
         PopupMenuItem<int>(
@@ -298,16 +318,16 @@ class NowPlayingBar extends StatelessWidget {
               Text(
                 '当前队列',
                 style: Theme.of(buttonContext).textTheme.titleMedium?.copyWith(
-                      color: AppTheme.textPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  color: AppTheme.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const Spacer(),
               Text(
                 '${queue.length} tracks',
-                style: Theme.of(buttonContext).textTheme.labelSmall?.copyWith(
-                      color: AppTheme.textMuted,
-                    ),
+                style: Theme.of(
+                  buttonContext,
+                ).textTheme.labelSmall?.copyWith(color: AppTheme.textMuted),
               ),
             ],
           ),
@@ -337,8 +357,8 @@ class NowPlayingBar extends StatelessWidget {
                               Icon(
                                 isCurrent
                                     ? (isPlaying
-                                        ? Icons.graphic_eq
-                                        : Icons.pause)
+                                          ? Icons.graphic_eq
+                                          : Icons.pause)
                                     : Icons.music_note,
                                 color: isCurrent
                                     ? accentColor
@@ -388,9 +408,7 @@ class NowPlayingBar extends StatelessWidget {
                                 style: Theme.of(buttonContext)
                                     .textTheme
                                     .labelSmall
-                                    ?.copyWith(
-                                      color: AppTheme.textMuted,
-                                    ),
+                                    ?.copyWith(color: AppTheme.textMuted),
                               ),
                             ],
                           ),
@@ -415,10 +433,11 @@ class NowPlayingBar extends StatelessWidget {
     final activeLabel = !_hasTrack
         ? 'IDLE'
         : playbackMode == PlaybackMode.video
-            ? 'MV ACTIVE'
-            : 'AUDIO ACTIVE';
-    final activeIcon =
-        playbackMode == PlaybackMode.video ? Icons.movie : Icons.music_note;
+        ? 'MV ACTIVE'
+        : 'AUDIO ACTIVE';
+    final activeIcon = playbackMode == PlaybackMode.video
+        ? Icons.movie
+        : Icons.music_note;
 
     return SizedBox(
       width: MediaQuery.sizeOf(context).width * 0.25,
@@ -427,8 +446,9 @@ class NowPlayingBar extends StatelessWidget {
         children: [
           Builder(
             builder: (buttonContext) => IconButton(
-              onPressed:
-                  _hasTrack ? () => _showQueuePopover(buttonContext, accentColor) : null,
+              onPressed: _hasTrack
+                  ? () => _showQueuePopover(buttonContext, accentColor)
+                  : null,
               tooltip: '当前列表',
               icon: const Icon(Icons.queue_music, size: 22),
               color: AppTheme.textMuted,
@@ -454,11 +474,10 @@ class NowPlayingBar extends StatelessWidget {
               Text(
                 activeLabel,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color:
-                          _hasTrack ? accentColor : AppTheme.textMuted,
-                      fontSize: 8,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  color: _hasTrack ? accentColor : AppTheme.textMuted,
+                  fontSize: 8,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           ),

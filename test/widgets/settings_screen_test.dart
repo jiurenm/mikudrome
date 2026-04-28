@@ -10,6 +10,7 @@ void main() {
         home: Scaffold(
           body: SettingsScreen(
             serverUrl: 'http://192.168.1.10:8080',
+            hasServerCookie: true,
             onEditServer: () => edited = true,
           ),
         ),
@@ -17,6 +18,7 @@ void main() {
     );
 
     expect(find.text('http://192.168.1.10:8080'), findsOneWidget);
+    expect(find.text('Cookie 已配置'), findsOneWidget);
 
     await tester.tap(find.text('服务器'));
     expect(edited, isTrue);
@@ -33,5 +35,13 @@ void main() {
     await tester.tap(find.text('媒体库重扫'));
 
     expect(rescanned, isTrue);
+  });
+
+  testWidgets('shows missing cookie status', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: SettingsScreen())),
+    );
+
+    expect(find.text('Cookie 未配置'), findsOneWidget);
   });
 }

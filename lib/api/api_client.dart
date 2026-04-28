@@ -18,17 +18,32 @@ import 'endpoints.dart';
 /// Single entry point for all backend API communication.
 /// Use [ApiConfig.defaultBaseUrl] or pass a custom [baseUrl].
 class ApiClient {
-  ApiClient({String? baseUrl}) : _baseUrl = baseUrl;
+  ApiClient({String? baseUrl, String? serverCookie})
+    : _baseUrl = baseUrl,
+      _serverCookie = serverCookie?.trim();
 
   final String? _baseUrl;
+  final String? _serverCookie;
 
   String get baseUrl => _baseUrl ?? ApiConfig.defaultBaseUrl;
 
   String _url(String path) => '$baseUrl$path';
 
+  Map<String, String> headersForRequest([Map<String, String>? headers]) {
+    final merged = <String, String>{...ApiConfig.defaultHeaders};
+    final cookie = _serverCookie;
+    if (cookie != null && cookie.isNotEmpty) {
+      merged['Cookie'] = cookie;
+    }
+    if (headers != null) {
+      merged.addAll(headers);
+    }
+    return merged;
+  }
+
   Future<void> checkConnection() async {
     final res = await http
-        .get(Uri.parse(_url(ApiEndpoints.albums)))
+        .get(Uri.parse(_url(ApiEndpoints.albums)), headers: headersForRequest())
         .timeout(const Duration(seconds: 5));
     if (res.statusCode != 200) {
       throw ApiException(
@@ -41,7 +56,10 @@ class ApiClient {
   // --- Tracks ---
 
   Future<List<Track>> getTracks() async {
-    final res = await http.get(Uri.parse(_url(ApiEndpoints.tracks)));
+    final res = await http.get(
+      Uri.parse(_url(ApiEndpoints.tracks)),
+      headers: headersForRequest(),
+    );
     if (res.statusCode != 200) {
       throw ApiException('Failed to load tracks', res.statusCode);
     }
@@ -51,7 +69,10 @@ class ApiClient {
   }
 
   Future<Track?> getTrack(int id) async {
-    final res = await http.get(Uri.parse(_url(ApiEndpoints.track(id))));
+    final res = await http.get(
+      Uri.parse(_url(ApiEndpoints.track(id))),
+      headers: headersForRequest(),
+    );
     if (res.statusCode == 404) return null;
     if (res.statusCode != 200) {
       throw ApiException('Failed to load track', res.statusCode);
@@ -67,7 +88,7 @@ class ApiClient {
   ) async {
     final res = await http.post(
       Uri.parse(_url(ApiEndpoints.trackDownloadMv(trackId))),
-      headers: {'Content-Type': 'application/json'},
+      headers: headersForRequest({'Content-Type': 'application/json'}),
       body: jsonEncode({'url': url}),
     );
     if (res.statusCode != 200) {
@@ -84,7 +105,10 @@ class ApiClient {
   // --- Albums ---
 
   Future<List<Album>> getAlbums() async {
-    final res = await http.get(Uri.parse(_url(ApiEndpoints.albums)));
+    final res = await http.get(
+      Uri.parse(_url(ApiEndpoints.albums)),
+      headers: headersForRequest(),
+    );
     if (res.statusCode != 200) {
       throw ApiException('Failed to load albums', res.statusCode);
     }
@@ -98,7 +122,10 @@ class ApiClient {
   // --- Producers ---
 
   Future<List<Producer>> getProducers() async {
-    final res = await http.get(Uri.parse(_url(ApiEndpoints.producers)));
+    final res = await http.get(
+      Uri.parse(_url(ApiEndpoints.producers)),
+      headers: headersForRequest(),
+    );
     if (res.statusCode != 200) {
       throw ApiException('Failed to load producers', res.statusCode);
     }
@@ -111,7 +138,10 @@ class ApiClient {
 
   Future<({Producer producer, List<Track> tracks, List<Album> albums})?>
   getProducer(int id) async {
-    final res = await http.get(Uri.parse(_url(ApiEndpoints.producer(id))));
+    final res = await http.get(
+      Uri.parse(_url(ApiEndpoints.producer(id))),
+      headers: headersForRequest(),
+    );
     if (res.statusCode == 404) return null;
     if (res.statusCode != 200) {
       throw ApiException('Failed to load producer', res.statusCode);
@@ -131,7 +161,10 @@ class ApiClient {
   }
 
   Future<({Album album, List<Track> tracks})?> getAlbum(String id) async {
-    final res = await http.get(Uri.parse(_url(ApiEndpoints.album(id))));
+    final res = await http.get(
+      Uri.parse(_url(ApiEndpoints.album(id))),
+      headers: headersForRequest(),
+    );
     if (res.statusCode == 404) return null;
     if (res.statusCode != 200) {
       throw ApiException('Failed to load album', res.statusCode);
@@ -149,7 +182,10 @@ class ApiClient {
   // --- Vocalists ---
 
   Future<List<Vocalist>> getVocalists() async {
-    final res = await http.get(Uri.parse(_url(ApiEndpoints.vocalists)));
+    final res = await http.get(
+      Uri.parse(_url(ApiEndpoints.vocalists)),
+      headers: headersForRequest(),
+    );
     if (res.statusCode != 200) {
       throw ApiException('Failed to load vocalists', res.statusCode);
     }
@@ -164,6 +200,7 @@ class ApiClient {
   getVocalistTracks(String name) async {
     final res = await http.get(
       Uri.parse(_url(ApiEndpoints.vocalistTracks(name))),
+      headers: headersForRequest(),
     );
     if (res.statusCode == 404) return null;
     if (res.statusCode != 200) {
@@ -188,7 +225,10 @@ class ApiClient {
   // --- Videos ---
 
   Future<List<Video>> getVideos() async {
-    final res = await http.get(Uri.parse(_url(ApiEndpoints.videos)));
+    final res = await http.get(
+      Uri.parse(_url(ApiEndpoints.videos)),
+      headers: headersForRequest(),
+    );
     if (res.statusCode != 200) {
       throw ApiException('Failed to load videos', res.statusCode);
     }
@@ -198,7 +238,10 @@ class ApiClient {
   }
 
   Future<Video?> getVideo(int id) async {
-    final res = await http.get(Uri.parse(_url(ApiEndpoints.video(id))));
+    final res = await http.get(
+      Uri.parse(_url(ApiEndpoints.video(id))),
+      headers: headersForRequest(),
+    );
     if (res.statusCode == 404) return null;
     if (res.statusCode != 200) {
       throw ApiException('Failed to load video', res.statusCode);
@@ -239,7 +282,10 @@ class ApiClient {
   // --- Library tasks ---
 
   Future<LibraryTaskStatus> startLibraryRescan() async {
-    final res = await http.post(Uri.parse(_url(ApiEndpoints.libraryRescan)));
+    final res = await http.post(
+      Uri.parse(_url(ApiEndpoints.libraryRescan)),
+      headers: headersForRequest(),
+    );
     if (res.statusCode != 202) {
       throw ApiException('Failed to start library rescan', res.statusCode);
     }
@@ -251,6 +297,7 @@ class ApiClient {
   Future<LibraryTaskStatus> getLibraryRescanStatus() async {
     final res = await http.get(
       Uri.parse(_url(ApiEndpoints.libraryRescanStatus)),
+      headers: headersForRequest(),
     );
     if (res.statusCode != 200) {
       throw ApiException(
@@ -266,7 +313,10 @@ class ApiClient {
   // --- Favorites ---
 
   Future<List<Track>> listFavorites() async {
-    final res = await http.get(Uri.parse(_url(ApiEndpoints.favorites)));
+    final res = await http.get(
+      Uri.parse(_url(ApiEndpoints.favorites)),
+      headers: headersForRequest(),
+    );
     if (res.statusCode != 200) {
       throw ApiException('Failed to load favorites', res.statusCode);
     }
@@ -278,6 +328,7 @@ class ApiClient {
   Future<void> addFavorite(int trackId) async {
     final res = await http.post(
       Uri.parse(_url(ApiEndpoints.favorite(trackId))),
+      headers: headersForRequest(),
     );
     if (res.statusCode != 204) {
       throw ApiException('Failed to add favorite', res.statusCode);
@@ -287,6 +338,7 @@ class ApiClient {
   Future<void> removeFavorite(int trackId) async {
     final res = await http.delete(
       Uri.parse(_url(ApiEndpoints.favorite(trackId))),
+      headers: headersForRequest(),
     );
     if (res.statusCode != 204) {
       throw ApiException('Failed to remove favorite', res.statusCode);
@@ -296,7 +348,10 @@ class ApiClient {
   // --- Playlists ---
 
   Future<List<Playlist>> listPlaylists() async {
-    final res = await http.get(Uri.parse(_url(ApiEndpoints.playlists)));
+    final res = await http.get(
+      Uri.parse(_url(ApiEndpoints.playlists)),
+      headers: headersForRequest(),
+    );
     if (res.statusCode != 200) {
       throw ApiException('Failed to load playlists', res.statusCode);
     }
@@ -310,7 +365,7 @@ class ApiClient {
   Future<Playlist> createPlaylist(String name) async {
     final res = await http.post(
       Uri.parse(_url(ApiEndpoints.playlists)),
-      headers: {'Content-Type': 'application/json'},
+      headers: headersForRequest({'Content-Type': 'application/json'}),
       body: jsonEncode({'name': name}),
     );
     if (res.statusCode != 201) {
@@ -320,7 +375,10 @@ class ApiClient {
   }
 
   Future<Playlist?> getPlaylist(int id) async {
-    final res = await http.get(Uri.parse(_url(ApiEndpoints.playlist(id))));
+    final res = await http.get(
+      Uri.parse(_url(ApiEndpoints.playlist(id))),
+      headers: headersForRequest(),
+    );
     if (res.statusCode == 404) return null;
     if (res.statusCode != 200) {
       throw ApiException('Failed to load playlist', res.statusCode);
@@ -331,7 +389,7 @@ class ApiClient {
   Future<void> renamePlaylist(int id, String name) async {
     final res = await http.patch(
       Uri.parse(_url(ApiEndpoints.playlist(id))),
-      headers: {'Content-Type': 'application/json'},
+      headers: headersForRequest({'Content-Type': 'application/json'}),
       body: jsonEncode({'name': name}),
     );
     if (res.statusCode != 200 && res.statusCode != 204) {
@@ -340,7 +398,10 @@ class ApiClient {
   }
 
   Future<void> deletePlaylist(int id) async {
-    final res = await http.delete(Uri.parse(_url(ApiEndpoints.playlist(id))));
+    final res = await http.delete(
+      Uri.parse(_url(ApiEndpoints.playlist(id))),
+      headers: headersForRequest(),
+    );
     if (res.statusCode != 204) {
       throw ApiException('Failed to delete playlist', res.statusCode);
     }
@@ -349,6 +410,7 @@ class ApiClient {
   Future<List<Track>> getPlaylistTracks(int id) async {
     final res = await http.get(
       Uri.parse(_url(ApiEndpoints.playlistTracks(id))),
+      headers: headersForRequest(),
     );
     if (res.statusCode != 200) {
       throw ApiException('Failed to load playlist tracks', res.statusCode);
@@ -359,7 +421,10 @@ class ApiClient {
   }
 
   Future<PlaylistDetailData> getPlaylistItems(int id) async {
-    final res = await http.get(Uri.parse(_url(ApiEndpoints.playlistItems(id))));
+    final res = await http.get(
+      Uri.parse(_url(ApiEndpoints.playlistItems(id))),
+      headers: headersForRequest(),
+    );
     if (res.statusCode != 200) {
       throw ApiException('Failed to load playlist items', res.statusCode);
     }
@@ -372,7 +437,7 @@ class ApiClient {
   Future<int> addTracksToPlaylist(int id, List<int> trackIds) async {
     final res = await http.post(
       Uri.parse(_url(ApiEndpoints.playlistTracks(id))),
-      headers: {'Content-Type': 'application/json'},
+      headers: headersForRequest({'Content-Type': 'application/json'}),
       body: jsonEncode({'track_ids': trackIds}),
     );
     if (res.statusCode != 200 && res.statusCode != 201) {
@@ -387,7 +452,7 @@ class ApiClient {
       'DELETE',
       Uri.parse(_url(ApiEndpoints.playlistTracks(id))),
     );
-    req.headers['Content-Type'] = 'application/json';
+    req.headers.addAll(headersForRequest({'Content-Type': 'application/json'}));
     req.body = jsonEncode({'track_ids': trackIds});
     final streamedRes = await req.send();
     final res = await http.Response.fromStream(streamedRes);
@@ -402,7 +467,7 @@ class ApiClient {
   Future<void> reorderPlaylist(int id, List<int> orderedTrackIds) async {
     final res = await http.put(
       Uri.parse(_url(ApiEndpoints.playlistTracksOrder(id))),
-      headers: {'Content-Type': 'application/json'},
+      headers: headersForRequest({'Content-Type': 'application/json'}),
       body: jsonEncode({'track_ids': orderedTrackIds}),
     );
     if (res.statusCode != 204) {
@@ -416,7 +481,7 @@ class ApiClient {
   ) async {
     final res = await http.put(
       Uri.parse(_url(ApiEndpoints.playlistItemsOrder(id))),
-      headers: {'Content-Type': 'application/json'},
+      headers: headersForRequest({'Content-Type': 'application/json'}),
       body: jsonEncode(PlaylistItemsOrderInput(groups: groups).toJson()),
     );
     if (res.statusCode != 204) {
@@ -427,7 +492,7 @@ class ApiClient {
   Future<PlaylistGroup> createPlaylistGroup(int id, String title) async {
     final res = await http.post(
       Uri.parse(_url(ApiEndpoints.playlistGroups(id))),
-      headers: {'Content-Type': 'application/json'},
+      headers: headersForRequest({'Content-Type': 'application/json'}),
       body: jsonEncode(PlaylistGroupTitleInput(title: title).toJson()),
     );
     if (res.statusCode != 201) {
@@ -443,7 +508,7 @@ class ApiClient {
   ) async {
     final res = await http.patch(
       Uri.parse(_url(ApiEndpoints.playlistGroup(playlistId, groupId))),
-      headers: {'Content-Type': 'application/json'},
+      headers: headersForRequest({'Content-Type': 'application/json'}),
       body: jsonEncode(PlaylistGroupTitleInput(title: title).toJson()),
     );
     if (res.statusCode != 204) {
@@ -454,6 +519,7 @@ class ApiClient {
   Future<void> deletePlaylistGroup(int playlistId, int groupId) async {
     final res = await http.delete(
       Uri.parse(_url(ApiEndpoints.playlistGroup(playlistId, groupId))),
+      headers: headersForRequest(),
     );
     if (res.statusCode != 204) {
       throw ApiException('Failed to delete playlist group', res.statusCode);
@@ -467,7 +533,7 @@ class ApiClient {
   ) async {
     final res = await http.patch(
       Uri.parse(_url(ApiEndpoints.playlistItem(playlistId, itemId))),
-      headers: {'Content-Type': 'application/json'},
+      headers: headersForRequest({'Content-Type': 'application/json'}),
       body: jsonEncode(request.toJson()),
     );
     if (res.statusCode != 204) {
@@ -486,6 +552,7 @@ class ApiClient {
       'PUT',
       Uri.parse(_url(ApiEndpoints.playlistItemCover(playlistId, itemId))),
     );
+    request.headers.addAll(headersForRequest());
     request.files.add(
       http.MultipartFile.fromBytes(
         'file',
@@ -507,6 +574,7 @@ class ApiClient {
   Future<void> clearPlaylistItemCover(int playlistId, int itemId) async {
     final res = await http.delete(
       Uri.parse(_url(ApiEndpoints.playlistItemCover(playlistId, itemId))),
+      headers: headersForRequest(),
     );
     if (res.statusCode != 204) {
       throw ApiException('Failed to clear playlist item cover', res.statusCode);
@@ -523,6 +591,7 @@ class ApiClient {
       'PUT',
       Uri.parse(_url(ApiEndpoints.playlistCover(id))),
     );
+    request.headers.addAll(headersForRequest());
     request.files.add(
       http.MultipartFile.fromBytes(
         'file',
@@ -541,6 +610,7 @@ class ApiClient {
   Future<void> clearPlaylistCover(int id) async {
     final res = await http.delete(
       Uri.parse(_url(ApiEndpoints.playlistCover(id))),
+      headers: headersForRequest(),
     );
     if (res.statusCode != 204) {
       throw ApiException('Failed to clear playlist cover', res.statusCode);

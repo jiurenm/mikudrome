@@ -15,19 +15,48 @@ abstract final class ApiConfig {
   );
 
   static String? _runtimeBaseUrl;
+  static String? _runtimeCookie;
 
   static String get defaultBaseUrl => _runtimeBaseUrl ?? dartDefineBaseUrl;
 
+  static Map<String, String> get defaultHeaders {
+    final cookie = _runtimeCookie;
+    if (cookie == null || cookie.isEmpty) {
+      return const {};
+    }
+    return {'Cookie': cookie};
+  }
+
   static void setRuntimeBaseUrl(String serverUrl) {
     _runtimeBaseUrl = normalizeServerUrl(serverUrl);
+  }
+
+  static void setRuntimeCookie(String? serverCookie) {
+    final trimmed = serverCookie?.trim() ?? '';
+    _runtimeCookie = trimmed.isEmpty ? null : trimmed;
   }
 
   static void clearRuntimeBaseUrl() {
     _runtimeBaseUrl = null;
   }
 
+  static void clearRuntimeCookie() {
+    _runtimeCookie = null;
+  }
+
+  static void clearRuntimeConfig() {
+    clearRuntimeBaseUrl();
+    clearRuntimeCookie();
+  }
+
   @visibleForTesting
   static void resetRuntimeBaseUrlForTests() {
     _runtimeBaseUrl = null;
+  }
+
+  @visibleForTesting
+  static void resetRuntimeConfigForTests() {
+    _runtimeBaseUrl = null;
+    _runtimeCookie = null;
   }
 }

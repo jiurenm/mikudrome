@@ -57,11 +57,13 @@ class _MvGalleryScreenState extends State<MvGalleryScreen> {
     final q = _searchController.text.trim().toLowerCase();
     if (q.isEmpty) return _videos;
     return _videos
-        .where((v) =>
-            v.title.toLowerCase().contains(q) ||
-            v.artist.toLowerCase().contains(q) ||
-            v.vocal.toLowerCase().contains(q) ||
-            v.composer.toLowerCase().contains(q))
+        .where(
+          (v) =>
+              v.title.toLowerCase().contains(q) ||
+              v.artist.toLowerCase().contains(q) ||
+              v.vocal.toLowerCase().contains(q) ||
+              v.composer.toLowerCase().contains(q),
+        )
         .toList();
   }
 
@@ -103,7 +105,8 @@ class _MvGalleryScreenState extends State<MvGalleryScreen> {
                       children: [
                         Text(
                           'MV Gallery',
-                          style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                          style: Theme.of(context).textTheme.displaySmall
+                              ?.copyWith(
                                 color: AppTheme.textPrimary,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -111,9 +114,8 @@ class _MvGalleryScreenState extends State<MvGalleryScreen> {
                         const SizedBox(height: 8),
                         Text(
                           'Total ${list.length} videos',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppTheme.textMuted,
-                              ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: AppTheme.textMuted),
                         ),
                       ],
                     ),
@@ -123,7 +125,11 @@ class _MvGalleryScreenState extends State<MvGalleryScreen> {
                         controller: _searchController,
                         decoration: const InputDecoration(
                           hintText: 'Search title, artist...',
-                          prefixIcon: Icon(Icons.search, color: AppTheme.textMuted, size: 18),
+                          prefixIcon: Icon(
+                            Icons.search,
+                            color: AppTheme.textMuted,
+                            size: 18,
+                          ),
                         ),
                         style: const TextStyle(fontSize: 14),
                         onChanged: (_) => setState(() {}),
@@ -152,16 +158,13 @@ class _MvGalleryScreenState extends State<MvGalleryScreen> {
                     crossAxisSpacing: 12,
                     childAspectRatio: 1.2,
                   ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final video = list[index];
-                      return _MvCard(
-                        video: video,
-                        onTap: () => widget.onVideoTap?.call(video),
-                      );
-                    },
-                    childCount: list.length,
-                  ),
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final video = list[index];
+                    return _MvCard(
+                      video: video,
+                      onTap: () => widget.onVideoTap?.call(video),
+                    );
+                  }, childCount: list.length),
                 ),
               ),
       ],
@@ -205,6 +208,7 @@ class _MvCardState extends State<_MvCard> {
                         borderRadius: BorderRadius.circular(8),
                         child: Image.network(
                           thumbUrl,
+                          headers: ApiConfig.defaultHeaders,
                           width: c.maxWidth,
                           height: c.maxHeight,
                           fit: BoxFit.cover,
@@ -213,7 +217,11 @@ class _MvCardState extends State<_MvCard> {
                             width: c.maxWidth,
                             height: c.maxHeight,
                             color: AppTheme.cardBg,
-                            child: const Icon(Icons.videocam, color: AppTheme.textMuted, size: 48),
+                            child: const Icon(
+                              Icons.videocam,
+                              color: AppTheme.textMuted,
+                              size: 48,
+                            ),
                           ),
                         ),
                       ),
@@ -223,7 +231,10 @@ class _MvCardState extends State<_MvCard> {
                           right: 6,
                           bottom: 6,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.black.withValues(alpha: 0.75),
                               borderRadius: BorderRadius.circular(4),
@@ -271,9 +282,9 @@ class _MvCardState extends State<_MvCard> {
               child: AutoScrollText(
                 text: widget.video.displayTitle,
                 style: Theme.of(context).textTheme.titleMedium!.copyWith(
-                      color: AppTheme.textPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  color: AppTheme.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
                 active: _hovering,
               ),
             ),
@@ -282,9 +293,9 @@ class _MvCardState extends State<_MvCard> {
               height: 16,
               child: AutoScrollText(
                 text: widget.video.vocalLine,
-                style: Theme.of(context).textTheme.bodySmall!.copyWith(
-                      color: AppTheme.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall!.copyWith(color: AppTheme.textMuted),
                 active: _hovering,
               ),
             ),

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:just_audio/just_audio.dart';
 
+import '../api/config.dart';
 import '../models/track.dart';
 import 'mobile_audio_playback.dart';
 
@@ -92,7 +93,12 @@ class JustAudioMobileAudioPlaybackService
     );
     final clampedIndex = index.clamp(0, nextQueue.length - 1);
     final sources = nextAudioUrls
-        .map((url) => AudioSource.uri(Uri.parse(url)))
+        .map(
+          (url) => AudioSource.uri(
+            Uri.parse(url),
+            headers: ApiConfig.defaultHeaders,
+          ),
+        )
         .toList(growable: false);
 
     await _player.setAudioSources(

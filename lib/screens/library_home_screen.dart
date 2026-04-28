@@ -1069,6 +1069,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
               ),
         settings: SettingsScreen(
           serverUrl: ApiConfig.defaultBaseUrl,
+          hasServerCookie: ApiConfig.defaultHeaders.containsKey('Cookie'),
           onEditServer: _openServerSettings,
           onRescan: _openMobileRescan,
         ),

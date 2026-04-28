@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../api/config.dart';
 import '../../models/album.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/responsive.dart';
@@ -19,9 +20,9 @@ class DiscographyGrid extends StatelessWidget {
     if (albums.isEmpty) {
       return Text(
         'No albums',
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppTheme.textMuted,
-            ),
+        style: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(color: AppTheme.textMuted),
       );
     }
     return GridView.builder(
@@ -73,6 +74,7 @@ class _AlbumTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               child: Image.network(
                 coverUrl,
+                headers: ApiConfig.defaultHeaders,
                 width: double.infinity,
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => Container(
@@ -86,17 +88,17 @@ class _AlbumTile extends StatelessWidget {
           Text(
             title,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: AppTheme.textPrimary,
-                  fontWeight: FontWeight.w700,
-                ),
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           Text(
             subtitle,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppTheme.textMuted,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: AppTheme.textMuted),
           ),
         ],
       ),

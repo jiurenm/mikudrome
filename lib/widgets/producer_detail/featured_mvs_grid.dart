@@ -26,18 +26,18 @@ class FeaturedMvsGrid extends StatelessWidget {
           alignment: Alignment.centerRight,
           child: Text(
             '${tracks.length} tracks with local MV',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppTheme.textMuted,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: AppTheme.textMuted),
           ),
         ),
         const SizedBox(height: 24),
         if (tracks.isEmpty)
           Text(
             'No tracks with local MV',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppTheme.textMuted,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppTheme.textMuted),
           )
         else
           GridView.builder(
@@ -103,6 +103,7 @@ class _MvCardState extends State<_MvCard> {
               child: widget.imageUrl.isNotEmpty
                   ? Image.network(
                       widget.imageUrl,
+                      headers: ApiConfig.defaultHeaders,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => _placeholder(),
                     )
@@ -131,16 +132,16 @@ class _MvCardState extends State<_MvCard> {
                   Text(
                     widget.title,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   Text(
                     widget.subtitle,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AppTheme.mikuGreen,
-                          fontWeight: FontWeight.w900,
-                        ),
+                      color: AppTheme.mikuGreen,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ],
               ),
@@ -163,7 +164,7 @@ class _MvCardState extends State<_MvCard> {
   }
 
   Widget _placeholder() => Container(
-        color: AppTheme.cardBg,
-        child: const Icon(Icons.movie, color: AppTheme.textMuted, size: 48),
-      );
+    color: AppTheme.cardBg,
+    child: const Icon(Icons.movie, color: AppTheme.textMuted, size: 48),
+  );
 }

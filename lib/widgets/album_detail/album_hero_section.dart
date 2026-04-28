@@ -105,6 +105,7 @@ class AlbumHeroSection extends StatelessWidget {
                         ApiClient(
                           baseUrl: baseUrl,
                         ).producerAvatarUrl(album.producerId),
+                        headers: ApiConfig.defaultHeaders,
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => const ColoredBox(
                           color: AppTheme.cardBg,
@@ -171,6 +172,7 @@ class AlbumHeroSection extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       child: Image.network(
         album.coverUrl,
+        headers: ApiConfig.defaultHeaders,
         width: size,
         height: size,
         fit: BoxFit.cover,

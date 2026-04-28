@@ -367,6 +367,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     final controller = VideoPlayerController.networkUrl(
       Uri.parse(_mediaUrl),
+      httpHeaders: ApiConfig.defaultHeaders,
       videoPlayerOptions: VideoPlayerOptions(allowBackgroundPlayback: true),
     );
     _controller = controller;
@@ -1251,6 +1252,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                     : _albumCoverUrl.isNotEmpty
                                     ? Image.network(
                                         _albumCoverUrl,
+                                        headers: ApiConfig.defaultHeaders,
                                         fit: BoxFit.cover,
                                         errorBuilder: (_, __, ___) =>
                                             _audioPlaceholder(),

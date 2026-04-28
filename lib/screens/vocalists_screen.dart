@@ -7,10 +7,7 @@ import '../theme/vocal_theme.dart';
 import '../utils/responsive.dart';
 
 class VocalistsScreen extends StatefulWidget {
-  const VocalistsScreen({
-    super.key,
-    this.onVocalistTap,
-  });
+  const VocalistsScreen({super.key, this.onVocalistTap});
 
   final ValueChanged<Vocalist>? onVocalistTap;
 
@@ -64,9 +61,9 @@ class _VocalistsScreenState extends State<VocalistsScreen> {
             children: [
               Text(
                 _error!,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppTheme.textMuted),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
@@ -87,24 +84,28 @@ class _VocalistsScreenState extends State<VocalistsScreen> {
         SliverToBoxAdapter(
           child: Padding(
             padding: EdgeInsets.fromLTRB(
-                edgePad, edgePad, edgePad, mobile ? 24 : 48),
+              edgePad,
+              edgePad,
+              edgePad,
+              mobile ? 24 : 48,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Vocalists',
                   style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                        color: AppTheme.textPrimary,
-                        fontWeight: FontWeight.w900,
-                      ),
+                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Text.rich(
                   TextSpan(
                     text: 'Featuring ',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppTheme.textMuted,
-                        ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: AppTheme.textMuted),
                     children: [
                       TextSpan(
                         text: '${list.length}',
@@ -127,16 +128,13 @@ class _VocalistsScreenState extends State<VocalistsScreen> {
               crossAxisSpacing: mobile ? 12 : 24,
               childAspectRatio: mobile ? 1.6 : 1.8,
             ),
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final v = list[index];
-                return _VocalistCard(
-                  vocalist: v,
-                  onTap: () => widget.onVocalistTap?.call(v),
-                );
-              },
-              childCount: list.length,
-            ),
+            delegate: SliverChildBuilderDelegate((context, index) {
+              final v = list[index];
+              return _VocalistCard(
+                vocalist: v,
+                onTap: () => widget.onVocalistTap?.call(v),
+              );
+            }, childCount: list.length),
           ),
         ),
       ],
@@ -145,10 +143,7 @@ class _VocalistsScreenState extends State<VocalistsScreen> {
 }
 
 class _VocalistCard extends StatelessWidget {
-  const _VocalistCard({
-    required this.vocalist,
-    required this.onTap,
-  });
+  const _VocalistCard({required this.vocalist, required this.onTap});
 
   final Vocalist vocalist;
   final VoidCallback onTap;
@@ -170,9 +165,7 @@ class _VocalistCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             color: color.withValues(alpha: 0.08),
-            border: Border(
-              left: BorderSide(color: color, width: 3),
-            ),
+            border: Border(left: BorderSide(color: color, width: 3)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           child: Row(
@@ -180,14 +173,14 @@ class _VocalistCard extends StatelessWidget {
               CircleAvatar(
                 radius: 20,
                 backgroundColor: color.withValues(alpha: 0.2),
-                foregroundImage: NetworkImage(avatarUrl),
+                foregroundImage: NetworkImage(
+                  avatarUrl,
+                  headers: ApiConfig.defaultHeaders,
+                ),
                 onForegroundImageError: (_, __) {},
                 child: Text(
                   vocalist.name.characters.first,
-                  style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: TextStyle(color: color, fontWeight: FontWeight.w700),
                 ),
               ),
               const SizedBox(width: 10),
@@ -198,22 +191,20 @@ class _VocalistCard extends StatelessWidget {
                   children: [
                     Text(
                       vocalist.name,
-                      style:
-                          Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: color,
-                                fontWeight: FontWeight.w700,
-                              ),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: color,
+                        fontWeight: FontWeight.w700,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       '${vocalist.trackCount} tracks',
-                      style:
-                          Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: AppTheme.textMuted,
-                                fontSize: 11,
-                              ),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: AppTheme.textMuted,
+                        fontSize: 11,
+                      ),
                     ),
                   ],
                 ),

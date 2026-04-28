@@ -73,7 +73,12 @@ class _MobileAppShellState extends State<MobileAppShell> {
             widget.discover ?? const DiscoverScreen(),
             widget.myMusic ?? const MyMusicScreen(),
             widget.settings ??
-                SettingsScreen(serverUrl: ApiConfig.defaultBaseUrl),
+                SettingsScreen(
+                  serverUrl: ApiConfig.defaultBaseUrl,
+                  hasServerCookie: ApiConfig.defaultHeaders.containsKey(
+                    'Cookie',
+                  ),
+                ),
           ],
         ),
       ),

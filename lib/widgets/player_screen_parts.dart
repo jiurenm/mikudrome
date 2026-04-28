@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../api/config.dart';
 import '../models/track.dart';
 import '../screens/library_home_screen.dart';
 import '../theme/app_theme.dart';
@@ -38,10 +39,12 @@ class ModeSwitcher extends StatelessWidget {
         ),
       ],
       selected: {playbackMode},
-      onSelectionChanged: canUseVideoMode ? (selection) {
-        final nextMode = selection.first;
-        onChanged(nextMode);
-      } : null,
+      onSelectionChanged: canUseVideoMode
+          ? (selection) {
+              final nextMode = selection.first;
+              onChanged(nextMode);
+            }
+          : null,
       showSelectedIcon: false,
     );
   }
@@ -74,9 +77,9 @@ class CreditColumn extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppTheme.textMuted,
-                  letterSpacing: 1.5,
-                ),
+              color: AppTheme.textMuted,
+              letterSpacing: 1.5,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -142,8 +145,9 @@ class _AutoScrollTextState extends State<_AutoScrollText>
       maxLines: 1,
     )..layout();
 
-    final nextOverflow =
-        (textPainter.width - widget.width).clamp(0, double.infinity).toDouble();
+    final nextOverflow = (textPainter.width - widget.width)
+        .clamp(0, double.infinity)
+        .toDouble();
 
     if ((nextOverflow - _overflow).abs() < 0.5) return;
 
@@ -204,10 +208,7 @@ class _AutoScrollTextState extends State<_AutoScrollText>
     );
 
     if (_overflow <= 0 || _offsetAnimation == null) {
-      return SizedBox(
-        width: widget.width,
-        child: textWidget,
-      );
+      return SizedBox(width: widget.width, child: textWidget);
     }
 
     return SizedBox(
@@ -219,10 +220,7 @@ class _AutoScrollTextState extends State<_AutoScrollText>
             final dx = _offsetAnimation?.value ?? 0;
             return Transform.translate(
               offset: Offset(-dx, 0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: child,
-              ),
+              child: Align(alignment: Alignment.centerLeft, child: child),
             );
           },
           child: Text(
@@ -265,9 +263,9 @@ class VocalBadgeColumn extends StatelessWidget {
           Text(
             'Vocalists',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppTheme.textMuted,
-                  letterSpacing: 1.5,
-                ),
+              color: AppTheme.textMuted,
+              letterSpacing: 1.5,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -288,10 +286,7 @@ class VocalBadgeColumn extends StatelessWidget {
 }
 
 class VocalBadge extends StatelessWidget {
-  const VocalBadge({
-    super.key,
-    required this.label,
-  });
+  const VocalBadge({super.key, required this.label});
 
   final String label;
 
@@ -306,10 +301,7 @@ class VocalBadge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          fontSize: 12,
-          color: AppTheme.mikuGreen,
-        ),
+        style: const TextStyle(fontSize: 12, color: AppTheme.mikuGreen),
       ),
     );
   }
@@ -337,8 +329,9 @@ class PlayerHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final modeText =
-        _isVideoMode ? 'Mode: MV Playback' : 'Mode: Audio Playback';
+    final modeText = _isVideoMode
+        ? 'Mode: MV Playback'
+        : 'Mode: Audio Playback';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
@@ -383,8 +376,8 @@ class PlayerHeader extends StatelessWidget {
                   child: Text(
                     contextLabel,
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: AppTheme.textMuted,
-                        ),
+                      color: AppTheme.textMuted,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -394,9 +387,9 @@ class PlayerHeader extends StatelessWidget {
           if (!_isVideoMode) ...[
             Text(
               modeText,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: AppTheme.textMuted,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.labelMedium?.copyWith(color: AppTheme.textMuted),
             ),
             const SizedBox(width: 10),
           ],
@@ -446,6 +439,7 @@ class AudioArtworkCard extends StatelessWidget {
               child: albumCoverUrl.isNotEmpty
                   ? Image.network(
                       albumCoverUrl,
+                      headers: ApiConfig.defaultHeaders,
                       width: 280,
                       height: 280,
                       fit: BoxFit.cover,
@@ -487,18 +481,18 @@ class VideoModeDetails extends StatelessWidget {
                 Text(
                   title,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: AppTheme.textPrimary,
-                        fontWeight: FontWeight.w900,
-                      ),
+                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.w900,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppTheme.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: AppTheme.textMuted),
                   maxLines: showSideInfo ? 2 : 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -513,9 +507,9 @@ class VideoModeDetails extends StatelessWidget {
                 alignment: Alignment.centerRight,
                 child: Text(
                   subtitle,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppTheme.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppTheme.textMuted),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.right,
@@ -546,15 +540,15 @@ class TrackListItem extends StatelessWidget {
   final VoidCallback onTap;
 
   Widget _coverPlaceholder() => Container(
-        width: 48,
-        height: 48,
-        color: AppTheme.cardBg,
-        alignment: Alignment.center,
-        child: Icon(
-          track.hasVideo ? Icons.movie : Icons.music_note,
-          color: track.hasVideo ? AppTheme.mikuGreen : AppTheme.textMuted,
-        ),
-      );
+    width: 48,
+    height: 48,
+    color: AppTheme.cardBg,
+    alignment: Alignment.center,
+    child: Icon(
+      track.hasVideo ? Icons.movie : Icons.music_note,
+      color: track.hasVideo ? AppTheme.mikuGreen : AppTheme.textMuted,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -582,6 +576,7 @@ class TrackListItem extends StatelessWidget {
                   if (coverUrl.isNotEmpty)
                     Image.network(
                       coverUrl,
+                      headers: ApiConfig.defaultHeaders,
                       width: 48,
                       height: 48,
                       fit: BoxFit.cover,
@@ -595,7 +590,9 @@ class TrackListItem extends StatelessWidget {
                       right: 4,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 4, vertical: 2),
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.7),
                           borderRadius: BorderRadius.circular(999),
@@ -622,17 +619,18 @@ class TrackListItem extends StatelessWidget {
                     track.title,
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
-                      color:
-                          isActive ? AppTheme.mikuGreen : AppTheme.textPrimary,
+                      color: isActive
+                          ? AppTheme.mikuGreen
+                          : AppTheme.textPrimary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
                     subtitle.isNotEmpty ? subtitle : '-',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppTheme.textMuted,
-                        ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: AppTheme.textMuted),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -646,14 +644,17 @@ class TrackListItem extends StatelessWidget {
                 if (track.hasVideo)
                   const Icon(Icons.movie, size: 14, color: AppTheme.mikuGreen)
                 else
-                  const Icon(Icons.music_note,
-                      size: 14, color: AppTheme.textMuted),
+                  const Icon(
+                    Icons.music_note,
+                    size: 14,
+                    color: AppTheme.textMuted,
+                  ),
                 const SizedBox(height: 4),
                 Text(
                   track.durationFormatted,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: AppTheme.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelSmall?.copyWith(color: AppTheme.textMuted),
                 ),
               ],
             ),

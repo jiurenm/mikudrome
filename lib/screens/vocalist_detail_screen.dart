@@ -101,8 +101,10 @@ class _VocalistDetailScreenState extends State<VocalistDetailScreen> {
                 icon: const Icon(Icons.arrow_back),
                 onPressed: widget.onBack,
               ),
-              title: Text(widget.vocalist.name,
-                  style: const TextStyle(fontSize: 16)),
+              title: Text(
+                widget.vocalist.name,
+                style: const TextStyle(fontSize: 16),
+              ),
             ),
           // Hero section
           SliverToBoxAdapter(
@@ -130,7 +132,9 @@ class _VocalistDetailScreenState extends State<VocalistDetailScreen> {
                       Text(_error!, textAlign: TextAlign.center),
                       const SizedBox(height: 16),
                       FilledButton(
-                          onPressed: _loadData, child: const Text('Retry')),
+                        onPressed: _loadData,
+                        child: const Text('Retry'),
+                      ),
                     ],
                   ),
                 ),
@@ -208,10 +212,7 @@ class _VocalistHero extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            color.withValues(alpha: 0.15),
-            AppTheme.mikuDark,
-          ],
+          colors: [color.withValues(alpha: 0.15), AppTheme.mikuDark],
         ),
       ),
       child: Column(
@@ -224,13 +225,10 @@ class _VocalistHero extends StatelessWidget {
                 backgroundColor: color.withValues(alpha: 0.15),
                 foregroundImage: NetworkImage(
                   ApiClient().vocalistAvatarUrl(vocalist.name),
+                  headers: ApiConfig.defaultHeaders,
                 ),
                 onForegroundImageError: (_, __) {},
-                child: Icon(
-                  Icons.mic,
-                  size: mobile ? 28 : 40,
-                  color: color,
-                ),
+                child: Icon(Icons.mic, size: mobile ? 28 : 40, color: color),
               ),
               const SizedBox(width: 24),
               Expanded(
@@ -239,19 +237,16 @@ class _VocalistHero extends StatelessWidget {
                   children: [
                     Text(
                       vocalist.name,
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            color: color,
-                            fontWeight: FontWeight.w900,
-                          ),
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(color: color, fontWeight: FontWeight.w900),
                     ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
                         Text(
                           '$trackCount tracks',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: AppTheme.textMuted,
-                              ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: AppTheme.textMuted),
                         ),
                         const SizedBox(width: 12),
                         Container(
@@ -265,9 +260,8 @@ class _VocalistHero extends StatelessWidget {
                         const SizedBox(width: 12),
                         Text(
                           '$albumCount albums',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: AppTheme.textMuted,
-                              ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: AppTheme.textMuted),
                         ),
                       ],
                     ),
@@ -303,18 +297,14 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(
-          width: 32,
-          height: 2,
-          color: color,
-        ),
+        Container(width: 32, height: 2, color: color),
         const SizedBox(width: 16),
         Text(
           title,
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: AppTheme.textPrimary,
-                fontWeight: FontWeight.w700,
-              ),
+            color: AppTheme.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ],
     );

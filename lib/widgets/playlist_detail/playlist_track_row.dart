@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../api/config.dart';
 import '../../models/playlist_item.dart';
 import '../../models/track.dart';
 import '../../theme/app_theme.dart';
@@ -95,9 +96,9 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: titleColor,
-                fontWeight: FontWeight.w700,
-              ),
+            color: titleColor,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         if (mobile && note.isNotEmpty)
           Text(
@@ -105,9 +106,9 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
             key: const ValueKey('playlist-track-row-note-mobile'),
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppTheme.textMuted,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppTheme.textMuted),
           ),
         if (vocalLine.isNotEmpty)
           Text(
@@ -115,9 +116,9 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppTheme.textMuted,
-                  fontSize: 12,
-                ),
+              color: AppTheme.textMuted,
+              fontSize: 12,
+            ),
           ),
       ],
     );
@@ -133,9 +134,9 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
               key: const ValueKey('playlist-track-row-note-desktop'),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.textMuted,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppTheme.textMuted),
             ),
     );
   }
@@ -165,9 +166,7 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
             ),
           ),
           const SizedBox(width: 24),
-          Expanded(
-            child: _buildDesktopNoteColumn(context, note),
-          ),
+          Expanded(child: _buildDesktopNoteColumn(context, note)),
         ],
       ),
     );
@@ -180,8 +179,9 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
     final mobile = isMobile(context);
     final vocalLine = _vocalLine;
     final note = _note;
-    final titleColor =
-        isActive || _hovering ? AppTheme.mikuGreen : AppTheme.textPrimary;
+    final titleColor = isActive || _hovering
+        ? AppTheme.mikuGreen
+        : AppTheme.textPrimary;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
@@ -194,7 +194,9 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
           hoverColor: Colors.white.withValues(alpha: 0.03),
           child: Padding(
             padding: EdgeInsets.symmetric(
-                horizontal: mobile ? 8 : 16, vertical: mobile ? 10 : 12),
+              horizontal: mobile ? 8 : 16,
+              vertical: mobile ? 10 : 12,
+            ),
             child: Row(
               children: [
                 if (widget.showDragHandle) ...[
@@ -213,6 +215,7 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
                   borderRadius: BorderRadius.circular(4),
                   child: Image.network(
                     _coverUrl,
+                    headers: ApiConfig.defaultHeaders,
                     width: mobile ? 40 : 48,
                     height: mobile ? 40 : 48,
                     cacheWidth: mobile ? 80 : 96,
@@ -223,6 +226,7 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
                       if (track.albumId > 0) {
                         return Image.network(
                           '${widget.baseUrl}/api/albums/${track.albumId}/cover',
+                          headers: ApiConfig.defaultHeaders,
                           width: mobile ? 40 : 48,
                           height: mobile ? 40 : 48,
                           cacheWidth: mobile ? 80 : 96,
@@ -316,8 +320,11 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
                           value: 'remove',
                           child: Row(
                             children: [
-                              Icon(Icons.remove_circle_outline,
-                                  size: 18, color: AppTheme.textMuted),
+                              Icon(
+                                Icons.remove_circle_outline,
+                                size: 18,
+                                color: AppTheme.textMuted,
+                              ),
                               SizedBox(width: 12),
                               Flexible(
                                 child: Text(
