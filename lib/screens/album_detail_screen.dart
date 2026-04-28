@@ -160,23 +160,14 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
               slivers: [
                 if (isMobile(context) && widget.onBack != null)
                   SliverAppBar(
-                    backgroundColor: AppTheme.mikuDark,
+                    backgroundColor: Color.alphaBlend(
+                      AppTheme.mikuGreen.withValues(alpha: 0.16),
+                      AppTheme.mikuDark,
+                    ),
                     surfaceTintColor: Colors.transparent,
                     pinned: true,
                     floating: false,
                     toolbarHeight: 56,
-                    flexibleSpace: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            AppTheme.mikuGreen.withValues(alpha: 0.18),
-                            AppTheme.mikuDark,
-                          ],
-                        ),
-                      ),
-                    ),
                     leading: IconButton(
                       icon: const Icon(Icons.chevron_left, size: 28),
                       color: AppTheme.textPrimary,

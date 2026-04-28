@@ -219,13 +219,17 @@ class AlbumHeroSection extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  album.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppTheme.textPrimary,
-                    fontWeight: FontWeight.w800,
+                SingleChildScrollView(
+                  key: const ValueKey('album-detail-mobile-title-scroll'),
+                  scrollDirection: Axis.horizontal,
+                  child: Text(
+                    album.title,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
                 if (album.producerName.isNotEmpty) ...[
@@ -235,7 +239,7 @@ class AlbumHeroSection extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.textPrimary.withValues(alpha: 0.86),
+                      color: AppTheme.textMuted,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

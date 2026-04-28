@@ -53,6 +53,10 @@ void main() {
       find.byKey(const ValueKey('album-detail-mobile-hero-row')),
       findsOneWidget,
     );
+    final titleScroll = tester.widget<SingleChildScrollView>(
+      find.byKey(const ValueKey('album-detail-mobile-title-scroll')),
+    );
+    expect(titleScroll.scrollDirection, Axis.horizontal);
     expect(find.text('GHOST'), findsOneWidget);
     expect(find.text('DECO*27'), findsOneWidget);
     expect(find.text('12 首歌曲'), findsOneWidget);
