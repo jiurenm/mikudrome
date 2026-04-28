@@ -12,8 +12,11 @@ import '../widgets/album_detail/album_action_bar.dart';
 import '../widgets/album_detail/album_hero_section.dart';
 import '../widgets/album_detail/album_track_list.dart';
 
-void _showTopMessage(BuildContext context, String message,
-    {required bool isError}) {
+void _showTopMessage(
+  BuildContext context,
+  String message, {
+  required bool isError,
+}) {
   final overlay = Overlay.of(context);
   late OverlayEntry entry;
   entry = OverlayEntry(
@@ -118,8 +121,9 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
       _error = null;
     });
     try {
-      final result = await ApiClient(baseUrl: widget._effectiveBaseUrl)
-          .getAlbum(widget.album.id);
+      final result = await ApiClient(
+        baseUrl: widget._effectiveBaseUrl,
+      ).getAlbum(widget.album.id);
       if (result == null || !mounted) return;
       setState(() {
         _tracks = result.tracks;
@@ -157,14 +161,25 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                 if (isMobile(context) && widget.onBack != null)
                   SliverAppBar(
                     backgroundColor: Colors.transparent,
+                    surfaceTintColor: Colors.transparent,
                     pinned: false,
                     floating: true,
+                    toolbarHeight: 56,
                     leading: IconButton(
-                      icon: const Icon(Icons.arrow_back),
+                      icon: const Icon(Icons.chevron_left, size: 28),
+                      color: AppTheme.textPrimary,
                       onPressed: widget.onBack,
+                      tooltip: 'Back',
                     ),
-                    title: Text(widget.album.title,
-                        style: const TextStyle(fontSize: 16)),
+                    actions: [
+                      IconButton(
+                        icon: const Icon(Icons.more_horiz, size: 24),
+                        color: AppTheme.textPrimary,
+                        onPressed: () {},
+                        tooltip: 'More',
+                      ),
+                      const SizedBox(width: 12),
+                    ],
                   ),
                 SliverToBoxAdapter(
                   child: AlbumHeroSection(
@@ -189,8 +204,9 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                             Text(_error!, textAlign: TextAlign.center),
                             const SizedBox(height: 16),
                             FilledButton(
-                                onPressed: _loadAlbum,
-                                child: const Text('Retry')),
+                              onPressed: _loadAlbum,
+                              child: const Text('Retry'),
+                            ),
                           ],
                         ),
                       ),

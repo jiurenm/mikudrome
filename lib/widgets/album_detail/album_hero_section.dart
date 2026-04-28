@@ -48,7 +48,8 @@ class AlbumHeroSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final year = tracks.isNotEmpty ? _earliestYear(tracks) : album.year;
+    final trackYear = tracks.isNotEmpty ? _earliestYear(tracks) : 0;
+    final year = trackYear > 0 ? trackYear : album.year;
     final totalSec = _totalDurationSeconds(tracks);
     final durationStr = _formatDuration(totalSec);
     final mobile = isMobile(context);
@@ -57,10 +58,7 @@ class AlbumHeroSection extends StatelessWidget {
       gradient: LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [
-          AppTheme.mikuGreen.withValues(alpha: 0.2),
-          AppTheme.mikuDark,
-        ],
+        colors: [AppTheme.mikuGreen.withValues(alpha: 0.2), AppTheme.mikuDark],
       ),
     );
 
@@ -78,12 +76,14 @@ class AlbumHeroSection extends StatelessWidget {
           : SystemMouseCursors.basic,
       child: GestureDetector(
         onTap: album.producerId > 0 && onProducerTap != null
-            ? () => onProducerTap!(Producer(
+            ? () => onProducerTap!(
+                Producer(
                   id: album.producerId,
                   name: album.producerName,
                   trackCount: 0,
                   albumCount: 0,
-                ))
+                ),
+              )
             : null,
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -102,8 +102,9 @@ class AlbumHeroSection extends StatelessWidget {
                         ),
                       )
                     : Image.network(
-                        ApiClient(baseUrl: baseUrl)
-                            .producerAvatarUrl(album.producerId),
+                        ApiClient(
+                          baseUrl: baseUrl,
+                        ).producerAvatarUrl(album.producerId),
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => const ColoredBox(
                           color: AppTheme.cardBg,
@@ -120,16 +121,15 @@ class AlbumHeroSection extends StatelessWidget {
             Text(
               album.producerName,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: album.producerId > 0 && onProducerTap != null
-                        ? AppTheme.mikuGreen
-                        : AppTheme.textPrimary,
-                    fontWeight: FontWeight.w700,
-                    decoration:
-                        album.producerId > 0 && onProducerTap != null
-                            ? TextDecoration.underline
-                            : null,
-                    decorationColor: AppTheme.mikuGreen,
-                  ),
+                color: album.producerId > 0 && onProducerTap != null
+                    ? AppTheme.mikuGreen
+                    : AppTheme.textPrimary,
+                fontWeight: FontWeight.w700,
+                decoration: album.producerId > 0 && onProducerTap != null
+                    ? TextDecoration.underline
+                    : null,
+                decorationColor: AppTheme.mikuGreen,
+              ),
             ),
           ],
         ),
@@ -148,9 +148,9 @@ class AlbumHeroSection extends StatelessWidget {
         if (year > 0) ...[
           Text(
             '• $year',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppTheme.textMuted,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppTheme.textMuted),
           ),
           const SizedBox(width: 8),
         ],
@@ -158,9 +158,9 @@ class AlbumHeroSection extends StatelessWidget {
           durationStr.isNotEmpty
               ? '• ${album.trackCount} Songs, $durationStr'
               : '• ${album.trackCount} Songs',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppTheme.textMuted,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AppTheme.textMuted),
         ),
       ],
     );
@@ -178,20 +178,16 @@ class AlbumHeroSection extends StatelessWidget {
           width: size,
           height: size,
           color: AppTheme.cardBg,
-          child: const Icon(
-            Icons.album,
-            color: AppTheme.textMuted,
-            size: 64,
-          ),
+          child: const Icon(Icons.album, color: AppTheme.textMuted, size: 64),
         ),
       ),
     );
   }
 
   Widget _buildInteractiveAlbumCover(BuildContext context, double size) {
-    final previewSize =
-        (MediaQuery.sizeOf(context).shortestSide - 32).clamp(240.0, 640.0)
-            .toDouble();
+    final previewSize = (MediaQuery.sizeOf(context).shortestSide - 32)
+        .clamp(240.0, 640.0)
+        .toDouble();
 
     return DetailCoverLightboxTrigger(
       key: const ValueKey('album-hero-cover-trigger'),
@@ -202,44 +198,60 @@ class AlbumHeroSection extends StatelessWidget {
   }
 
   Widget _buildMobileLayout(
-      BuildContext context, int year, String durationStr, BoxDecoration gradient) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final coverSize = screenWidth * 0.6;
+    BuildContext context,
+    int year,
+    String durationStr,
+    BoxDecoration gradient,
+  ) {
+    final metadata = '${album.trackCount} 首歌曲';
 
     return Container(
       decoration: gradient,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-      child: Column(
+      padding: const EdgeInsets.fromLTRB(24, 10, 24, 8),
+      child: Row(
+        key: const ValueKey('album-detail-mobile-hero-row'),
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _buildInteractiveAlbumCover(context, coverSize),
-          const SizedBox(height: 16),
-          Text(
-            'ALBUM',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppTheme.mikuGreen,
+          _buildInteractiveAlbumCover(context, 96),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  album.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-          ),
-          const SizedBox(height: 8),
-          SelectableText(
-            album.title,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: AppTheme.textPrimary,
-                  fontWeight: FontWeight.w900,
+                if (album.producerName.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    album.producerName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppTheme.textPrimary.withValues(alpha: 0.86),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Text(
+                  metadata,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppTheme.textMuted,
+                    fontSize: 12,
+                  ),
                 ),
-          ),
-          const SizedBox(height: 12),
-          if (album.producerName.isNotEmpty) _buildProducerRow(context),
-          const SizedBox(height: 6),
-          Text(
-            [
-              if (year > 0) '$year',
-              '${album.trackCount} Songs',
-              if (durationStr.isNotEmpty) durationStr,
-            ].join(' · '),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppTheme.textMuted,
-                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -247,7 +259,11 @@ class AlbumHeroSection extends StatelessWidget {
   }
 
   Widget _buildDesktopLayout(
-      BuildContext context, int year, String durationStr, BoxDecoration gradient) {
+    BuildContext context,
+    int year,
+    String durationStr,
+    BoxDecoration gradient,
+  ) {
     return Container(
       height: 320,
       decoration: gradient,
@@ -266,18 +282,17 @@ class AlbumHeroSection extends StatelessWidget {
                 children: [
                   Text(
                     'ALBUM',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AppTheme.mikuGreen,
-                        ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelSmall?.copyWith(color: AppTheme.mikuGreen),
                   ),
                   const SizedBox(height: 8),
                   SelectableText(
                     album.title,
-                    style:
-                        Theme.of(context).textTheme.displaySmall?.copyWith(
-                              color: AppTheme.textPrimary,
-                              fontWeight: FontWeight.w900,
-                            ),
+                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                   const SizedBox(height: 24),
                   _buildMetaRow(context, year, durationStr),
