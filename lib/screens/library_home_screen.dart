@@ -69,6 +69,26 @@ class LibraryHomeScreen extends StatefulWidget {
   State<LibraryHomeScreen> createState() => _LibraryHomeScreenState();
 }
 
+class _MobileNavigationSnapshot {
+  const _MobileNavigationSnapshot({
+    required this.tab,
+    required this.route,
+    required this.selectedAlbum,
+    required this.selectedProducer,
+    required this.selectedVocalist,
+    required this.selectedPlaylistId,
+    required this.showPlayer,
+  });
+
+  final MobileAppTab tab;
+  final ShellRoute route;
+  final Album? selectedAlbum;
+  final Producer? selectedProducer;
+  final Vocalist? selectedVocalist;
+  final int? selectedPlaylistId;
+  final bool showPlayer;
+}
+
 class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   static Future<void> _noopTogglePlayback() async {}
 
@@ -79,6 +99,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   Vocalist? _selectedVocalist;
   int? _selectedPlaylistId;
   MobileAppTab _mobileTab = MobileAppTab.discover;
+  final List<_MobileNavigationSnapshot> _mobileHistory = [];
   List<Track> _playerQueue = const [];
   int _playerIndex = 0;
   bool _showPlayer = false;
@@ -183,50 +204,125 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     return _playerQueue[_playerIndex];
   }
 
+  _MobileNavigationSnapshot _currentMobileSnapshot() {
+    return _MobileNavigationSnapshot(
+      tab: _mobileTab,
+      route: _route,
+      selectedAlbum: _selectedAlbum,
+      selectedProducer: _selectedProducer,
+      selectedVocalist: _selectedVocalist,
+      selectedPlaylistId: _selectedPlaylistId,
+      showPlayer: _showPlayer,
+    );
+  }
+
+  void _restoreMobileSnapshot(_MobileNavigationSnapshot snapshot) {
+    _mobileTab = snapshot.tab;
+    _route = snapshot.route;
+    _selectedAlbum = snapshot.selectedAlbum;
+    _selectedProducer = snapshot.selectedProducer;
+    _selectedVocalist = snapshot.selectedVocalist;
+    _selectedPlaylistId = snapshot.selectedPlaylistId;
+    _showPlayer = snapshot.showPlayer;
+  }
+
+  bool _isSameMobileSnapshot(
+    _MobileNavigationSnapshot a,
+    _MobileNavigationSnapshot b,
+  ) {
+    return a.tab == b.tab &&
+        a.route == b.route &&
+        a.selectedAlbum?.id == b.selectedAlbum?.id &&
+        a.selectedProducer?.id == b.selectedProducer?.id &&
+        a.selectedVocalist?.name == b.selectedVocalist?.name &&
+        a.selectedPlaylistId == b.selectedPlaylistId &&
+        a.showPlayer == b.showPlayer;
+  }
+
+  void _recordMobileHistory() {
+    if (!isMobile(context)) return;
+    final snapshot = _currentMobileSnapshot();
+    if (_mobileHistory.isNotEmpty &&
+        _isSameMobileSnapshot(_mobileHistory.last, snapshot)) {
+      return;
+    }
+    _mobileHistory.add(snapshot);
+  }
+
+  void _handleMobileBack() {
+    if (!isMobile(context)) return;
+    if (_showPlayer) {
+      setState(() {
+        _showPlayer = false;
+      });
+      return;
+    }
+    if (_mobileHistory.isEmpty) return;
+    setState(() {
+      _restoreMobileSnapshot(_mobileHistory.removeLast());
+    });
+  }
+
   Widget _contentForRoute(ShellRoute route) {
     // On mobile, 'more' is the sentinel for the "More" tab
     if (isMobile(context) && route == ShellRoute.more) {
       return MobileMoreScreen(
-        onNavigate: (r) => setState(() {
-          _route = r;
-        }),
+        onNavigate: (r) {
+          _recordMobileHistory();
+          setState(() {
+            _route = r;
+          });
+        },
       );
     }
     switch (route) {
       case ShellRoute.albums:
         return AlbumsScreen(
-          onAlbumTap: (album) => setState(() {
-            _selectedAlbum = album;
-            _selectedProducer = null;
-            _showPlayer = false;
-          }),
+          onAlbumTap: (album) {
+            _recordMobileHistory();
+            setState(() {
+              _selectedAlbum = album;
+              _selectedProducer = null;
+              _showPlayer = false;
+            });
+          },
         );
       case ShellRoute.producers:
         return ProducersScreen(
-          onProducerTap: (producer) => setState(() {
-            _selectedProducer = producer;
-            _selectedAlbum = null;
-            _showPlayer = false;
-          }),
+          onProducerTap: (producer) {
+            _recordMobileHistory();
+            setState(() {
+              _selectedProducer = producer;
+              _selectedAlbum = null;
+              _showPlayer = false;
+            });
+          },
         );
       case ShellRoute.vocalists:
         return VocalistsScreen(
-          onVocalistTap: (vocalist) => setState(() {
-            _selectedVocalist = vocalist;
-            _selectedAlbum = null;
-            _selectedProducer = null;
-            _showPlayer = false;
-          }),
+          onVocalistTap: (vocalist) {
+            _recordMobileHistory();
+            setState(() {
+              _selectedVocalist = vocalist;
+              _selectedAlbum = null;
+              _selectedProducer = null;
+              _showPlayer = false;
+            });
+          },
         );
       case ShellRoute.playlists:
         return PlaylistsScreen(
-          onPlaylistTap: (playlistId) => setState(() {
-            _selectedPlaylistId = playlistId;
-            _showPlayer = false;
-          }),
+          onPlaylistTap: (playlistId) {
+            _recordMobileHistory();
+            setState(() {
+              _selectedPlaylistId = playlistId;
+              _showPlayer = false;
+            });
+          },
         );
       case ShellRoute.favorites:
         return FavoritesScreen(
+          onBack: _mobileHistory.isNotEmpty ? _handleMobileBack : null,
           onPlayTrack: (track, queue, index) => _openPlayerForQueue(
             track: track,
             queue: queue,
@@ -240,9 +336,12 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         return MvGalleryScreen(onVideoTap: _playVideo);
       case ShellRoute.more:
         return MobileMoreScreen(
-          onNavigate: (r) => setState(() {
-            _route = r;
-          }),
+          onNavigate: (r) {
+            _recordMobileHistory();
+            setState(() {
+              _route = r;
+            });
+          },
         );
     }
   }
@@ -273,15 +372,36 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   }
 
   void _navigateMobileDiscover(DiscoverSection section) {
+    final route = _routeForDiscoverSection(section);
+    if (_mobileTab == MobileAppTab.discover &&
+        _route == route &&
+        _selectedAlbum == null &&
+        _selectedProducer == null &&
+        _selectedVocalist == null &&
+        _selectedPlaylistId == null &&
+        !_showPlayer) {
+      return;
+    }
+    _recordMobileHistory();
     setState(() {
       _mobileTab = MobileAppTab.discover;
-      _route = _routeForDiscoverSection(section);
+      _route = route;
       _clearSelection();
       _showPlayer = false;
     });
   }
 
   void _navigateMobileMyMusic(ShellRoute route) {
+    if (_mobileTab == MobileAppTab.myMusic &&
+        _route == route &&
+        _selectedAlbum == null &&
+        _selectedProducer == null &&
+        _selectedVocalist == null &&
+        _selectedPlaylistId == null &&
+        !_showPlayer) {
+      return;
+    }
+    _recordMobileHistory();
     setState(() {
       _mobileTab = MobileAppTab.myMusic;
       _route = route;
@@ -291,6 +411,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   }
 
   void _selectMobileTab(MobileAppTab tab) {
+    if (tab == _mobileTab) return;
+    _recordMobileHistory();
     setState(() {
       _mobileTab = tab;
       if (tab == MobileAppTab.discover) {
@@ -312,6 +434,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
               onNavigate: (route) {
                 Navigator.of(routeContext).pop();
                 if (!mounted) return;
+                _recordMobileHistory();
                 setState(() {
                   _mobileTab = switch (route) {
                     ShellRoute.favorites ||
@@ -841,12 +964,16 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     if (_selectedAlbum != null) {
       mainContent = AlbumDetailScreen(
         album: _selectedAlbum!,
-        onProducerTap: (producer) => setState(() {
-          _selectedProducer = producer;
-          _selectedAlbum = null;
-          _route = ShellRoute.producers;
-          _showPlayer = false;
-        }),
+        onBack: mobile && _mobileHistory.isNotEmpty ? _handleMobileBack : null,
+        onProducerTap: (producer) {
+          _recordMobileHistory();
+          setState(() {
+            _selectedProducer = producer;
+            _selectedAlbum = null;
+            _route = ShellRoute.producers;
+            _showPlayer = false;
+          });
+        },
         onPlayTrack: (track, queue, index) => _openPlayerForQueue(
           track: track,
           queue: queue,
@@ -859,12 +986,16 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     } else if (_selectedProducer != null) {
       mainContent = ProducerDetailScreen(
         producer: _selectedProducer!,
-        onAlbumTap: (album) => setState(() {
-          _selectedAlbum = album;
-          _selectedProducer = null;
-          _route = ShellRoute.albums;
-          _showPlayer = false;
-        }),
+        onBack: mobile && _mobileHistory.isNotEmpty ? _handleMobileBack : null,
+        onAlbumTap: (album) {
+          _recordMobileHistory();
+          setState(() {
+            _selectedAlbum = album;
+            _selectedProducer = null;
+            _route = ShellRoute.albums;
+            _showPlayer = false;
+          });
+        },
         onPlayTrack: (track, queue, index) => _openPlayerForQueue(
           track: track,
           queue: queue,
@@ -877,12 +1008,16 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     } else if (_selectedVocalist != null) {
       mainContent = VocalistDetailScreen(
         vocalist: _selectedVocalist!,
-        onAlbumTap: (album) => setState(() {
-          _selectedAlbum = album;
-          _selectedVocalist = null;
-          _route = ShellRoute.albums;
-          _showPlayer = false;
-        }),
+        onBack: mobile && _mobileHistory.isNotEmpty ? _handleMobileBack : null,
+        onAlbumTap: (album) {
+          _recordMobileHistory();
+          setState(() {
+            _selectedAlbum = album;
+            _selectedVocalist = null;
+            _route = ShellRoute.albums;
+            _showPlayer = false;
+          });
+        },
         onPlayTrack: (track, queue, index) => _openPlayerForQueue(
           track: track,
           queue: queue,
@@ -893,6 +1028,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     } else if (_selectedPlaylistId != null) {
       mainContent = PlaylistDetailScreen(
         playlistId: _selectedPlaylistId!,
+        onBack: mobile && _mobileHistory.isNotEmpty ? _handleMobileBack : null,
         onPlayTrack: (track, queue, index) => _openPlayerForQueue(
           track: track,
           queue: queue,
@@ -934,59 +1070,67 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         ),
       );
 
-      return VocalThemeProvider(
-        track: currentTrack,
-        child: Stack(
-          children: [
-            appShell,
-            if (currentTrack != null && !_restoredNotStarted)
-              MobilePlayerSheet(
-                track: currentTrack,
-                coverUrl: ApiClient(
-                  baseUrl: ApiConfig.defaultBaseUrl,
-                ).albumCoverUrl(currentTrack.albumId.toString()),
-                isPlaying: _isPlaying,
-                progress: _playbackProgress,
-                onPlayPause: _togglePlayback,
-                bottomPadding: bottomPadding,
-                expanded: _showPlayer,
-                onExpandedChanged: (expanded) => setState(() {
-                  _showPlayer = expanded;
-                }),
-                playerBuilder: (onClose) => PlayerScreen(
+      return PopScope(
+        canPop: _mobileHistory.isEmpty && !_showPlayer,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          _handleMobileBack();
+        },
+        child: VocalThemeProvider(
+          track: currentTrack,
+          child: Stack(
+            children: [
+              appShell,
+              if (currentTrack != null && !_restoredNotStarted)
+                MobilePlayerSheet(
                   track: currentTrack,
-                  queue: _playerQueue,
-                  currentIndex: _playerIndex,
-                  contextLabel: _playerContextLabel,
-                  playbackMode: _playbackMode,
-                  onSelectTrack: (index) => _selectPlayerTrack(index),
-                  onPrevious: _playPrevious,
-                  onNext: _playNext,
-                  onClose: onClose,
-                  onSwitchPlaybackMode: _switchPlaybackMode,
-                  playbackOrderMode: _playbackOrderMode,
-                  onCyclePlaybackOrderMode: _cyclePlaybackOrderMode,
-                  onPlaybackStateChanged: _updatePlaybackUi,
-                  onControlsReady:
-                      ({required togglePlayback, required seekToFraction}) {
-                        _registerPlayerControls(
-                          togglePlayback: togglePlayback,
-                          seekToFraction: seekToFraction,
-                        );
-                        _resumeProgress = null;
-                      },
-                  initialProgress: _resumeProgress,
-                  onVideoControllerChanged: _onVideoControllerChanged,
-                  renderVideo: true,
-                  useExternalAudioPlayback: _playbackMode == PlaybackMode.audio,
-                  externalIsPlaying: _isPlaying,
-                  externalProgress: _playbackProgress,
-                  onExternalPlay: _mobileAudioPlaybackService.play,
-                  onExternalPause: _mobileAudioPlaybackService.pause,
-                  onExternalSeekToFraction: _seekMobileAudioPlayback,
+                  coverUrl: ApiClient(
+                    baseUrl: ApiConfig.defaultBaseUrl,
+                  ).albumCoverUrl(currentTrack.albumId.toString()),
+                  isPlaying: _isPlaying,
+                  progress: _playbackProgress,
+                  onPlayPause: _togglePlayback,
+                  bottomPadding: bottomPadding,
+                  expanded: _showPlayer,
+                  onExpandedChanged: (expanded) => setState(() {
+                    _showPlayer = expanded;
+                  }),
+                  playerBuilder: (onClose) => PlayerScreen(
+                    track: currentTrack,
+                    queue: _playerQueue,
+                    currentIndex: _playerIndex,
+                    contextLabel: _playerContextLabel,
+                    playbackMode: _playbackMode,
+                    onSelectTrack: (index) => _selectPlayerTrack(index),
+                    onPrevious: _playPrevious,
+                    onNext: _playNext,
+                    onClose: onClose,
+                    onSwitchPlaybackMode: _switchPlaybackMode,
+                    playbackOrderMode: _playbackOrderMode,
+                    onCyclePlaybackOrderMode: _cyclePlaybackOrderMode,
+                    onPlaybackStateChanged: _updatePlaybackUi,
+                    onControlsReady:
+                        ({required togglePlayback, required seekToFraction}) {
+                          _registerPlayerControls(
+                            togglePlayback: togglePlayback,
+                            seekToFraction: seekToFraction,
+                          );
+                          _resumeProgress = null;
+                        },
+                    initialProgress: _resumeProgress,
+                    onVideoControllerChanged: _onVideoControllerChanged,
+                    renderVideo: true,
+                    useExternalAudioPlayback:
+                        _playbackMode == PlaybackMode.audio,
+                    externalIsPlaying: _isPlaying,
+                    externalProgress: _playbackProgress,
+                    onExternalPlay: _mobileAudioPlaybackService.play,
+                    onExternalPause: _mobileAudioPlaybackService.pause,
+                    onExternalSeekToFraction: _seekMobileAudioPlayback,
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       );
     }
