@@ -56,8 +56,17 @@ void main() {
         expect(find.text('最新'), findsOneWidget);
         expect(find.text('最热'), findsOneWidget);
         expect(find.text('VOCALOID'), findsOneWidget);
+        expect(find.byIcon(Icons.more_horiz_rounded), findsNothing);
         expect(find.text('Albums'), findsNothing);
         expect(find.text('热门P主'), findsNothing);
+
+        await tester.tap(find.byTooltip('搜索'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Neru');
+        await tester.pumpAndSettle();
+
+        expect(find.text('25時、ナイトコードで。'), findsOneWidget);
+        expect(find.text('GHOST'), findsNothing);
 
         handled = await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
@@ -68,6 +77,21 @@ void main() {
       expect(find.text('Albums'), findsNothing);
     },
   );
+
+  testWidgets('tapping a discover home album opens its detail page', (
+    tester,
+  ) async {
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('GHOST').last);
+      await tester.pumpAndSettle();
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(find.text('Ghost Track'), findsOneWidget);
+    expect(find.text('专辑推荐'), findsNothing);
+  });
 
   testWidgets('system back returns from a mobile destination to My Music', (
     tester,
@@ -182,6 +206,33 @@ class _LibraryFakeHttpClientResponse extends Stream<List<int>>
             'title': 'GHOST',
             'producer_name': 'DECO*27',
             'track_count': 12,
+          },
+          {
+            'id': 2,
+            'title': '25時、ナイトコードで。',
+            'producer_name': 'Neru',
+            'track_count': 8,
+          },
+        ],
+      }),
+      '/api/albums/1' => jsonEncode({
+        'album': {
+          'id': 1,
+          'title': 'GHOST',
+          'producer_name': 'DECO*27',
+          'track_count': 1,
+        },
+        'tracks': [
+          {
+            'id': 101,
+            'title': 'Ghost Track',
+            'audio_path': 'ghost.flac',
+            'album_id': 1,
+            'track_number': 1,
+            'duration_seconds': 219,
+            'artists': 'DECO*27 feat. 初音ミク',
+            'composer': 'DECO*27',
+            'vocal': '初音ミク',
           },
         ],
       }),

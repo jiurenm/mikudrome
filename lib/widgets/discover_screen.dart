@@ -24,6 +24,7 @@ class DiscoverScreen extends StatefulWidget {
     this.showSectionTabs = true,
     this.preferMobileHome = false,
     this.onMobileMoreSelected,
+    this.onMobileAlbumSelected,
   });
 
   final DiscoverSection? currentSection;
@@ -32,6 +33,7 @@ class DiscoverScreen extends StatefulWidget {
   final bool showSectionTabs;
   final bool preferMobileHome;
   final ValueChanged<DiscoverSection>? onMobileMoreSelected;
+  final ValueChanged<Album>? onMobileAlbumSelected;
 
   @override
   State<DiscoverScreen> createState() => _DiscoverScreenState();
@@ -66,7 +68,10 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     if (widget.showSectionTabs &&
         isMobile(context) &&
         (widget.child == null || widget.preferMobileHome)) {
-      return _MobileDiscoverHome(onMoreSelected: widget.onMobileMoreSelected);
+      return _MobileDiscoverHome(
+        onMoreSelected: widget.onMobileMoreSelected,
+        onAlbumSelected: widget.onMobileAlbumSelected,
+      );
     }
 
     return Column(
@@ -135,9 +140,10 @@ ButtonStyle _segmentStyle() {
 }
 
 class _MobileDiscoverHome extends StatefulWidget {
-  const _MobileDiscoverHome({this.onMoreSelected});
+  const _MobileDiscoverHome({this.onMoreSelected, this.onAlbumSelected});
 
   final ValueChanged<DiscoverSection>? onMoreSelected;
+  final ValueChanged<Album>? onAlbumSelected;
 
   @override
   State<_MobileDiscoverHome> createState() => _MobileDiscoverHomeState();
@@ -235,7 +241,10 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
               const SizedBox(height: 12),
               _MobileSearchField(controller: _searchController),
               const SizedBox(height: 16),
-              _FeaturedAlbumBanner(album: featuredAlbum),
+              _FeaturedAlbumBanner(
+                album: featuredAlbum,
+                onAlbumSelected: widget.onAlbumSelected,
+              ),
               const SizedBox(height: 20),
               _MobileSectionHeader(
                 title: '专辑推荐',
@@ -243,7 +252,10 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
                 onMoreSelected: widget.onMoreSelected,
               ),
               const SizedBox(height: 10),
-              _AlbumStrip(albums: _albums.take(5).toList()),
+              _AlbumStrip(
+                albums: _albums.take(5).toList(),
+                onAlbumSelected: widget.onAlbumSelected,
+              ),
               const SizedBox(height: 20),
               _MobileSectionHeader(
                 title: '热门P主',
@@ -356,9 +368,10 @@ class _MobileSearchField extends StatelessWidget {
 }
 
 class _FeaturedAlbumBanner extends StatelessWidget {
-  const _FeaturedAlbumBanner({required this.album});
+  const _FeaturedAlbumBanner({required this.album, this.onAlbumSelected});
 
   final Album? album;
+  final ValueChanged<Album>? onAlbumSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -366,92 +379,98 @@ class _FeaturedAlbumBanner extends StatelessWidget {
     final producer = album?.producerName.isNotEmpty == true
         ? album!.producerName
         : 'DECO*27 feat. 初音ミク';
-    return Container(
-      height: 144,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        color: AppTheme.cardBg,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (album != null)
-            Image.network(
-              album!.coverUrl,
-              headers: ApiConfig.defaultHeaders,
-              fit: BoxFit.cover,
-              alignment: Alignment.centerRight,
-              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+    return InkWell(
+      onTap: album == null ? null : () => onAlbumSelected?.call(album!),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        height: 144,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: AppTheme.cardBg,
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (album != null)
+              Image.network(
+                album!.coverUrl,
+                headers: ApiConfig.defaultHeaders,
+                fit: BoxFit.cover,
+                alignment: Alignment.centerRight,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              ),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.black.withValues(alpha: 0.88),
+                    Colors.black.withValues(alpha: 0.56),
+                    AppTheme.mikuGreen.withValues(alpha: 0.16),
+                  ],
+                ),
+              ),
             ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.black.withValues(alpha: 0.88),
-                  Colors.black.withValues(alpha: 0.56),
-                  AppTheme.mikuGreen.withValues(alpha: 0.16),
+            Positioned(
+              left: 14,
+              top: 12,
+              bottom: 12,
+              width: 178,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'FEATURED',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppTheme.mikuGreen,
+                      fontSize: 9,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    producer,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.white.withValues(alpha: 0.76),
+                      fontSize: 11,
+                    ),
+                  ),
+                  const Spacer(),
+                  FilledButton(
+                    onPressed: album == null
+                        ? null
+                        : () => onAlbumSelected?.call(album!),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.mikuGreen,
+                      foregroundColor: Colors.black,
+                      minimumSize: const Size(74, 26),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      textStyle: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    child: const Text('立即播放'),
+                  ),
                 ],
               ),
             ),
-          ),
-          Positioned(
-            left: 14,
-            top: 12,
-            bottom: 12,
-            width: 178,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'FEATURED',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppTheme.mikuGreen,
-                    fontSize: 9,
-                    letterSpacing: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  producer,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.76),
-                    fontSize: 11,
-                  ),
-                ),
-                const Spacer(),
-                FilledButton(
-                  onPressed: () {},
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.mikuGreen,
-                    foregroundColor: Colors.black,
-                    minimumSize: const Size(74, 26),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    textStyle: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  child: const Text('立即播放'),
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -499,9 +518,10 @@ class _MobileSectionHeader extends StatelessWidget {
 }
 
 class _AlbumStrip extends StatelessWidget {
-  const _AlbumStrip({required this.albums});
+  const _AlbumStrip({required this.albums, this.onAlbumSelected});
 
   final List<Album> albums;
+  final ValueChanged<Album>? onAlbumSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -517,35 +537,39 @@ class _AlbumStrip extends StatelessWidget {
         separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (context, index) {
           final album = albums[index];
-          return SizedBox(
-            width: 64,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _SquareImage(url: album.coverUrl, icon: Icons.album_rounded),
-                const SizedBox(height: 6),
-                Text(
-                  album.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppTheme.textPrimary,
-                    fontSize: 10,
-                    letterSpacing: 0,
+          return InkWell(
+            onTap: () => onAlbumSelected?.call(album),
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              width: 64,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SquareImage(url: album.coverUrl, icon: Icons.album_rounded),
+                  const SizedBox(height: 6),
+                  Text(
+                    album.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppTheme.textPrimary,
+                      fontSize: 10,
+                      letterSpacing: 0,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  album.producerName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppTheme.textMuted,
-                    fontSize: 8,
-                    letterSpacing: 0,
+                  const SizedBox(height: 2),
+                  Text(
+                    album.producerName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppTheme.textMuted,
+                      fontSize: 8,
+                      letterSpacing: 0,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },

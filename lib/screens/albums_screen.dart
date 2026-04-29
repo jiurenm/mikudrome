@@ -33,6 +33,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
   List<Album> _albums = [];
   bool _loading = true;
   String? _error;
+  bool _showMobileSearch = false;
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -164,7 +165,11 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
               ),
               const Spacer(),
               IconButton(
-                onPressed: () {},
+                onPressed: () {
+                  setState(() {
+                    _showMobileSearch = !_showMobileSearch;
+                  });
+                },
                 tooltip: '搜索',
                 icon: const Icon(
                   Icons.search_rounded,
@@ -183,6 +188,34 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
               ),
             ],
           ),
+          if (_showMobileSearch) ...[
+            const SizedBox(height: 12),
+            TextField(
+              controller: _searchController,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: '搜索专辑或P主',
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  color: AppTheme.textMuted,
+                  size: 18,
+                ),
+                suffixIcon: _searchController.text.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: '清除搜索',
+                        onPressed: () {
+                          setState(() {
+                            _searchController.clear();
+                          });
+                        },
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                      ),
+              ),
+              style: const TextStyle(fontSize: 14),
+              onChanged: (_) => setState(() {}),
+            ),
+          ],
           const SizedBox(height: 18),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -388,23 +421,6 @@ class _MobileRecommendationAlbumCard extends StatelessWidget {
                           size: 32,
                         ),
                       ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  right: 5,
-                  bottom: 5,
-                  child: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.55),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.more_horiz_rounded,
-                      color: Colors.white,
-                      size: 18,
                     ),
                   ),
                 ),

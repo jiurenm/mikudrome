@@ -407,6 +407,18 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     });
   }
 
+  void _openMobileDiscoverAlbum(Album album) {
+    _recordMobileHistory();
+    setState(() {
+      _mobileTab = MobileAppTab.discover;
+      _route = ShellRoute.albums;
+      _showMobileDiscoverHome = false;
+      _clearSelection();
+      _selectedAlbum = album;
+      _showPlayer = false;
+    });
+  }
+
   void _navigateMobileMyMusic(ShellRoute route) {
     if (_mobileTab == MobileAppTab.myMusic &&
         _route == route &&
@@ -1094,6 +1106,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           currentSection: _discoverSectionForRoute(_route),
           onSectionChanged: _navigateMobileDiscover,
           onMobileMoreSelected: _navigateMobileDiscover,
+          onMobileAlbumSelected: _openMobileDiscoverAlbum,
           showSectionTabs:
               _showMobileDiscoverHome &&
               _selectedAlbum == null &&
