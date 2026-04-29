@@ -78,6 +78,7 @@ class _MobileNavigationSnapshot {
     required this.selectedVocalist,
     required this.selectedPlaylistId,
     required this.showPlayer,
+    required this.showDiscoverHome,
   });
 
   final MobileAppTab tab;
@@ -87,6 +88,7 @@ class _MobileNavigationSnapshot {
   final Vocalist? selectedVocalist;
   final int? selectedPlaylistId;
   final bool showPlayer;
+  final bool showDiscoverHome;
 }
 
 class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
@@ -100,6 +102,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   int? _selectedPlaylistId;
   MobileAppTab _mobileTab = MobileAppTab.discover;
   final List<_MobileNavigationSnapshot> _mobileHistory = [];
+  bool _showMobileDiscoverHome = true;
   List<Track> _playerQueue = const [];
   int _playerIndex = 0;
   bool _showPlayer = false;
@@ -213,6 +216,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       selectedVocalist: _selectedVocalist,
       selectedPlaylistId: _selectedPlaylistId,
       showPlayer: _showPlayer,
+      showDiscoverHome: _showMobileDiscoverHome,
     );
   }
 
@@ -224,6 +228,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     _selectedVocalist = snapshot.selectedVocalist;
     _selectedPlaylistId = snapshot.selectedPlaylistId;
     _showPlayer = snapshot.showPlayer;
+    _showMobileDiscoverHome = snapshot.showDiscoverHome;
   }
 
   bool _isSameMobileSnapshot(
@@ -236,7 +241,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         a.selectedProducer?.id == b.selectedProducer?.id &&
         a.selectedVocalist?.name == b.selectedVocalist?.name &&
         a.selectedPlaylistId == b.selectedPlaylistId &&
-        a.showPlayer == b.showPlayer;
+        a.showPlayer == b.showPlayer &&
+        a.showDiscoverHome == b.showDiscoverHome;
   }
 
   void _recordMobileHistory() {
@@ -271,6 +277,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           _recordMobileHistory();
           setState(() {
             _route = r;
+            _showMobileDiscoverHome = false;
           });
         },
       );
@@ -283,6 +290,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
             setState(() {
               _selectedAlbum = album;
               _selectedProducer = null;
+              _showMobileDiscoverHome = false;
               _showPlayer = false;
             });
           },
@@ -294,6 +302,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
             setState(() {
               _selectedProducer = producer;
               _selectedAlbum = null;
+              _showMobileDiscoverHome = false;
               _showPlayer = false;
             });
           },
@@ -306,6 +315,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
               _selectedVocalist = vocalist;
               _selectedAlbum = null;
               _selectedProducer = null;
+              _showMobileDiscoverHome = false;
               _showPlayer = false;
             });
           },
@@ -340,6 +350,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
             _recordMobileHistory();
             setState(() {
               _route = r;
+              _showMobileDiscoverHome = false;
             });
           },
         );
@@ -375,6 +386,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     final route = _routeForDiscoverSection(section);
     if (_mobileTab == MobileAppTab.discover &&
         _route == route &&
+        !_showMobileDiscoverHome &&
         _selectedAlbum == null &&
         _selectedProducer == null &&
         _selectedVocalist == null &&
@@ -386,6 +398,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     setState(() {
       _mobileTab = MobileAppTab.discover;
       _route = route;
+      _showMobileDiscoverHome = false;
       _clearSelection();
       _showPlayer = false;
     });
@@ -405,6 +418,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     setState(() {
       _mobileTab = MobileAppTab.myMusic;
       _route = route;
+      _showMobileDiscoverHome = false;
       _clearSelection();
       _showPlayer = false;
     });
@@ -420,6 +434,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     setState(() {
       _mobileTab = MobileAppTab.myMusic;
       _route = ShellRoute.playlists;
+      _showMobileDiscoverHome = false;
       _clearSelection();
       _selectedPlaylistId = playlistId;
       _showPlayer = false;
@@ -433,7 +448,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _mobileTab = tab;
       if (tab == MobileAppTab.discover) {
         _route = ShellRoute.albums;
+        _showMobileDiscoverHome = true;
         _clearSelection();
+      } else {
+        _showMobileDiscoverHome = false;
       }
       _showPlayer = false;
     });
@@ -458,6 +476,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
                     _ => MobileAppTab.discover,
                   };
                   _route = route;
+                  _showMobileDiscoverHome = false;
                   _clearSelection();
                   _showPlayer = false;
                 });
@@ -1071,11 +1090,12 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         discover: DiscoverScreen(
           currentSection: _discoverSectionForRoute(_route),
           onSectionChanged: _navigateMobileDiscover,
+          onMobileMoreSelected: _navigateMobileDiscover,
           showSectionTabs:
               _selectedAlbum == null &&
               _selectedProducer == null &&
               _selectedVocalist == null,
-          preferMobileHome: true,
+          preferMobileHome: _showMobileDiscoverHome,
           child: mainContent,
         ),
         myMusic: showMyMusicContent

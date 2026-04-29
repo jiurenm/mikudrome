@@ -23,6 +23,7 @@ class DiscoverScreen extends StatefulWidget {
     this.child,
     this.showSectionTabs = true,
     this.preferMobileHome = false,
+    this.onMobileMoreSelected,
   });
 
   final DiscoverSection? currentSection;
@@ -30,6 +31,7 @@ class DiscoverScreen extends StatefulWidget {
   final Widget? child;
   final bool showSectionTabs;
   final bool preferMobileHome;
+  final ValueChanged<DiscoverSection>? onMobileMoreSelected;
 
   @override
   State<DiscoverScreen> createState() => _DiscoverScreenState();
@@ -64,7 +66,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     if (widget.showSectionTabs &&
         isMobile(context) &&
         (widget.child == null || widget.preferMobileHome)) {
-      return const _MobileDiscoverHome();
+      return _MobileDiscoverHome(onMoreSelected: widget.onMobileMoreSelected);
     }
 
     return Column(
@@ -133,7 +135,9 @@ ButtonStyle _segmentStyle() {
 }
 
 class _MobileDiscoverHome extends StatefulWidget {
-  const _MobileDiscoverHome();
+  const _MobileDiscoverHome({this.onMoreSelected});
+
+  final ValueChanged<DiscoverSection>? onMoreSelected;
 
   @override
   State<_MobileDiscoverHome> createState() => _MobileDiscoverHomeState();
@@ -233,19 +237,35 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
               const SizedBox(height: 16),
               _FeaturedAlbumBanner(album: featuredAlbum),
               const SizedBox(height: 20),
-              const _MobileSectionHeader(title: '专辑推荐'),
+              _MobileSectionHeader(
+                title: '专辑推荐',
+                section: DiscoverSection.albums,
+                onMoreSelected: widget.onMoreSelected,
+              ),
               const SizedBox(height: 10),
               _AlbumStrip(albums: _albums.take(5).toList()),
               const SizedBox(height: 20),
-              const _MobileSectionHeader(title: '热门P主'),
+              _MobileSectionHeader(
+                title: '热门P主',
+                section: DiscoverSection.producers,
+                onMoreSelected: widget.onMoreSelected,
+              ),
               const SizedBox(height: 10),
               _ProducerStrip(producers: _producers.take(5).toList()),
               const SizedBox(height: 20),
-              const _MobileSectionHeader(title: '虚拟歌手'),
+              _MobileSectionHeader(
+                title: '虚拟歌手',
+                section: DiscoverSection.vocalists,
+                onMoreSelected: widget.onMoreSelected,
+              ),
               const SizedBox(height: 10),
               _VocalistStrip(vocalists: _vocalists.take(5).toList()),
               const SizedBox(height: 20),
-              const _MobileSectionHeader(title: '推荐MV'),
+              _MobileSectionHeader(
+                title: '推荐MV',
+                section: DiscoverSection.mv,
+                onMoreSelected: widget.onMoreSelected,
+              ),
               const SizedBox(height: 10),
               _VideoStrip(videos: _videos.take(3).toList()),
             ],
@@ -438,9 +458,15 @@ class _FeaturedAlbumBanner extends StatelessWidget {
 }
 
 class _MobileSectionHeader extends StatelessWidget {
-  const _MobileSectionHeader({required this.title});
+  const _MobileSectionHeader({
+    required this.title,
+    required this.section,
+    this.onMoreSelected,
+  });
 
   final String title;
+  final DiscoverSection section;
+  final ValueChanged<DiscoverSection>? onMoreSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -457,7 +483,7 @@ class _MobileSectionHeader extends StatelessWidget {
           ),
         ),
         TextButton(
-          onPressed: () {},
+          onPressed: () => onMoreSelected?.call(section),
           style: TextButton.styleFrom(
             foregroundColor: AppTheme.textMuted,
             visualDensity: VisualDensity.compact,

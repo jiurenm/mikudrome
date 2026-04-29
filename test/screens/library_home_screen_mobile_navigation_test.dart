@@ -39,6 +39,30 @@ void main() {
     expect(find.text('服务器'), findsNothing);
   });
 
+  testWidgets(
+    'discover more opens the full mobile section and back restores home',
+    (tester) async {
+      late bool handled;
+      await HttpOverrides.runZoned(() async {
+        await _pumpMobileLibrary(tester);
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('更多 >').first);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Albums'), findsOneWidget);
+        expect(find.text('专辑推荐'), findsNothing);
+
+        handled = await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+      expect(handled, isTrue);
+      expect(find.text('专辑推荐'), findsOneWidget);
+      expect(find.text('Albums'), findsNothing);
+    },
+  );
+
   testWidgets('system back returns from a mobile destination to My Music', (
     tester,
   ) async {
