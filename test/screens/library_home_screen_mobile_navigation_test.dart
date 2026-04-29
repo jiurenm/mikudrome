@@ -50,8 +50,14 @@ void main() {
         await tester.tap(find.text('更多 >').first);
         await tester.pumpAndSettle();
 
-        expect(find.text('Albums'), findsOneWidget);
-        expect(find.text('专辑推荐'), findsNothing);
+        expect(find.text('专辑推荐'), findsOneWidget);
+        expect(find.text('(全部)'), findsOneWidget);
+        expect(find.text('全部'), findsOneWidget);
+        expect(find.text('最新'), findsOneWidget);
+        expect(find.text('最热'), findsOneWidget);
+        expect(find.text('VOCALOID'), findsOneWidget);
+        expect(find.text('Albums'), findsNothing);
+        expect(find.text('热门P主'), findsNothing);
 
         handled = await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();

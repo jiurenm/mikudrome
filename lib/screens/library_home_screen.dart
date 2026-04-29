@@ -285,6 +285,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     switch (route) {
       case ShellRoute.albums:
         return AlbumsScreen(
+          mobileRecommendationLayout:
+              _mobileTab == MobileAppTab.discover && !_showMobileDiscoverHome,
+          onMobileBack: _mobileHistory.isNotEmpty ? _handleMobileBack : null,
           onAlbumTap: (album) {
             _recordMobileHistory();
             setState(() {
@@ -1092,6 +1095,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
           onSectionChanged: _navigateMobileDiscover,
           onMobileMoreSelected: _navigateMobileDiscover,
           showSectionTabs:
+              _showMobileDiscoverHome &&
               _selectedAlbum == null &&
               _selectedProducer == null &&
               _selectedVocalist == null,
