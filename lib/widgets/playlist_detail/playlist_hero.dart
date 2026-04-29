@@ -27,10 +27,7 @@ class PlaylistHero extends StatelessWidget {
     gradient: LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [
-        AppTheme.mikuGreen.withValues(alpha: 0.2),
-        AppTheme.mikuDark,
-      ],
+      colors: [AppTheme.mikuGreen.withValues(alpha: 0.2), AppTheme.mikuDark],
     ),
   );
 
@@ -45,9 +42,9 @@ class PlaylistHero extends StatelessWidget {
   }
 
   Widget _buildInteractiveCover(BuildContext context, double size) {
-    final previewSize =
-        (MediaQuery.sizeOf(context).shortestSide - 32).clamp(240.0, 640.0)
-            .toDouble();
+    final previewSize = (MediaQuery.sizeOf(context).shortestSide - 32)
+        .clamp(240.0, 640.0)
+        .toDouble();
 
     return DetailCoverLightboxTrigger(
       key: const ValueKey('playlist-hero-cover-trigger'),
@@ -62,92 +59,71 @@ class PlaylistHero extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: PlaylistCover(
-          playlist: playlist,
-          client: client,
-          size: size,
-        ),
+        child: PlaylistCover(playlist: playlist, client: client, size: size),
       ),
     );
   }
 
   Widget _buildMobileLayout(BuildContext context, BoxDecoration gradient) {
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final coverSize = screenWidth * 0.6;
+    final coverSize = (screenWidth * 0.3).clamp(112.0, 128.0).toDouble();
     final playEnabled = canPlay ?? playlist.trackCount > 0;
 
     return Container(
       decoration: gradient,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      padding: const EdgeInsets.fromLTRB(28, 20, 28, 18),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildInteractiveCover(context, coverSize),
-          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.center,
+            child: _buildInteractiveCover(context, coverSize),
+          ),
+          const SizedBox(height: 18),
           Text(
-            'PLAYLIST',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppTheme.mikuGreen,
-                ),
+            playlist.name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.w900,
+            ),
           ),
           const SizedBox(height: 8),
-          SelectableText(
-            playlist.name,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: AppTheme.textPrimary,
-                  fontWeight: FontWeight.w900,
-                ),
-          ),
-          const SizedBox(height: 12),
           Text(
-            '${playlist.trackCount} tracks',
+            '歌单',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppTheme.textMuted,
-                ),
+              color: AppTheme.textMuted.withValues(alpha: 0.82),
+              fontWeight: FontWeight.w600,
+            ),
           ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Semantics(
-                label: 'Play playlist',
-                button: true,
-                child: FilledButton.icon(
-                  onPressed: playEnabled ? onPlay : null,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.mikuGreen,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
+          const SizedBox(height: 10),
+          Text(
+            '${playlist.trackCount} 首歌曲',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppTheme.textMuted),
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: Semantics(
+              label: 'Play playlist',
+              button: true,
+              child: FilledButton.icon(
+                onPressed: playEnabled ? onPlay : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.mikuGreen,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
                   ),
-                  icon: const Icon(Icons.play_arrow, size: 20),
-                  label: const Text('PLAY'),
                 ),
+                icon: const Icon(Icons.play_arrow, size: 18),
+                label: const Text('播放全部'),
               ),
-              if (onEdit != null) ...[
-                const SizedBox(width: 12),
-                Semantics(
-                  label: 'Edit playlist',
-                  button: true,
-                  child: OutlinedButton(
-                    onPressed: onEdit,
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppTheme.textMuted),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 12),
-                      foregroundColor: AppTheme.textPrimary,
-                    ),
-                    child: const Text('EDIT'),
-                  ),
-                ),
-              ],
-            ],
+            ),
           ),
         ],
       ),
@@ -175,17 +151,17 @@ class PlaylistHero extends StatelessWidget {
                 children: [
                   Text(
                     'PLAYLIST',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AppTheme.mikuGreen,
-                        ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelSmall?.copyWith(color: AppTheme.mikuGreen),
                   ),
                   const SizedBox(height: 8),
                   SelectableText(
                     playlist.name,
                     style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                          color: AppTheme.textPrimary,
-                          fontWeight: FontWeight.w900,
-                        ),
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                   const SizedBox(height: 24),
                   Row(
@@ -193,8 +169,8 @@ class PlaylistHero extends StatelessWidget {
                       Text(
                         '${playlist.trackCount} tracks',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppTheme.textMuted,
-                            ),
+                          color: AppTheme.textMuted,
+                        ),
                       ),
                       const SizedBox(width: 24),
                       Semantics(
@@ -206,7 +182,9 @@ class PlaylistHero extends StatelessWidget {
                             backgroundColor: AppTheme.mikuGreen,
                             foregroundColor: Colors.black,
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 32, vertical: 12),
+                              horizontal: 32,
+                              vertical: 12,
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(24),
                             ),
@@ -228,7 +206,9 @@ class PlaylistHero extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(24),
                               ),
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 32, vertical: 12),
+                                horizontal: 32,
+                                vertical: 12,
+                              ),
                               foregroundColor: AppTheme.textPrimary,
                             ),
                             child: const Text('EDIT'),

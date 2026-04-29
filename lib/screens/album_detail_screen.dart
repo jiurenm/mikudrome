@@ -8,6 +8,7 @@ import '../models/producer.dart';
 import '../models/track.dart';
 import '../theme/app_theme.dart';
 import '../utils/responsive.dart';
+import '../widgets/add_to_playlist_sheet.dart';
 import '../widgets/album_detail/album_action_bar.dart';
 import '../widgets/album_detail/album_hero_section.dart';
 import '../widgets/album_detail/album_track_list.dart';
@@ -78,6 +79,7 @@ class AlbumDetailScreen extends StatefulWidget {
     this.onPlayTrack,
     this.currentPlayingTrackId,
     this.isPlaying = false,
+    this.client,
   });
 
   final Album album;
@@ -89,6 +91,9 @@ class AlbumDetailScreen extends StatefulWidget {
   final void Function(Track track, List<Track> queue, int index)? onPlayTrack;
   final int? currentPlayingTrackId;
   final bool isPlaying;
+  final ApiClient? client;
+
+  ApiClient get _apiClient => client ?? ApiClient(baseUrl: _effectiveBaseUrl);
 
   @override
   State<AlbumDetailScreen> createState() => _AlbumDetailScreenState();
@@ -121,9 +126,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
       _error = null;
     });
     try {
-      final result = await ApiClient(
-        baseUrl: widget._effectiveBaseUrl,
-      ).getAlbum(widget.album.id);
+      final result = await widget._apiClient.getAlbum(widget.album.id);
       if (result == null || !mounted) return;
       setState(() {
         _tracks = result.tracks;
@@ -147,6 +150,15 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
     final shuffled = List<Track>.from(_tracks);
     shuffled.shuffle(Random());
     _playTrack(shuffled.first, 0, queue: shuffled);
+  }
+
+  void _showAlbumMoreSheet() {
+    if (_tracks.isEmpty) return;
+    AddToPlaylistSheet.show(
+      context: context,
+      trackIds: _tracks.map((t) => t.id).toList(),
+      client: widget._apiClient,
+    );
   }
 
   @override
@@ -178,7 +190,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                       IconButton(
                         icon: const Icon(Icons.more_horiz, size: 24),
                         color: AppTheme.textPrimary,
-                        onPressed: () {},
+                        onPressed: _tracks.isEmpty ? null : _showAlbumMoreSheet,
                         tooltip: 'More',
                       ),
                       const SizedBox(width: 12),

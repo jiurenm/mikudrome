@@ -305,7 +305,7 @@ class _AlbumTrackRowState extends State<AlbumTrackRow> {
                   ),
                 SizedBox(width: mobile ? 8 : 16),
                 SizedBox(
-                  width: mobile ? 42 : 48,
+                  width: mobile ? 64 : 48,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [

@@ -84,11 +84,7 @@ void main() {
     expect(find.text('intro note'), findsOneWidget);
 
     PlaylistRepository.instance.upsertPlaylist(
-      const Playlist(
-        id: 7,
-        name: 'Stale Name',
-        trackCount: 0,
-      ),
+      const Playlist(id: 7, name: 'Stale Name', trackCount: 0),
     );
     await tester.pump();
 
@@ -168,10 +164,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(
-        find.byKey(const ValueKey('playlist-cover-grid')),
-        findsNothing,
-      );
+      expect(find.byKey(const ValueKey('playlist-cover-grid')), findsNothing);
       expect(
         find.byKey(const ValueKey('playlist-track-row-title-desktop-101')),
         findsOneWidget,
@@ -182,10 +175,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const ValueKey('playlist-cover-grid')),
-        findsWidgets,
-      );
+      expect(find.byKey(const ValueKey('playlist-cover-grid')), findsWidgets);
       expect(
         find.byKey(const ValueKey('playlist-track-row-title-desktop-101')),
         findsNothing,
@@ -345,8 +335,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('显示标题'), findsOneWidget);
-    expect(find.byKey(const ValueKey('playlist-cover-title-toggle')),
-        findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('playlist-cover-title-toggle')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('PlaylistDetailScreen cover mode uses a compact title toggle', (
@@ -402,8 +394,9 @@ void main() {
           .height;
       expect(find.text('Track A'), findsOneWidget);
 
-      await tester
-          .tap(find.byKey(const ValueKey('playlist-cover-title-toggle')));
+      await tester.tap(
+        find.byKey(const ValueKey('playlist-cover-title-toggle')),
+      );
       await tester.pumpAndSettle();
 
       final collapsedCardHeight = tester
@@ -434,8 +427,9 @@ void main() {
         find.byKey(const ValueKey('playlist-display-mode-cover-icon')),
       );
       await tester.pumpAndSettle();
-      await tester
-          .tap(find.byKey(const ValueKey('playlist-cover-title-toggle')));
+      await tester.tap(
+        find.byKey(const ValueKey('playlist-cover-title-toggle')),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('Track A'), findsNothing);
@@ -586,30 +580,29 @@ void main() {
     },
   );
 
-  testWidgets('PlaylistDetailScreen keeps mobile layout without display switch',
-      (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MediaQuery(
-        data: const MediaQueryData(size: Size(390, 844)),
-        child: MaterialApp(
-          home: PlaylistDetailScreen(
-            playlistId: 7,
-            client: _FakeApiClient(_buildReorderableDetail()),
+  testWidgets(
+    'PlaylistDetailScreen keeps mobile layout without display switch',
+    (tester) async {
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(size: Size(390, 844)),
+          child: MaterialApp(
+            home: PlaylistDetailScreen(
+              playlistId: 7,
+              client: _FakeApiClient(_buildReorderableDetail()),
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    expect(
-      find.byKey(const ValueKey('playlist-display-mode-switch')),
-      findsNothing,
-    );
-    expect(find.text('歌单'), findsNothing);
-    expect(find.text('封面'), findsNothing);
-  });
+      expect(
+        find.byKey(const ValueKey('playlist-display-mode-switch')),
+        findsNothing,
+      );
+      expect(find.text('封面'), findsNothing);
+    },
+  );
 
   testWidgets(
     'PlaylistDetailScreen desktop hero cover closes lightbox and keeps play and edit working',
@@ -644,10 +637,15 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.byKey(const ValueKey('playlist-hero-cover-trigger')));
+      await tester.tap(
+        find.byKey(const ValueKey('playlist-hero-cover-trigger')),
+      );
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('detail-cover-lightbox')),
+        findsOneWidget,
+      );
 
       await tester.tap(
         find.byKey(const ValueKey('detail-cover-lightbox-close-button')),
@@ -687,6 +685,7 @@ void main() {
             home: PlaylistDetailScreen(
               playlistId: 7,
               client: _FakeApiClient(_buildReorderableDetail()),
+              onBack: () {},
               onPlayTrack: (track, queue, index) {
                 playedTrack = track;
                 playedQueue = queue;
@@ -698,17 +697,45 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.widgetWithText(FilledButton, 'PLAY'), findsOneWidget);
-      expect(find.widgetWithText(OutlinedButton, 'EDIT'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, '播放全部'), findsOneWidget);
+      final coverSize = tester.getSize(
+        find.byKey(const ValueKey('playlist-hero-cover-trigger')),
+      );
+      expect(coverSize.width, lessThanOrEqualTo(132));
+      final playButtonSize = tester.getSize(
+        find.widgetWithText(FilledButton, '播放全部'),
+      );
+      expect(playButtonSize.width, greaterThanOrEqualTo(300));
+      expect(find.widgetWithText(OutlinedButton, 'EDIT'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('playlist-mobile-edit-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('playlist-mobile-content-padding')),
+        findsOneWidget,
+      );
+      final contentPadding = tester.widget<SliverPadding>(
+        find.byKey(const ValueKey('playlist-mobile-content-padding')),
+      );
+      expect(
+        contentPadding.padding.resolve(TextDirection.ltr).bottom,
+        greaterThanOrEqualTo(112),
+      );
       expect(
         find.bySemanticsLabel('Open playlist cover preview'),
         findsOneWidget,
       );
 
-      await tester.tap(find.byKey(const ValueKey('playlist-hero-cover-trigger')));
+      await tester.tap(
+        find.byKey(const ValueKey('playlist-hero-cover-trigger')),
+      );
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('detail-cover-lightbox')),
+        findsOneWidget,
+      );
 
       await tester.tap(
         find.byKey(const ValueKey('detail-cover-lightbox-close-button')),
@@ -717,13 +744,23 @@ void main() {
 
       expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsNothing);
 
-      await tester.tap(find.widgetWithText(OutlinedButton, 'EDIT'));
+      await tester.tap(
+        find.byKey(const ValueKey('playlist-mobile-edit-button')),
+      );
       await tester.pumpAndSettle();
 
-      expect(find.text('DONE'), findsOneWidget);
-      expect(find.text('ADD GROUP'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('playlist-mobile-done-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('playlist-mobile-add-group-button')),
+        findsOneWidget,
+      );
+      expect(find.text('DONE'), findsNothing);
+      expect(find.text('ADD GROUP'), findsNothing);
 
-      await tester.tap(find.widgetWithText(FilledButton, 'PLAY'));
+      await tester.tap(find.widgetWithText(FilledButton, '播放全部'));
       await tester.pumpAndSettle();
 
       expect(playedTrack?.id, 11);
@@ -758,10 +795,15 @@ void main() {
       );
       await tester.pump();
 
-      await tester.tap(find.byKey(const ValueKey('playlist-hero-cover-trigger')));
+      await tester.tap(
+        find.byKey(const ValueKey('playlist-hero-cover-trigger')),
+      );
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('detail-cover-lightbox')),
+        findsOneWidget,
+      );
       expect(
         _networkImageUrlsInLightbox(tester),
         contains('http://example.test/api/playlists/7/cover'),
@@ -795,10 +837,15 @@ void main() {
       );
       await tester.pump();
 
-      await tester.tap(find.byKey(const ValueKey('playlist-hero-cover-trigger')));
+      await tester.tap(
+        find.byKey(const ValueKey('playlist-hero-cover-trigger')),
+      );
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('detail-cover-lightbox')),
+        findsOneWidget,
+      );
       expect(
         _networkImageUrlsInLightbox(tester),
         containsAll(<String>[
@@ -817,12 +864,7 @@ void main() {
       final client = _EditableFakeApiClient(_buildEditableDetail());
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: PlaylistDetailScreen(
-            playlistId: 7,
-            client: client,
-          ),
-        ),
+        MaterialApp(home: PlaylistDetailScreen(playlistId: 7, client: client)),
       );
       await tester.pump();
 
@@ -847,11 +889,14 @@ void main() {
 
       expect(find.text('Edit Playlist Item'), findsOneWidget);
       await tester.enterText(
-          find.widgetWithText(TextField, 'Note'), 'updated note');
+        find.widgetWithText(TextField, 'Note'),
+        'updated note',
+      );
       await tester.tap(find.widgetWithText(RadioListTile<int>, 'Act 2'));
       await tester.pumpAndSettle();
-      await tester
-          .tap(find.widgetWithText(RadioListTile<String>, 'Custom Cover'));
+      await tester.tap(
+        find.widgetWithText(RadioListTile<String>, 'Custom Cover'),
+      );
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Save'));
       await tester.tap(find.text('Save'));
@@ -872,41 +917,35 @@ void main() {
     },
   );
 
-  testWidgets(
-    'PlaylistDetailScreen edit mode removes item from playlist',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(1280, 900));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+  testWidgets('PlaylistDetailScreen edit mode removes item from playlist', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      final client = _EditableFakeApiClient(_buildEditableDetail());
+    final client = _EditableFakeApiClient(_buildEditableDetail());
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: PlaylistDetailScreen(
-            playlistId: 7,
-            client: client,
-          ),
-        ),
-      );
-      await tester.pump();
+    await tester.pumpWidget(
+      MaterialApp(home: PlaylistDetailScreen(playlistId: 7, client: client)),
+    );
+    await tester.pump();
 
-      await tester.tap(find.text('EDIT'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('EDIT'));
+    await tester.pumpAndSettle();
 
-      expect(find.byIcon(Icons.more_horiz), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.more_horiz));
-      await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.more_horiz), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.more_horiz));
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Remove from playlist'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove from playlist'));
+    await tester.pumpAndSettle();
 
-      expect(client.removedTrackIds, [
-        [11],
-      ]);
-      expect(find.text('Track A'), findsNothing);
-      expect(find.text('No tracks in this playlist'), findsOneWidget);
-    },
-  );
+    expect(client.removedTrackIds, [
+      [11],
+    ]);
+    expect(find.text('Track A'), findsNothing);
+    expect(find.text('No tracks in this playlist'), findsOneWidget);
+  });
 
   testWidgets(
     'PlaylistDetailScreen edit mode drags items between groups with grouped reorder payload',
@@ -914,12 +953,7 @@ void main() {
       final client = _EditableFakeApiClient(_buildReorderableDetail());
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: PlaylistDetailScreen(
-            playlistId: 7,
-            client: client,
-          ),
-        ),
+        MaterialApp(home: PlaylistDetailScreen(playlistId: 7, client: client)),
       );
       await tester.pump();
 
@@ -933,8 +967,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final handle =
-          find.byKey(const ValueKey('playlist-item-101-drag-handle'));
+      final handle = find.byKey(
+        const ValueKey('playlist-item-101-drag-handle'),
+      );
       final target = find.byKey(const ValueKey('playlist-group-2-slot-1'));
 
       expect(handle, findsOneWidget);
@@ -1036,91 +1071,81 @@ void main() {
     },
   );
 
-  testWidgets(
-    'PlaylistDetailScreen renames system group from quick actions',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(1280, 900));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+  testWidgets('PlaylistDetailScreen renames system group from quick actions', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      final client = _EditableFakeApiClient(_buildThreeGroupDetail());
+    final client = _EditableFakeApiClient(_buildThreeGroupDetail());
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: PlaylistDetailScreen(
-            playlistId: 7,
-            client: client,
-          ),
-        ),
-      );
-      await tester.pump();
+    await tester.pumpWidget(
+      MaterialApp(home: PlaylistDetailScreen(playlistId: 7, client: client)),
+    );
+    await tester.pump();
 
-      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-      addTearDown(gesture.removePointer);
-      await gesture.addPointer();
-      await gesture.moveTo(
-        tester.getCenter(find.byKey(const ValueKey('playlist-group-header-1'))),
-      );
-      await tester.pumpAndSettle();
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(gesture.removePointer);
+    await gesture.addPointer();
+    await gesture.moveTo(
+      tester.getCenter(find.byKey(const ValueKey('playlist-group-header-1'))),
+    );
+    await tester.pumpAndSettle();
 
-      await tester
-          .tap(find.byKey(const ValueKey('playlist-group-1-rename-button')));
-      await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('playlist-group-1-rename-button')),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.text('Rename Group'), findsOneWidget);
-      await tester.enterText(find.byType(TextField), 'Loose Tracks');
-      await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
+    expect(find.text('Rename Group'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'Loose Tracks');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
 
-      expect(client.renamedGroups, [
-        (playlistId: 7, groupId: 1, title: 'Loose Tracks'),
-      ]);
-      expect(find.text('Loose Tracks'), findsOneWidget);
-      expect(find.text('Ungrouped'), findsNothing);
-    },
-  );
+    expect(client.renamedGroups, [
+      (playlistId: 7, groupId: 1, title: 'Loose Tracks'),
+    ]);
+    expect(find.text('Loose Tracks'), findsOneWidget);
+    expect(find.text('Ungrouped'), findsNothing);
+  });
 
-  testWidgets(
-    'PlaylistDetailScreen renames normal groups from quick actions',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(1280, 900));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+  testWidgets('PlaylistDetailScreen renames normal groups from quick actions', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      final client = _EditableFakeApiClient(_buildThreeGroupDetail());
+    final client = _EditableFakeApiClient(_buildThreeGroupDetail());
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: PlaylistDetailScreen(
-            playlistId: 7,
-            client: client,
-          ),
-        ),
-      );
-      await tester.pump();
+    await tester.pumpWidget(
+      MaterialApp(home: PlaylistDetailScreen(playlistId: 7, client: client)),
+    );
+    await tester.pump();
 
-      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-      addTearDown(gesture.removePointer);
-      await gesture.addPointer();
-      await gesture.moveTo(
-        tester.getCenter(find.byKey(const ValueKey('playlist-group-header-2'))),
-      );
-      await tester.pumpAndSettle();
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(gesture.removePointer);
+    await gesture.addPointer();
+    await gesture.moveTo(
+      tester.getCenter(find.byKey(const ValueKey('playlist-group-header-2'))),
+    );
+    await tester.pumpAndSettle();
 
-      await tester
-          .tap(find.byKey(const ValueKey('playlist-group-2-rename-button')));
-      await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('playlist-group-2-rename-button')),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.text('Rename Group'), findsOneWidget);
-      await tester.enterText(find.byType(TextField), 'Act II');
-      await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
+    expect(find.text('Rename Group'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'Act II');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
 
-      expect(client.renamedGroups, [
-        (playlistId: 7, groupId: 2, title: 'Act II'),
-      ]);
-      expect(find.text('Act II'), findsOneWidget);
-      expect(find.text('Act 2'), findsNothing);
-    },
-  );
+    expect(client.renamedGroups, [
+      (playlistId: 7, groupId: 2, title: 'Act II'),
+    ]);
+    expect(find.text('Act II'), findsOneWidget);
+    expect(find.text('Act 2'), findsNothing);
+  });
 
   testWidgets(
     'PlaylistDetailScreen confirms deleting normal groups and moves items to Ungrouped',
@@ -1131,12 +1156,7 @@ void main() {
       final client = _EditableFakeApiClient(_buildThreeGroupDetail());
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: PlaylistDetailScreen(
-            playlistId: 7,
-            client: client,
-          ),
-        ),
+        MaterialApp(home: PlaylistDetailScreen(playlistId: 7, client: client)),
       );
       await tester.pump();
 
@@ -1148,24 +1168,26 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester
-          .tap(find.byKey(const ValueKey('playlist-group-2-more-button')));
+      await tester.tap(
+        find.byKey(const ValueKey('playlist-group-2-more-button')),
+      );
       await tester.pumpAndSettle();
-      await tester
-          .tap(find.byKey(const ValueKey('playlist-group-2-delete-action')));
+      await tester.tap(
+        find.byKey(const ValueKey('playlist-group-2-delete-action')),
+      );
       await tester.pumpAndSettle();
 
       expect(find.textContaining('Delete group'), findsOneWidget);
       expect(find.textContaining('Act 2'), findsAtLeastNWidgets(1));
-      expect(find.text('Tracks in this group will move to Ungrouped.'),
-          findsOneWidget);
+      expect(
+        find.text('Tracks in this group will move to Ungrouped.'),
+        findsOneWidget,
+      );
 
       await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
       await tester.pumpAndSettle();
 
-      expect(client.deletedGroups, [
-        (playlistId: 7, groupId: 2),
-      ]);
+      expect(client.deletedGroups, [(playlistId: 7, groupId: 2)]);
       expect(find.text('Act 2'), findsNothing);
       expect(find.text('Track C'), findsOneWidget);
     },
@@ -1180,12 +1202,7 @@ void main() {
       final client = _EditableFakeApiClient(_buildThreeGroupDetail());
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: PlaylistDetailScreen(
-            playlistId: 7,
-            client: client,
-          ),
-        ),
+        MaterialApp(home: PlaylistDetailScreen(playlistId: 7, client: client)),
       );
       await tester.pump();
 
@@ -1213,8 +1230,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(client.reorderRequests, hasLength(1));
-      expect(client.reorderRequests.single.map((group) => group.id).toList(),
-          [1, 3, 2]);
+      expect(client.reorderRequests.single.map((group) => group.id).toList(), [
+        1,
+        3,
+        2,
+      ]);
       expect(find.text('Finale'), findsOneWidget);
     },
   );
@@ -1228,12 +1248,7 @@ void main() {
       final client = _EditableFakeApiClient(_buildThreeGroupDetail());
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: PlaylistDetailScreen(
-            playlistId: 7,
-            client: client,
-          ),
-        ),
+        MaterialApp(home: PlaylistDetailScreen(playlistId: 7, client: client)),
       );
       await tester.pump();
 
@@ -1261,10 +1276,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(client.reorderRequests, hasLength(1));
-      expect(
-        client.reorderRequests.single.map((group) => group.id).toList(),
-        [2, 1, 3],
-      );
+      expect(client.reorderRequests.single.map((group) => group.id).toList(), [
+        2,
+        1,
+        3,
+      ]);
     },
   );
 
@@ -1292,45 +1308,43 @@ void main() {
     expect(find.text('Legacy Track'), findsOneWidget);
   });
 
-  testWidgets(
-    'Custom item cover overrides default cover in playlist detail',
-    (tester) async {
-      const item = PlaylistItem(
-        id: 9,
-        playlistId: 7,
-        trackId: 3,
-        groupId: 1,
-        position: 0,
-        note: '',
-        coverMode: 'custom',
-        customCoverPath: 'http://example.test/custom.jpg',
-        track: Track(
-          id: 3,
-          title: 'Track A',
-          audioPath: '/a.flac',
-          videoPath: '',
-        ),
-      );
+  testWidgets('Custom item cover overrides default cover in playlist detail', (
+    tester,
+  ) async {
+    const item = PlaylistItem(
+      id: 9,
+      playlistId: 7,
+      trackId: 3,
+      groupId: 1,
+      position: 0,
+      note: '',
+      coverMode: 'custom',
+      customCoverPath: 'http://example.test/custom.jpg',
+      track: Track(
+        id: 3,
+        title: 'Track A',
+        audioPath: '/a.flac',
+        videoPath: '',
+      ),
+    );
 
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: PlaylistTrackRow(
-              item: item,
-              baseUrl: 'http://example.test',
-              onTap: _noop,
-              onRemove: _noop,
-            ),
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: PlaylistTrackRow(
+            item: item,
+            baseUrl: 'http://example.test',
+            onTap: _noop,
+            onRemove: _noop,
           ),
         ),
-      );
+      ),
+    );
 
-      final image = tester.widget<Image>(find.byType(Image).first);
-      final provider =
-          (image.image as ResizeImage).imageProvider as NetworkImage;
-      expect(provider.url, 'http://example.test/custom.jpg');
-    },
-  );
+    final image = tester.widget<Image>(find.byType(Image).first);
+    final provider = (image.image as ResizeImage).imageProvider as NetworkImage;
+    expect(provider.url, 'http://example.test/custom.jpg');
+  });
 
   testWidgets(
     'PlaylistCoverGrid falls back to album cover for album-backed tracks',
@@ -1376,129 +1390,137 @@ void main() {
       );
 
       expect(fallback, isA<Image>());
-      final provider = ((fallback as Image).image as ResizeImage).imageProvider
-          as NetworkImage;
+      final provider =
+          ((fallback as Image).image as ResizeImage).imageProvider
+              as NetworkImage;
       expect(provider.url, 'http://example.test/api/albums/42/cover');
     },
   );
 
-  testWidgets(
-    'PlaylistTrackRow shows note in dedicated desktop column',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(1280, 900));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+  testWidgets('PlaylistTrackRow shows note in dedicated desktop column', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      const item = PlaylistItem(
-        id: 10,
-        playlistId: 7,
-        trackId: 4,
-        groupId: 1,
-        position: 0,
-        note: 'desktop note',
-        coverMode: 'default',
-        track: Track(
-          id: 4,
-          title: 'Column Track',
-          audioPath: '/column.flac',
-          videoPath: '',
-          vocal: 'Miku',
-        ),
-      );
+    const item = PlaylistItem(
+      id: 10,
+      playlistId: 7,
+      trackId: 4,
+      groupId: 1,
+      position: 0,
+      note: 'desktop note',
+      coverMode: 'default',
+      track: Track(
+        id: 4,
+        title: 'Column Track',
+        audioPath: '/column.flac',
+        videoPath: '',
+        vocal: 'Miku',
+      ),
+    );
 
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: MediaQuery(
-            data: MediaQueryData(size: Size(1280, 900)),
-            child: Scaffold(
-              body: PlaylistTrackRow(
-                item: item,
-                baseUrl: 'http://example.test',
-                onTap: _noop,
-              ),
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(size: Size(1280, 900)),
+          child: Scaffold(
+            body: PlaylistTrackRow(
+              item: item,
+              baseUrl: 'http://example.test',
+              onTap: _noop,
             ),
           ),
         ),
-      );
-      await tester.pump();
+      ),
+    );
+    await tester.pump();
 
-      expect(
-        find.byKey(const ValueKey('playlist-track-row-title-desktop-10')),
-        findsOneWidget,
-      );
-      expect(find.byKey(const ValueKey('playlist-track-row-note-desktop')),
-          findsOneWidget);
-      expect(find.byKey(const ValueKey('playlist-track-row-note-mobile')),
-          findsNothing);
-      expect(find.text('desktop note'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('playlist-track-row-title-desktop-10')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('playlist-track-row-note-desktop')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('playlist-track-row-note-mobile')),
+      findsNothing,
+    );
+    expect(find.text('desktop note'), findsOneWidget);
 
-      final titleWidth = tester
-          .getSize(
-            find.byKey(const ValueKey('playlist-track-row-title-desktop-10')),
-          )
-          .width;
-      expect(titleWidth, lessThan(320));
+    final titleWidth = tester
+        .getSize(
+          find.byKey(const ValueKey('playlist-track-row-title-desktop-10')),
+        )
+        .width;
+    expect(titleWidth, lessThan(320));
 
-      final noteText = tester.widget<Text>(
-        find.byKey(const ValueKey('playlist-track-row-note-desktop')),
-      );
-      expect(noteText.maxLines, 3);
+    final noteText = tester.widget<Text>(
+      find.byKey(const ValueKey('playlist-track-row-note-desktop')),
+    );
+    expect(noteText.maxLines, 3);
 
-      final noteLeft = tester
-          .getTopLeft(
-              find.byKey(const ValueKey('playlist-track-row-note-desktop')))
-          .dx;
-      expect(noteLeft, lessThan(600));
-    },
-  );
+    final noteLeft = tester
+        .getTopLeft(
+          find.byKey(const ValueKey('playlist-track-row-note-desktop')),
+        )
+        .dx;
+    expect(noteLeft, lessThan(600));
+  });
 
-  testWidgets(
-    'PlaylistTrackRow keeps note under title on mobile',
-    (tester) async {
-      const item = PlaylistItem(
-        id: 11,
-        playlistId: 7,
-        trackId: 5,
-        groupId: 1,
-        position: 0,
-        note: 'mobile note',
-        coverMode: 'default',
-        track: Track(
-          id: 5,
-          title: 'Mobile Track',
-          audioPath: '/mobile.flac',
-          videoPath: '',
-          vocal: 'Miku',
-        ),
-      );
+  testWidgets('PlaylistTrackRow keeps note under title on mobile', (
+    tester,
+  ) async {
+    const item = PlaylistItem(
+      id: 11,
+      playlistId: 7,
+      trackId: 5,
+      groupId: 1,
+      position: 0,
+      note: 'mobile note',
+      coverMode: 'default',
+      track: Track(
+        id: 5,
+        title: 'Mobile Track',
+        audioPath: '/mobile.flac',
+        videoPath: '',
+        vocal: 'Miku',
+      ),
+    );
 
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: MediaQuery(
-            data: MediaQueryData(size: Size(390, 844)),
-            child: Scaffold(
-              body: PlaylistTrackRow(
-                item: item,
-                baseUrl: 'http://example.test',
-                onTap: _noop,
-              ),
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(size: Size(390, 844)),
+          child: Scaffold(
+            body: PlaylistTrackRow(
+              item: item,
+              baseUrl: 'http://example.test',
+              onTap: _noop,
             ),
           ),
         ),
-      );
-      await tester.pump();
+      ),
+    );
+    await tester.pump();
 
-      expect(find.byKey(const ValueKey('playlist-track-row-note-mobile')),
-          findsOneWidget);
-      expect(find.byKey(const ValueKey('playlist-track-row-note-desktop')),
-          findsNothing);
-      expect(find.text('mobile note'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('playlist-track-row-note-mobile')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('playlist-track-row-note-desktop')),
+      findsNothing,
+    );
+    expect(find.text('mobile note'), findsOneWidget);
 
-      final noteText = tester.widget<Text>(
-        find.byKey(const ValueKey('playlist-track-row-note-mobile')),
-      );
-      expect(noteText.maxLines, 3);
-    },
-  );
+    final noteText = tester.widget<Text>(
+      find.byKey(const ValueKey('playlist-track-row-note-mobile')),
+    );
+    expect(noteText.maxLines, 3);
+  });
 
   testWidgets(
     'PlaylistDetailScreen uses minimum shared desktop title width for short titles',
@@ -1612,8 +1634,9 @@ void main() {
         ),
       );
 
-      await tester
-          .tap(find.widgetWithText(RadioListTile<String>, 'Library Cover'));
+      await tester.tap(
+        find.widgetWithText(RadioListTile<String>, 'Library Cover'),
+      );
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Save'));
       await tester.tap(find.text('Save'));
@@ -1631,10 +1654,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: PlaylistDetailScreen(
-          playlistId: 7,
-          client: _ThrowingApiClient(),
-        ),
+        home: PlaylistDetailScreen(playlistId: 7, client: _ThrowingApiClient()),
       ),
     );
     await tester.pump();
@@ -1648,11 +1668,7 @@ void main() {
     'PlaylistDetailScreen keeps error state when cached playlist metadata exists',
     (tester) async {
       PlaylistRepository.instance.upsertPlaylist(
-        const Playlist(
-          id: 7,
-          name: 'Cached Playlist',
-          trackCount: 3,
-        ),
+        const Playlist(id: 7, name: 'Cached Playlist', trackCount: 3),
       );
 
       await tester.pumpWidget(
@@ -1722,12 +1738,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: PlaylistDetailScreen(
-          playlistId: 7,
-          client: client,
-        ),
-      ),
+      MaterialApp(home: PlaylistDetailScreen(playlistId: 7, client: client)),
     );
     await tester.pump();
 
@@ -1802,9 +1813,11 @@ class _EditableFakeApiClient extends ApiClient {
                 .firstWhere((group) => group.id == groups[groupIndex].id)
                 .updatedAt,
             items: [
-              for (var itemIndex = 0;
-                  itemIndex < groups[groupIndex].itemIds.length;
-                  itemIndex++)
+              for (
+                var itemIndex = 0;
+                itemIndex < groups[groupIndex].itemIds.length;
+                itemIndex++
+              )
                 PlaylistItem(
                   id: itemsById[groups[groupIndex].itemIds[itemIndex]]!.id,
                   playlistId: itemsById[groups[groupIndex].itemIds[itemIndex]]!
@@ -1857,7 +1870,10 @@ class _EditableFakeApiClient extends ApiClient {
 
   @override
   Future<void> renamePlaylistGroup(
-      int playlistId, int groupId, String title) async {
+    int playlistId,
+    int groupId,
+    String title,
+  ) async {
     renamedGroups.add((playlistId: playlistId, groupId: groupId, title: title));
     _detail = PlaylistDetailData(
       playlist: _detail.playlist,
@@ -1884,8 +1900,9 @@ class _EditableFakeApiClient extends ApiClient {
   Future<void> deletePlaylistGroup(int playlistId, int groupId) async {
     deletedGroups.add((playlistId: playlistId, groupId: groupId));
 
-    final targetGroup =
-        _detail.groups.firstWhere((group) => group.id == groupId);
+    final targetGroup = _detail.groups.firstWhere(
+      (group) => group.id == groupId,
+    );
     final ungrouped = _detail.groups.firstWhere((group) => group.isSystem);
 
     _detail = PlaylistDetailData(
@@ -2064,11 +2081,7 @@ void _noop() {}
 
 PlaylistDetailData _buildEditableDetail() {
   return const PlaylistDetailData(
-    playlist: Playlist(
-      id: 7,
-      name: 'Edit Mix',
-      trackCount: 1,
-    ),
+    playlist: Playlist(id: 7, name: 'Edit Mix', trackCount: 1),
     groups: [
       PlaylistGroup(
         id: 1,
@@ -2103,11 +2116,7 @@ PlaylistDetailData _buildDesktopTitleWidthDetail({
   required String longTitle,
 }) {
   return PlaylistDetailData(
-    playlist: const Playlist(
-      id: 7,
-      name: 'Desktop Width Mix',
-      trackCount: 2,
-    ),
+    playlist: const Playlist(id: 7, name: 'Desktop Width Mix', trackCount: 2),
     groups: [
       PlaylistGroup(
         id: 1,
@@ -2154,11 +2163,7 @@ PlaylistDetailData _buildDesktopTitleWidthDetail({
 
 PlaylistDetailData _buildReorderableDetail() {
   return const PlaylistDetailData(
-    playlist: Playlist(
-      id: 7,
-      name: 'Edit Mix',
-      trackCount: 3,
-    ),
+    playlist: Playlist(id: 7, name: 'Edit Mix', trackCount: 3),
     groups: [
       PlaylistGroup(
         id: 1,
@@ -2228,10 +2233,7 @@ PlaylistDetailData _buildReorderableDetail() {
 
 PlaylistDetailData _buildDetailWithPlaylist(Playlist playlist) {
   final detail = _buildReorderableDetail();
-  return PlaylistDetailData(
-    playlist: playlist,
-    groups: detail.groups,
-  );
+  return PlaylistDetailData(playlist: playlist, groups: detail.groups);
 }
 
 List<String> _networkImageUrlsInLightbox(WidgetTester tester) {
@@ -2250,11 +2252,7 @@ List<String> _networkImageUrlsInLightbox(WidgetTester tester) {
 
 PlaylistDetailData _buildThreeGroupDetail() {
   return const PlaylistDetailData(
-    playlist: Playlist(
-      id: 7,
-      name: 'Group Edit Mix',
-      trackCount: 4,
-    ),
+    playlist: Playlist(id: 7, name: 'Group Edit Mix', trackCount: 4),
     groups: [
       PlaylistGroup(
         id: 1,
@@ -2331,10 +2329,7 @@ PlaylistDetailData _buildThreeGroupDetail() {
 }
 
 class _UpdatedItemCall {
-  const _UpdatedItemCall({
-    required this.itemId,
-    required this.request,
-  });
+  const _UpdatedItemCall({required this.itemId, required this.request});
 
   final int itemId;
   final PlaylistItemUpdateRequest request;

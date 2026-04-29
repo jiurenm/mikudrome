@@ -410,6 +410,22 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     });
   }
 
+  void _openMobilePlaylist(int playlistId) {
+    if (_mobileTab == MobileAppTab.myMusic &&
+        _selectedPlaylistId == playlistId &&
+        !_showPlayer) {
+      return;
+    }
+    _recordMobileHistory();
+    setState(() {
+      _mobileTab = MobileAppTab.myMusic;
+      _route = ShellRoute.playlists;
+      _clearSelection();
+      _selectedPlaylistId = playlistId;
+      _showPlayer = false;
+    });
+  }
+
   void _selectMobileTab(MobileAppTab tab) {
     if (tab == _mobileTab) return;
     _recordMobileHistory();
@@ -1059,13 +1075,16 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
               _selectedAlbum == null &&
               _selectedProducer == null &&
               _selectedVocalist == null,
+          preferMobileHome: true,
           child: mainContent,
         ),
         myMusic: showMyMusicContent
             ? mainContent
             : MyMusicScreen(
                 onNavigate: _navigateMobileMyMusic,
+                onPlaylistTap: _openMobilePlaylist,
                 onQueue: _openCurrentPlayer,
+                currentTrack: currentTrack,
               ),
         settings: SettingsScreen(
           serverUrl: ApiConfig.defaultBaseUrl,

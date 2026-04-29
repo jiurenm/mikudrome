@@ -209,13 +209,13 @@ class AlbumHeroSection extends StatelessWidget {
 
     return Container(
       decoration: gradient,
-      padding: const EdgeInsets.fromLTRB(24, 10, 24, 8),
+      padding: const EdgeInsets.fromLTRB(24, 18, 24, 16),
       child: Row(
         key: const ValueKey('album-detail-mobile-hero-row'),
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _buildInteractiveAlbumCover(context, 96),
-          const SizedBox(width: 14),
+          _buildInteractiveAlbumCover(context, 128),
+          const SizedBox(width: 18),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -228,7 +228,7 @@ class AlbumHeroSection extends StatelessWidget {
                     album.title,
                     maxLines: 1,
                     softWrap: false,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       color: AppTheme.textPrimary,
                       fontWeight: FontWeight.w800,
                     ),

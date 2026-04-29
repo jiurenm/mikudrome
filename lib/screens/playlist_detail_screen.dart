@@ -265,13 +265,17 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     );
     if (title == null || title.trim().isEmpty) return;
     await _client.renamePlaylistGroup(
-        widget.playlistId, group.id, title.trim());
+      widget.playlistId,
+      group.id,
+      title.trim(),
+    );
     await _loadPlaylistAndTracks();
   }
 
   Future<void> _deleteGroup(PlaylistGroup group) async {
-    final systemGroup =
-        _detail?.groups.where((candidate) => candidate.isSystem).firstOrNull;
+    final systemGroup = _detail?.groups
+        .where((candidate) => candidate.isSystem)
+        .firstOrNull;
     final fallbackTitle = systemGroup?.title.trim().isNotEmpty == true
         ? systemGroup!.title
         : 'Ungrouped';
@@ -296,17 +300,18 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     await _client.deletePlaylistGroup(widget.playlistId, group.id);
     await _loadPlaylistAndTracks();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Group deleted')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Group deleted')));
   }
 
   Future<void> _moveGroup(PlaylistGroup group, int targetIndex) async {
     final detail = _detail;
     if (detail == null || _isPersistingOrder) return;
 
-    final sourceIndex =
-        detail.groups.indexWhere((candidate) => candidate.id == group.id);
+    final sourceIndex = detail.groups.indexWhere(
+      (candidate) => candidate.id == group.id,
+    );
     if (sourceIndex < 0) return;
 
     var normalizedTargetIndex = targetIndex.clamp(0, detail.groups.length);
@@ -333,9 +338,11 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
           nextGroups[groupIndex],
           position: groupIndex,
           items: [
-            for (var itemIndex = 0;
-                itemIndex < nextGroups[groupIndex].items.length;
-                itemIndex++)
+            for (
+              var itemIndex = 0;
+              itemIndex < nextGroups[groupIndex].items.length;
+              itemIndex++
+            )
               _copyItem(
                 nextGroups[groupIndex].items[itemIndex],
                 groupId: nextGroups[groupIndex].id,
@@ -364,9 +371,9 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
           groups: previousGroups,
         );
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_sanitizeError(e))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_sanitizeError(e))));
     } finally {
       if (mounted) {
         setState(() {
@@ -405,9 +412,9 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     final bytes = file.bytes;
     if (bytes == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to read file')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to read file')));
       return;
     }
 
@@ -420,27 +427,27 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     );
     await _loadPlaylistAndTracks();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Custom cover uploaded')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Custom cover uploaded')));
   }
 
   Future<void> _clearItemCover(PlaylistItem item) async {
     await _client.clearPlaylistItemCover(widget.playlistId, item.id);
     await _loadPlaylistAndTracks();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Custom cover removed')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Custom cover removed')));
   }
 
   Future<void> _removeItem(PlaylistItem item) async {
     await _client.removeTracksFromPlaylist(widget.playlistId, [item.trackId]);
     await _loadPlaylistAndTracks();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Removed from playlist')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Removed from playlist')));
   }
 
   Future<void> _persistGroupedOrder() async {
@@ -473,17 +480,20 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     final detail = _detail;
     if (detail == null || _isPersistingOrder) return;
 
-    final sourceGroupIndex =
-        detail.groups.indexWhere((group) => group.id == item.groupId);
+    final sourceGroupIndex = detail.groups.indexWhere(
+      (group) => group.id == item.groupId,
+    );
     if (sourceGroupIndex < 0) return;
 
     final sourceGroup = detail.groups[sourceGroupIndex];
-    final sourceIndex =
-        sourceGroup.items.indexWhere((candidate) => candidate.id == item.id);
+    final sourceIndex = sourceGroup.items.indexWhere(
+      (candidate) => candidate.id == item.id,
+    );
     if (sourceIndex < 0) return;
 
-    final targetGroupIndex =
-        detail.groups.indexWhere((group) => group.id == targetGroupId);
+    final targetGroupIndex = detail.groups.indexWhere(
+      (group) => group.id == targetGroupId,
+    );
     if (targetGroupIndex < 0) return;
 
     var normalizedTargetIndex = targetIndex;
@@ -504,8 +514,10 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     final nextGroups = _cloneGroups(detail.groups);
     final movingItem = nextGroups[sourceGroupIndex].items.removeAt(sourceIndex);
     final destinationItems = nextGroups[targetGroupIndex].items;
-    final insertionIndex =
-        normalizedTargetIndex.clamp(0, destinationItems.length);
+    final insertionIndex = normalizedTargetIndex.clamp(
+      0,
+      destinationItems.length,
+    );
     destinationItems.insert(
       insertionIndex,
       _copyItem(movingItem, groupId: targetGroupId, position: insertionIndex),
@@ -517,9 +529,11 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
           nextGroups[groupIndex],
           position: groupIndex,
           items: [
-            for (var itemIndex = 0;
-                itemIndex < nextGroups[groupIndex].items.length;
-                itemIndex++)
+            for (
+              var itemIndex = 0;
+              itemIndex < nextGroups[groupIndex].items.length;
+              itemIndex++
+            )
               _copyItem(
                 nextGroups[groupIndex].items[itemIndex],
                 groupId: nextGroups[groupIndex].id,
@@ -548,9 +562,9 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
           groups: previousGroups,
         );
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_sanitizeError(e))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_sanitizeError(e))));
     } finally {
       if (mounted) {
         setState(() {
@@ -583,11 +597,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     );
   }
 
-  PlaylistItem _copyItem(
-    PlaylistItem item, {
-    int? groupId,
-    int? position,
-  }) {
+  PlaylistItem _copyItem(PlaylistItem item, {int? groupId, int? position}) {
     return PlaylistItem(
       id: item.id,
       playlistId: item.playlistId,
@@ -605,10 +615,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     );
   }
 
-  Widget _buildDropSlot(
-    PlaylistGroup group,
-    int itemIndex,
-  ) {
+  Widget _buildDropSlot(PlaylistGroup group, int itemIndex) {
     return DragTarget<_PlaylistDragData>(
       key: ValueKey('playlist-group-${group.id}-slot-$itemIndex'),
       onWillAcceptWithDetails: (details) => !_isPersistingOrder,
@@ -632,9 +639,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(999),
             border: active
-                ? Border.all(
-                    color: AppTheme.mikuGreen.withValues(alpha: 0.75),
-                  )
+                ? Border.all(color: AppTheme.mikuGreen.withValues(alpha: 0.75))
                 : null,
           ),
         );
@@ -666,9 +671,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(999),
             border: active
-                ? Border.all(
-                    color: AppTheme.mikuGreen.withValues(alpha: 0.75),
-                  )
+                ? Border.all(color: AppTheme.mikuGreen.withValues(alpha: 0.75))
                 : null,
           ),
         );
@@ -713,9 +716,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
           decoration: BoxDecoration(
             color: AppTheme.cardBg,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.08),
-            ),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.25),
@@ -731,10 +732,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
         ),
       ),
       childWhenDragging: icon,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.grab,
-        child: icon,
-      ),
+      child: MouseRegion(cursor: SystemMouseCursors.grab, child: icon),
     );
   }
 
@@ -775,9 +773,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
           decoration: BoxDecoration(
             color: AppTheme.cardBg,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.08),
-            ),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.25),
@@ -793,17 +789,14 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
         ),
       ),
       childWhenDragging: icon,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.grab,
-        child: icon,
-      ),
+      child: MouseRegion(cursor: SystemMouseCursors.grab, child: icon),
     );
   }
 
   double _desktopTitleColumnWidth(BuildContext context) {
-    final textStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
-          fontWeight: FontWeight.w700,
-        );
+    final textStyle = Theme.of(
+      context,
+    ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700);
     if (textStyle == null || _items.isEmpty) {
       return _desktopTitleColumnMinWidth;
     }
@@ -814,10 +807,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
 
     for (final item in _items) {
       final painter = TextPainter(
-        text: TextSpan(
-          text: item.track.title,
-          style: textStyle,
-        ),
+        text: TextSpan(text: item.track.title, style: textStyle),
         maxLines: 1,
         textDirection: textDirection,
         textScaler: textScaler,
@@ -856,7 +846,8 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
             showDragHandle: _isEditMode,
             dragHandle: _isEditMode ? _buildDragHandle(item) : null,
             desktopTitleWidth: desktopTitleWidth,
-            isCurrentlyPlaying: widget.currentPlayingTrackId == item.track.id &&
+            isCurrentlyPlaying:
+                widget.currentPlayingTrackId == item.track.id &&
                 widget.isPlaying,
           ),
         ),
@@ -870,7 +861,8 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
 
   Widget _buildGroupHeader(PlaylistGroup group, {required bool interactive}) {
     final isHovered = _hoveredGroupId == group.id;
-    final showQuickActions = interactive &&
+    final showQuickActions =
+        interactive &&
         (isHovered ||
             _draggingGroupId == group.id ||
             _activeGroupMenuId == group.id);
@@ -957,7 +949,8 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                       child: Text(
                         'Delete group',
                         key: ValueKey(
-                            'playlist-group-${group.id}-delete-action'),
+                          'playlist-group-${group.id}-delete-action',
+                        ),
                       ),
                     ),
                   ],
@@ -1001,9 +994,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.02),
                 borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.06),
-                ),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
               ),
               child: InkWell(
                 key: const ValueKey('playlist-cover-title-toggle'),
@@ -1014,8 +1005,10 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                 },
                 borderRadius: BorderRadius.circular(999),
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 2,
+                    vertical: 2,
+                  ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -1032,11 +1025,11 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                       Text(
                         '显示标题',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: _showCoverTitles
-                                  ? AppTheme.textPrimary.withValues(alpha: 0.88)
-                                  : AppTheme.textMuted,
-                              fontSize: 11,
-                            ),
+                          color: _showCoverTitles
+                              ? AppTheme.textPrimary.withValues(alpha: 0.88)
+                              : AppTheme.textMuted,
+                          fontSize: 11,
+                        ),
                       ),
                     ],
                   ),
@@ -1067,10 +1060,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
           child: Opacity(
             opacity: _draggingGroupId == group.id ? 0.55 : 1,
             child: PlaylistGroupSection(
-              header: _buildGroupHeader(
-                group,
-                interactive: canQuickEditGroups,
-              ),
+              header: _buildGroupHeader(group, interactive: canQuickEditGroups),
               children: _buildGroupChildren(
                 group,
                 desktopTitleWidth: desktopTitleWidth,
@@ -1085,9 +1075,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
       children.add(_buildGroupDropSlot(groups.length));
     }
 
-    return SliverList(
-      delegate: SliverChildListDelegate(children),
-    );
+    return SliverList(delegate: SliverChildListDelegate(children));
   }
 
   Widget _buildContentSliver({
@@ -1095,9 +1083,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     required double? desktopTitleWidth,
   }) {
     if (!mobile && _displayMode == PlaylistDisplayMode.cover) {
-      return SliverToBoxAdapter(
-        child: _buildCoverModeContent(),
-      );
+      return SliverToBoxAdapter(child: _buildCoverModeContent());
     }
 
     return _buildListModeContent(desktopTitleWidth);
@@ -1110,9 +1096,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   }) {
     if (_loading) {
       return const SliverFillRemaining(
-        child: Center(
-          child: CircularProgressIndicator(),
-        ),
+        child: Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -1153,9 +1137,9 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                 const SizedBox(height: 16),
                 Text(
                   'No tracks in this playlist',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: AppTheme.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(color: AppTheme.textMuted),
                 ),
               ],
             ),
@@ -1165,9 +1149,14 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     }
 
     return SliverPadding(
-      padding: EdgeInsets.symmetric(
-        horizontal: mobile ? 8 : 32,
-        vertical: 16,
+      key: mobile
+          ? const ValueKey('playlist-mobile-content-padding')
+          : const ValueKey('playlist-desktop-content-padding'),
+      padding: EdgeInsets.fromLTRB(
+        mobile ? 8 : 32,
+        16,
+        mobile ? 8 : 32,
+        mobile ? 128 : 16,
       ),
       sliver: _buildContentSliver(
         mobile: mobile,
@@ -1235,7 +1224,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
         children: [
           Column(
             children: [
-              if (_isEditMode)
+              if (_isEditMode && !mobile)
                 PlaylistEditBar(
                   onDone: _finishEditMode,
                   onAddGroup: _createGroup,
@@ -1245,17 +1234,52 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                   slivers: [
                     if (isMobile(context) && widget.onBack != null)
                       SliverAppBar(
-                        backgroundColor: Colors.transparent,
-                        pinned: false,
-                        floating: true,
+                        backgroundColor: Color.alphaBlend(
+                          AppTheme.mikuGreen.withValues(alpha: 0.16),
+                          AppTheme.mikuDark,
+                        ),
+                        surfaceTintColor: Colors.transparent,
+                        pinned: true,
+                        floating: false,
+                        toolbarHeight: 56,
                         leading: IconButton(
-                          icon: const Icon(Icons.arrow_back),
+                          icon: const Icon(Icons.chevron_left, size: 28),
+                          color: AppTheme.textPrimary,
                           onPressed: widget.onBack,
+                          tooltip: 'Back',
                         ),
-                        title: Text(
-                          _playlist?.name ?? '',
-                          style: const TextStyle(fontSize: 16),
-                        ),
+                        actions: [
+                          if (_isEditMode)
+                            IconButton(
+                              key: const ValueKey(
+                                'playlist-mobile-add-group-button',
+                              ),
+                              icon: const Icon(
+                                Icons.create_new_folder_outlined,
+                                size: 22,
+                              ),
+                              color: AppTheme.textPrimary,
+                              onPressed: _createGroup,
+                              tooltip: 'Add group',
+                            ),
+                          IconButton(
+                            key: ValueKey(
+                              _isEditMode
+                                  ? 'playlist-mobile-done-button'
+                                  : 'playlist-mobile-edit-button',
+                            ),
+                            icon: Icon(
+                              _isEditMode ? Icons.check : Icons.edit_outlined,
+                              size: 22,
+                            ),
+                            color: AppTheme.textPrimary,
+                            onPressed: _isEditMode
+                                ? _finishEditMode
+                                : _toggleEditMode,
+                            tooltip: _isEditMode ? 'Done' : 'Edit playlist',
+                          ),
+                          const SizedBox(width: 12),
+                        ],
                       ),
                     if (_playlist != null)
                       SliverToBoxAdapter(
@@ -1264,7 +1288,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                           client: _client,
                           onPlay: _playAll,
                           canPlay: _items.isNotEmpty,
-                          onEdit: _toggleEditMode,
+                          onEdit: mobile ? null : _toggleEditMode,
                         ),
                       ),
                     if (!mobile &&
@@ -1292,17 +1316,13 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
 }
 
 class _PlaylistDragData {
-  const _PlaylistDragData({
-    required this.itemId,
-  });
+  const _PlaylistDragData({required this.itemId});
 
   final int itemId;
 }
 
 class _PlaylistGroupDragData {
-  const _PlaylistGroupDragData({
-    required this.groupId,
-  });
+  const _PlaylistGroupDragData({required this.groupId});
 
   final int groupId;
 }
