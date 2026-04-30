@@ -7,8 +7,10 @@ import '../api/config.dart';
 import '../models/track.dart';
 import 'mobile_audio_playback.dart';
 
+Future<MikudromeAudioHandler>? _audioServiceHandlerInit;
+
 MobileAudioPlaybackService createMobileAudioPlaybackService() {
-  return JustAudioMobileAudioPlaybackService();
+  return JustAudioMobileAudioPlaybackService.fromAudioService();
 }
 
 abstract class MobileAudioPlayerAdapter {
@@ -310,20 +312,46 @@ class MikudromeAudioHandler extends BaseAudioHandler
 
 class JustAudioMobileAudioPlaybackService
     implements MobileAudioPlaybackService {
+  JustAudioMobileAudioPlaybackService.fromAudioService()
+    : this(
+        handlerLoader: () => _audioServiceHandlerInit ??= AudioService.init(
+          builder: MikudromeAudioHandler.new,
+          config: const AudioServiceConfig(
+            androidNotificationChannelId: 'com.miku39.mikudrome.playback',
+            androidNotificationChannelName: 'Mikudrome playback',
+            androidNotificationOngoing: true,
+          ),
+        ).then((handler) => handler as MikudromeAudioHandler),
+        usesAudioService: true,
+      );
+
   JustAudioMobileAudioPlaybackService({
     MikudromeAudioHandler? handler,
+    Future<MikudromeAudioHandler> Function()? handlerLoader,
     MobileAudioPlayerAdapter? player,
-  }) : _handler = handler ?? MikudromeAudioHandler(player: player),
+    this.usesAudioService = false,
+  }) : _handler = handler,
+       _handlerLoader = handlerLoader,
+       _fallbackHandler = handler == null && handlerLoader == null
+           ? MikudromeAudioHandler(player: player)
+           : null,
        _states = StreamController<MobileAudioPlaybackState>.broadcast(
          sync: true,
        ) {
-    _subscriptions.add(_handler.mikudromeState.listen(_emit));
+    final immediateHandler = _handler ?? _fallbackHandler;
+    if (immediateHandler != null) {
+      _bindHandler(immediateHandler);
+    }
   }
 
-  final MikudromeAudioHandler _handler;
+  final MikudromeAudioHandler? _handler;
+  final MikudromeAudioHandler? _fallbackHandler;
+  final Future<MikudromeAudioHandler> Function()? _handlerLoader;
+  final bool usesAudioService;
   final StreamController<MobileAudioPlaybackState> _states;
   final List<StreamSubscription<Object?>> _subscriptions = [];
   MobileAudioPlaybackState _currentState = MobileAudioPlaybackState.empty();
+  MikudromeAudioHandler? _boundHandler;
   bool _disposed = false;
 
   @override
@@ -344,7 +372,8 @@ class JustAudioMobileAudioPlaybackService
     final nextAudioUrls = List<String>.unmodifiable(
       nextQueue.map(audioUrlForTrack),
     );
-    await _handler.setMikudromeQueue(
+    final handler = await _effectiveHandler();
+    await handler.setMikudromeQueue(
       tracks: nextQueue,
       audioUrls: nextAudioUrls,
       initialIndex: index,
@@ -355,7 +384,8 @@ class JustAudioMobileAudioPlaybackService
   Future<void> play() async {
     if (_disposed || _currentState.queue.isEmpty) return;
     try {
-      await _handler.play();
+      final handler = await _effectiveHandler();
+      await handler.play();
     } catch (_) {
       if (!_disposed) {
         _emit(_currentState.copyWith(isPlaying: false));
@@ -366,31 +396,36 @@ class JustAudioMobileAudioPlaybackService
   @override
   Future<void> pause() async {
     if (_disposed) return;
-    await _handler.pause();
+    final handler = await _effectiveHandler();
+    await handler.pause();
   }
 
   @override
   Future<void> seek(Duration position) async {
     if (_disposed) return;
-    await _handler.seek(position);
+    final handler = await _effectiveHandler();
+    await handler.seek(position);
   }
 
   @override
   Future<void> stop() async {
     if (_disposed) return;
-    await _handler.stop();
+    final handler = await _effectiveHandler();
+    await handler.stop();
   }
 
   @override
   Future<void> next() async {
     if (_disposed || _currentState.queue.isEmpty) return;
-    await _handler.skipToNext();
+    final handler = await _effectiveHandler();
+    await handler.skipToNext();
   }
 
   @override
   Future<void> previous() async {
     if (_disposed || _currentState.queue.isEmpty) return;
-    await _handler.skipToPrevious();
+    final handler = await _effectiveHandler();
+    await handler.skipToPrevious();
   }
 
   @override
@@ -400,8 +435,26 @@ class JustAudioMobileAudioPlaybackService
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
-    await _handler.dispose();
+    await (_handler ?? _fallbackHandler ?? _boundHandler)?.dispose();
     await _states.close();
+  }
+
+  Future<MikudromeAudioHandler> _effectiveHandler() async {
+    final immediateHandler = _handler ?? _fallbackHandler;
+    if (immediateHandler != null) return immediateHandler;
+    final existing = _boundHandler;
+    if (existing != null) return existing;
+    final handler = await _handlerLoader!();
+    if (!_disposed) {
+      _bindHandler(handler);
+    }
+    return handler;
+  }
+
+  void _bindHandler(MikudromeAudioHandler handler) {
+    if (_boundHandler == handler) return;
+    _boundHandler = handler;
+    _subscriptions.add(handler.mikudromeState.listen(_emit));
   }
 
   void _emit(MobileAudioPlaybackState state) {
