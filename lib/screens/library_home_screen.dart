@@ -631,11 +631,18 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         : state.position;
     var shouldSavePlaybackState = previousTrackId != track?.id;
     setState(() {
-      _playerQueue = state.queue;
-      _playerIndex = state.queue.isEmpty
-          ? 0
-          : state.index.clamp(0, state.queue.length - 1);
-      if (!_shuffleEnabled) {
+      if (_shuffleEnabled && track != null && _playerQueue.isNotEmpty) {
+        final shuffledIndex = _playerQueue.indexWhere(
+          (item) => item.id == track.id,
+        );
+        if (shuffledIndex >= 0) {
+          _playerIndex = shuffledIndex;
+        }
+      } else {
+        _playerQueue = state.queue;
+        _playerIndex = state.queue.isEmpty
+            ? 0
+            : state.index.clamp(0, state.queue.length - 1);
         _orderedPlayerQueue = null;
       }
       _isPlaying = state.isPlaying;
@@ -798,9 +805,6 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         _shuffleEnabled = false;
       });
       _savePlaybackState();
-      if (_isMobilePlaybackSurface) {
-        unawaited(_routeMobileAudioPlaybackForCurrentMode());
-      }
       return;
     }
 
@@ -814,9 +818,6 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _shuffleEnabled = true;
     });
     _savePlaybackState();
-    if (_isMobilePlaybackSurface) {
-      unawaited(_routeMobileAudioPlaybackForCurrentMode());
-    }
   }
 
   void _playPrevious() {
@@ -1245,6 +1246,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
                     onExternalPause: _mobileAudioPlaybackService.pause,
                     onExternalSeekToFraction: _seekMobileAudioPlayback,
                     currentCoverUrl: _coverUrlForTrack(currentTrack),
+                    coverUrlForTrack: _coverUrlForTrack,
                     shuffleEnabled: _shuffleEnabled,
                     onToggleShuffle: _toggleShufflePlayback,
                   ),

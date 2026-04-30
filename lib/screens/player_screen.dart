@@ -65,6 +65,7 @@ class PlayerScreen extends StatefulWidget {
     this.currentCoverUrl,
     this.shuffleEnabled = false,
     this.onToggleShuffle,
+    this.coverUrlForTrack,
   });
 
   final Track track;
@@ -103,6 +104,7 @@ class PlayerScreen extends StatefulWidget {
   final String? currentCoverUrl;
   final bool shuffleEnabled;
   final VoidCallback? onToggleShuffle;
+  final String Function(Track track)? coverUrlForTrack;
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
@@ -166,6 +168,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       : _coverUrlForTrack(_track);
 
   String _coverUrlForTrack(Track track) {
+    final injected = widget.coverUrlForTrack?.call(track);
+    if (injected != null && injected.isNotEmpty) return injected;
     if (track.coverOverrideUrl != null) return track.coverOverrideUrl!;
     return track.albumId > 0
         ? _api.albumCoverUrl(track.albumId.toString())
@@ -1166,9 +1170,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final screenHeight = MediaQuery.sizeOf(context).height;
     final artworkSize = (screenWidth - 80).clamp(
-      220.0,
-      screenHeight < 760 ? screenHeight * 0.31 : screenHeight * 0.38,
+      188.0,
+      screenHeight < 760 ? screenHeight * 0.25 : screenHeight * 0.3,
     );
+    final queuePanelHeight = (screenHeight * 0.42).clamp(260.0, 390.0);
 
     return Scaffold(
       backgroundColor: const Color(0xFF061116),
@@ -1179,7 +1184,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             bottom: false,
             child: Padding(
               key: const ValueKey('mobile-player-immersive'),
-              padding: const EdgeInsets.fromLTRB(32, 12, 32, 12),
+              padding: const EdgeInsets.fromLTRB(32, 6, 32, 52),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -1223,7 +1228,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       const SizedBox(width: 48),
                     ],
                   ),
-                  SizedBox(height: screenHeight < 760 ? 10 : 16),
+                  SizedBox(height: screenHeight < 760 ? 6 : 10),
                   if (_showLyrics)
                     Expanded(
                       child: LyricsSection(
@@ -1234,7 +1239,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     )
                   else ...[
                     Expanded(
-                      flex: 8,
+                      flex: 7,
                       child: Center(
                         child: _buildMobileArtwork(
                           context,
@@ -1243,7 +1248,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ),
                       ),
                     ),
-                    SizedBox(height: screenHeight < 760 ? 8 : 14),
+                    SizedBox(height: screenHeight < 760 ? 6 : 10),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
@@ -1251,15 +1256,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                _track.title,
-                                style: Theme.of(context).textTheme.headlineLarge
-                                    ?.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                              SizedBox(
+                                key: const ValueKey('mobile-player-title-box'),
+                                width: 254,
+                                child: _MobileScrollingTitle(
+                                  text: _track.title,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineLarge
+                                      ?.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                ),
                               ),
                               const SizedBox(height: 8),
                               Row(
@@ -1298,7 +1307,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ),
                       ],
                     ),
-                    SizedBox(height: screenHeight < 760 ? 8 : 12),
+                    SizedBox(height: screenHeight < 760 ? 6 : 8),
                     SliderTheme(
                       data: SliderTheme.of(context).copyWith(
                         activeTrackColor: accentColor,
@@ -1335,7 +1344,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ],
                       ),
                     ),
-                    SizedBox(height: screenHeight < 760 ? 6 : 10),
+                    SizedBox(height: screenHeight < 760 ? 4 : 6),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -1377,14 +1386,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ),
                       ],
                     ),
-                    SizedBox(height: screenHeight < 760 ? 8 : 12),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 220),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeOutCubic,
-                      child: _showMobileQueue
-                          ? _buildMobileQueuePanel(context, accentColor)
-                          : _buildMobileQueuePeek(accentColor),
+                    const SizedBox(height: 18),
+                    if (!_showMobileQueue) _buildMobileQueuePeek(accentColor),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOutCubic,
+                      height: _showMobileQueue ? queuePanelHeight : 0,
+                      child: ClipRect(
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: _showMobileQueue
+                              ? _buildMobileQueuePanel(
+                                  context,
+                                  accentColor,
+                                  queuePanelHeight,
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ),
                     ),
                   ],
                 ],
@@ -1439,37 +1458,49 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  Widget _buildMobileQueuePanel(BuildContext context, Color accentColor) {
-    final visibleItems = widget.queue
-        .asMap()
-        .entries
-        .where((entry) => entry.key != widget.currentIndex)
-        .take(4)
-        .toList();
+  Widget _buildMobileQueuePanel(
+    BuildContext context,
+    Color accentColor,
+    double panelHeight,
+  ) {
+    final visibleItems = widget.queue.asMap().entries.toList();
 
     return GestureDetector(
       key: const ValueKey('mobile-player-queue-panel'),
-      onVerticalDragEnd: (details) {
-        if ((details.primaryVelocity ?? 0) > 0) {
+      behavior: HitTestBehavior.opaque,
+      onVerticalDragUpdate: (details) {
+        if (details.primaryDelta != null && details.primaryDelta! > 8) {
           setState(() => _showMobileQueue = false);
         }
       },
       child: SizedBox(
-        height: 230,
+        height: panelHeight,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.34),
-                  borderRadius: BorderRadius.circular(999),
+            GestureDetector(
+              key: const ValueKey('mobile-player-queue-collapse-handle'),
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _showMobileQueue = false),
+              onVerticalDragUpdate: (details) {
+                if (details.primaryDelta != null && details.primaryDelta! > 4) {
+                  setState(() => _showMobileQueue = false);
+                }
+              },
+              child: Padding(
+                padding: const EdgeInsets.only(top: 14, bottom: 10),
+                child: Center(
+                  child: Container(
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.34),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 14),
             Row(
               children: [
                 Expanded(
@@ -1534,7 +1565,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _buildMobileQueueItem(BuildContext context, int index, Track track) {
-    final coverUrl = _coverUrlForTrack(track);
+    final coverUrl = index == widget.currentIndex
+        ? _albumCoverUrl
+        : _coverUrlForTrack(track);
     return InkWell(
       onTap: () => widget.onSelectTrack(index),
       borderRadius: BorderRadius.circular(8),
@@ -2143,6 +2176,125 @@ class _PlayerScreenState extends State<PlayerScreen> {
           letterSpacing: 1.2,
         ),
         overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+}
+
+class _MobileScrollingTitle extends StatefulWidget {
+  const _MobileScrollingTitle({required this.text, required this.style});
+
+  final String text;
+  final TextStyle? style;
+
+  @override
+  State<_MobileScrollingTitle> createState() => _MobileScrollingTitleState();
+}
+
+class _MobileScrollingTitleState extends State<_MobileScrollingTitle>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  Animation<double>? _offsetAnimation;
+  double _overflow = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _recalculate());
+  }
+
+  @override
+  void didUpdateWidget(covariant _MobileScrollingTitle oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text || oldWidget.style != widget.style) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _recalculate());
+    }
+  }
+
+  void _recalculate() {
+    if (!mounted) return;
+    final box = context.findRenderObject() as RenderBox?;
+    final width = box?.size.width ?? 0;
+    if (width <= 0) return;
+
+    final textPainter = TextPainter(
+      text: TextSpan(text: widget.text, style: widget.style),
+      textDirection: Directionality.of(context),
+      maxLines: 1,
+    )..layout();
+
+    final nextOverflow = (textPainter.width - width)
+        .clamp(0, double.infinity)
+        .toDouble();
+    if ((nextOverflow - _overflow).abs() < 0.5) return;
+    _overflow = nextOverflow;
+
+    if (_overflow <= 0) {
+      _offsetAnimation = null;
+      _controller.stop();
+      _controller.reset();
+      setState(() {});
+      return;
+    }
+
+    final travelMs = ((_overflow / 36) * 1000).clamp(1600, 9000).round();
+    const pauseMs = 700;
+    _controller.duration = Duration(milliseconds: travelMs * 2 + pauseMs * 2);
+    _offsetAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: ConstantTween<double>(0),
+        weight: pauseMs.toDouble(),
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0, end: _overflow),
+        weight: travelMs.toDouble(),
+      ),
+      TweenSequenceItem(
+        tween: ConstantTween<double>(_overflow),
+        weight: pauseMs.toDouble(),
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: _overflow, end: 0),
+        weight: travelMs.toDouble(),
+      ),
+    ]).animate(_controller);
+    _controller
+      ..reset()
+      ..repeat();
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Text(
+      widget.text,
+      style: widget.style,
+      maxLines: 1,
+      softWrap: false,
+      overflow: TextOverflow.visible,
+    );
+
+    if (_overflow <= 0 || _offsetAnimation == null) {
+      return ClipRect(child: text);
+    }
+
+    return ClipRect(
+      child: AnimatedBuilder(
+        animation: _controller,
+        child: text,
+        builder: (context, child) {
+          return Transform.translate(
+            offset: Offset(-(_offsetAnimation?.value ?? 0), 0),
+            child: Align(alignment: Alignment.centerLeft, child: child),
+          );
+        },
       ),
     );
   }

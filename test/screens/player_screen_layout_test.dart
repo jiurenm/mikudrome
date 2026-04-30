@@ -30,6 +30,7 @@ Widget _buildPlayer({
   String? currentCoverUrl,
   bool shuffleEnabled = false,
   VoidCallback? onToggleShuffle,
+  String Function(Track track)? coverUrlForTrack,
 }) {
   final resolvedTrack = track ?? _desktopTrack();
   final resolvedQueue = queue ?? [resolvedTrack];
@@ -60,6 +61,7 @@ Widget _buildPlayer({
         currentCoverUrl: currentCoverUrl,
         shuffleEnabled: shuffleEnabled,
         onToggleShuffle: onToggleShuffle,
+        coverUrlForTrack: coverUrlForTrack,
       ),
     ),
   );
@@ -73,6 +75,7 @@ Future<void> _pumpPlayer(
   String? currentCoverUrl,
   bool shuffleEnabled = false,
   VoidCallback? onToggleShuffle,
+  String Function(Track track)? coverUrlForTrack,
 }) async {
   await tester.pumpWidget(
     _buildPlayer(
@@ -82,6 +85,7 @@ Future<void> _pumpPlayer(
       currentCoverUrl: currentCoverUrl,
       shuffleEnabled: shuffleEnabled,
       onToggleShuffle: onToggleShuffle,
+      coverUrlForTrack: coverUrlForTrack,
     ),
   );
   for (var i = 0; i < 40; i++) {
@@ -219,6 +223,7 @@ void main() {
         audioPath: '/tmp/9.flac',
         videoPath: '',
         vocal: 'DECO*27 feat. 初音ミク',
+        coverOverrideUrl: 'http://127.0.0.1:8080/api/covers/9',
       ),
       const Track(
         id: 10,
@@ -241,6 +246,9 @@ void main() {
       surfaceSize: const Size(430, 900),
       track: current,
       queue: queue,
+      currentCoverUrl: 'http://127.0.0.1:8080/api/covers/7',
+      coverUrlForTrack: (track) =>
+          'http://127.0.0.1:8080/api/covers/${track.id}',
     );
 
     expect(
@@ -282,8 +290,67 @@ void main() {
 
     expect(find.text('播放的音乐来自'), findsOneWidget);
     expect(find.text('Layout Test'), findsOneWidget);
+    expect(find.text('ぽかぽかの星'), findsWidgets);
     expect(find.text('ヒバナ'), findsOneWidget);
     expect(find.text('ゴーストルール'), findsOneWidget);
+    expect(find.text('アンチビート'), findsOneWidget);
+
+    final imageUrls = tester
+        .widgetList<Image>(
+          find.byWidgetPredicate(
+            (widget) => widget is Image && widget.image is NetworkImage,
+          ),
+        )
+        .map((image) => image.image)
+        .whereType<NetworkImage>()
+        .map((image) => image.url);
+
+    expect(imageUrls, contains('http://127.0.0.1:8080/api/covers/7'));
+    expect(imageUrls, contains('http://127.0.0.1:8080/api/covers/9'));
+
+    await tester.tap(
+      find.byKey(const ValueKey('mobile-player-queue-collapse-handle')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('播放的音乐来自'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('mobile-player-queue-peek')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('mobile title is fixed-width single-line auto scrolling', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const longTitle =
+        'This is a very very long mobile player title that should scroll';
+    const track = Track(
+      id: 12,
+      title: longTitle,
+      audioPath: '/tmp/12.flac',
+      videoPath: '',
+      vocal: 'Miku',
+    );
+
+    await _pumpPlayer(tester, surfaceSize: const Size(430, 900), track: track);
+
+    final titleBox = tester.widget<SizedBox>(
+      find.byKey(const ValueKey('mobile-player-title-box')),
+    );
+    final titleText = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(const ValueKey('mobile-player-title-box')),
+        matching: find.text(longTitle),
+      ),
+    );
+
+    expect(titleBox.width, 254);
+    expect(titleText.maxLines, 1);
+    expect(titleText.softWrap, isFalse);
   });
 
   testWidgets('mobile shuffle button calls toggle callback', (tester) async {
