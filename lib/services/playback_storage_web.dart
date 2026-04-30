@@ -50,8 +50,9 @@ class PlaybackStorage {
       final queueRaw = storage.getItem(_keyQueue);
       if (queueRaw == null || queueRaw.isEmpty) return null;
       final list = jsonDecode(queueRaw) as List<dynamic>;
-      final queue =
-          list.map((e) => Track.fromJson(e as Map<String, dynamic>)).toList();
+      final queue = list
+          .map((e) => Track.fromJson(e as Map<String, dynamic>))
+          .toList();
       if (queue.isEmpty) return null;
       final index = int.tryParse(storage.getItem(_keyIndex) ?? '') ?? 0;
       final progress =
@@ -65,8 +66,9 @@ class PlaybackStorage {
         progress: progress.clamp(0.0, 1.0),
         mode:
             PlaybackMode.values.where((m) => m.name == modeName).firstOrNull ??
-                PlaybackMode.audio,
-        orderMode: PlaybackOrderMode.values
+            PlaybackMode.audio,
+        orderMode:
+            PlaybackOrderMode.values
                 .where((m) => m.name == orderName)
                 .firstOrNull ??
             PlaybackOrderMode.sequential,
@@ -93,29 +95,30 @@ class PlaybackStorage {
   }
 
   static Map<String, dynamic> _trackToJson(Track t) => {
-        'id': t.id,
-        'title': t.title,
-        'audio_path': t.audioPath,
-        'video_path': t.videoPath,
-        'video_thumb_path': t.videoThumbPath,
-        'album_id': t.albumId,
-        'disc_number': t.discNumber,
-        'track_number': t.trackNumber,
-        'artists': t.artists,
-        'year': t.year,
-        'duration_seconds': t.durationSeconds,
-        'format': t.format,
-        'composer': t.composer,
-        'lyricist': t.lyricist,
-        'arranger': t.arranger,
-        'vocal': t.vocal,
-        'voice_manipulator': t.voiceManipulator,
-        'illustrator': t.illustrator,
-        'movie': t.movie,
-        'source': t.source,
-        'lyrics': t.lyrics,
-        'comment': t.comment,
-      };
+    'id': t.id,
+    'title': t.title,
+    'audio_path': t.audioPath,
+    'video_path': t.videoPath,
+    'video_thumb_path': t.videoThumbPath,
+    'album_id': t.albumId,
+    'disc_number': t.discNumber,
+    'track_number': t.trackNumber,
+    'artists': t.artists,
+    'year': t.year,
+    'duration_seconds': t.durationSeconds,
+    'format': t.format,
+    'composer': t.composer,
+    'lyricist': t.lyricist,
+    'arranger': t.arranger,
+    'remix': t.remix,
+    'vocal': t.vocal,
+    'voice_manipulator': t.voiceManipulator,
+    'illustrator': t.illustrator,
+    'movie': t.movie,
+    'source': t.source,
+    'lyrics': t.lyrics,
+    'comment': t.comment,
+  };
 }
 
 class PlaybackState {

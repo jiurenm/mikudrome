@@ -63,7 +63,7 @@ func (s *Store) ListFavorites() ([]Track, error) {
 		`SELECT t.id, t.title, t.audio_path, t.video_path, COALESCE(t.video_thumb_path, ''), COALESCE(t.album_id, 0),
 		 COALESCE(t.disc_number, 1), COALESCE(t.track_number, 0), COALESCE(t.artists, ''), COALESCE(t.year, 0),
 		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''), COALESCE(t.composer, ''), COALESCE(t.lyricist, ''),
-		 COALESCE(t.arranger, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''), COALESCE(t.illustrator, ''),
+		 COALESCE(t.arranger, ''), COALESCE(t.remix, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''), COALESCE(t.illustrator, ''),
 		 COALESCE(t.movie, ''), COALESCE(t.source, ''), COALESCE(t.lyrics, ''), COALESCE(t.comment, ''),
 		 COALESCE(a.album_artist, '')
 		 FROM favorites f
@@ -80,7 +80,7 @@ func (s *Store) ListFavorites() ([]Track, error) {
 		var t Track
 		if err := rows.Scan(&t.ID, &t.Title, &t.AudioPath, &t.VideoPath, &t.VideoThumbPath, &t.AlbumID,
 			&t.DiscNumber, &t.TrackNumber, &t.Artists, &t.Year, &t.DurationSeconds, &t.Format,
-			&t.Composer, &t.Lyricist, &t.Arranger, &t.Vocal, &t.VoiceManipulator, &t.Illustrator,
+			&t.Composer, &t.Lyricist, &t.Arranger, &t.Remix, &t.Vocal, &t.VoiceManipulator, &t.Illustrator,
 			&t.Movie, &t.Source, &t.Lyrics, &t.Comment, &t.AlbumArtist); err != nil {
 			return nil, err
 		}
@@ -474,7 +474,7 @@ func (s *Store) GetPlaylistDetail(id int64) (PlaylistDetail, bool, error) {
 		        COALESCE(t.album_id, 0), COALESCE(t.disc_number, 1), COALESCE(t.track_number, 0),
 		        COALESCE(t.artists, ''), COALESCE(t.year, 0), COALESCE(t.duration_seconds, 0),
 		        COALESCE(t.format, ''), COALESCE(t.composer, ''), COALESCE(t.lyricist, ''),
-		        COALESCE(t.arranger, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''),
+		        COALESCE(t.arranger, ''), COALESCE(t.remix, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''),
 		        COALESCE(t.illustrator, ''), COALESCE(t.movie, ''), COALESCE(t.source, ''),
 		        COALESCE(t.lyrics, ''), COALESCE(t.comment, ''), COALESCE(a.album_artist, '')
 		 FROM playlist_items pi
@@ -520,6 +520,7 @@ func (s *Store) GetPlaylistDetail(id int64) (PlaylistDetail, bool, error) {
 			&item.Track.Composer,
 			&item.Track.Lyricist,
 			&item.Track.Arranger,
+			&item.Track.Remix,
 			&item.Track.Vocal,
 			&item.Track.VoiceManipulator,
 			&item.Track.Illustrator,
@@ -555,7 +556,7 @@ func (s *Store) GetPlaylistTracks(playlistID int64) ([]Track, error) {
 		`SELECT t.id, t.title, t.audio_path, t.video_path, COALESCE(t.video_thumb_path, ''), COALESCE(t.album_id, 0),
 		 COALESCE(t.disc_number, 1), COALESCE(t.track_number, 0), COALESCE(t.artists, ''), COALESCE(t.year, 0),
 		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''), COALESCE(t.composer, ''), COALESCE(t.lyricist, ''),
-		 COALESCE(t.arranger, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''), COALESCE(t.illustrator, ''),
+		 COALESCE(t.arranger, ''), COALESCE(t.remix, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''), COALESCE(t.illustrator, ''),
 		 COALESCE(t.movie, ''), COALESCE(t.source, ''), COALESCE(t.lyrics, ''), COALESCE(t.comment, ''),
 		 COALESCE(a.album_artist, '')
 		 FROM playlist_items pi
@@ -575,7 +576,7 @@ func (s *Store) GetPlaylistTracks(playlistID int64) ([]Track, error) {
 		var t Track
 		if err := rows.Scan(&t.ID, &t.Title, &t.AudioPath, &t.VideoPath, &t.VideoThumbPath, &t.AlbumID,
 			&t.DiscNumber, &t.TrackNumber, &t.Artists, &t.Year, &t.DurationSeconds, &t.Format,
-			&t.Composer, &t.Lyricist, &t.Arranger, &t.Vocal, &t.VoiceManipulator, &t.Illustrator,
+			&t.Composer, &t.Lyricist, &t.Arranger, &t.Remix, &t.Vocal, &t.VoiceManipulator, &t.Illustrator,
 			&t.Movie, &t.Source, &t.Lyrics, &t.Comment, &t.AlbumArtist); err != nil {
 			return nil, err
 		}

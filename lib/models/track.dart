@@ -5,7 +5,7 @@ class Track {
   final String audioPath;
   final String videoPath;
   final String
-      videoThumbPath; // MV thumbnail (same name as video or ffmpeg-generated)
+  videoThumbPath; // MV thumbnail (same name as video or ffmpeg-generated)
   final int albumId;
   final int discNumber; // 碟号，多碟专辑时从元数据读取，默认 1
   final int trackNumber;
@@ -17,6 +17,7 @@ class Track {
   final String composer; // 作曲
   final String lyricist; // 作词
   final String arranger; // 编曲
+  final String remix; // Remix
   final String vocal; // Vocal（如 "初音ミク"）
   final String voiceManipulator; // 调教
   final String illustrator; // 插画
@@ -53,6 +54,7 @@ class Track {
     this.composer = '',
     this.lyricist = '',
     this.arranger = '',
+    this.remix = '',
     this.vocal = '',
     this.voiceManipulator = '',
     this.illustrator = '',
@@ -83,6 +85,7 @@ class Track {
       composer: json['composer'] as String? ?? '',
       lyricist: json['lyricist'] as String? ?? '',
       arranger: json['arranger'] as String? ?? '',
+      remix: json['remix'] as String? ?? '',
       vocal: json['vocal'] as String? ?? '',
       voiceManipulator: json['voice_manipulator'] as String? ?? '',
       illustrator: json['illustrator'] as String? ?? '',
@@ -127,6 +130,8 @@ class Track {
 
   List<String> get lyricists => _dedupeCredits(_splitCredits(lyricist));
 
+  List<String> get remixers => _dedupeCredits(_splitCredits(remix));
+
   List<String> get vocalists => _dedupeCredits(_splitCredits(vocal));
 
   String get composerDisplay {
@@ -145,10 +150,13 @@ class Track {
   }
 
   String get vocalLine {
-    var peopleCredits = _dedupeCredits([
-      ..._splitCredits(composer),
-      ..._splitCredits(lyricist),
-    ]);
+    var peopleCredits = remixers;
+    if (peopleCredits.isEmpty) {
+      peopleCredits = _dedupeCredits([
+        ..._splitCredits(composer),
+        ..._splitCredits(lyricist),
+      ]);
+    }
     if (peopleCredits.isEmpty && artists.isNotEmpty) {
       peopleCredits = _dedupeCredits(_splitCredits(artists));
     }

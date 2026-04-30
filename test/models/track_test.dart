@@ -41,6 +41,21 @@ void main() {
 
       expect(track.vocalLine, 'Miku, Rin');
     });
+
+    test('uses remix credits before composer and lyricist', () {
+      const track = Track(
+        id: 1,
+        title: 'Test',
+        audioPath: '/tmp/test.flac',
+        videoPath: '',
+        composer: 'Composer',
+        lyricist: 'Lyricist',
+        remix: 'Remixer',
+        vocal: 'Miku',
+      );
+
+      expect(track.vocalLine, 'Remixer feat. Miku');
+    });
   });
 
   group('Track credit display fallbacks', () {

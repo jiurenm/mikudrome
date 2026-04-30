@@ -74,12 +74,13 @@ func TestTrackMetadataHTTP_PatchUpdatesProvidedFieldsOnly(t *testing.T) {
 	if err := h.store.UpdateTrackMetadata(id, store.TrackMetadataPatch{
 		Composer: strPtr("manual composer"),
 		Arranger: strPtr("old arranger"),
+		Remix:    strPtr("old remix"),
 		Vocal:    strPtr("old vocal"),
 	}); err != nil {
 		t.Fatalf("seed patch metadata: %v", err)
 	}
 
-	body := `{"composer":"","arranger":"new arranger"}`
+	body := `{"composer":"","arranger":"new arranger","remix":"new remix"}`
 	rr := doReq(h, http.MethodPatch, "/api/tracks/"+strconv.FormatInt(id, 10)+"/metadata", body)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d: %s", rr.Code, http.StatusOK, rr.Body.String())
@@ -89,6 +90,7 @@ func TestTrackMetadataHTTP_PatchUpdatesProvidedFieldsOnly(t *testing.T) {
 		Composer       string `json:"composer"`
 		ComposerSource string `json:"composer_source"`
 		Arranger       string `json:"arranger"`
+		Remix          string `json:"remix"`
 		Vocal          string `json:"vocal"`
 	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
@@ -97,7 +99,7 @@ func TestTrackMetadataHTTP_PatchUpdatesProvidedFieldsOnly(t *testing.T) {
 	if resp.Composer != "scan composer" || resp.ComposerSource != "scanned" {
 		t.Fatalf("composer = %q (%s)", resp.Composer, resp.ComposerSource)
 	}
-	if resp.Arranger != "new arranger" || resp.Vocal != "old vocal" {
+	if resp.Arranger != "new arranger" || resp.Remix != "new remix" || resp.Vocal != "old vocal" {
 		t.Fatalf("unexpected patch response: %+v", resp)
 	}
 }
