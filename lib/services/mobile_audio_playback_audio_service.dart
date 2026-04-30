@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../api/config.dart';
@@ -34,6 +35,81 @@ abstract class MobileAudioPlayerAdapter {
   Future<void> seekToPrevious();
   Future<void> stop();
   Future<void> dispose();
+}
+
+class MikudromeAudioHandler extends BaseAudioHandler
+    with QueueHandler, SeekHandler {
+  MikudromeAudioHandler({MobileAudioPlayerAdapter? player})
+    : _player = player ?? JustAudioPlayerAdapter() {
+    _subscriptions.add(
+      _player.currentIndexStream.listen(_handleCurrentIndexChanged),
+    );
+  }
+
+  final MobileAudioPlayerAdapter _player;
+  final List<StreamSubscription<Object?>> _subscriptions = [];
+  List<Track> _tracks = const [];
+  List<String> _audioUrls = const [];
+  bool _disposed = false;
+
+  Future<void> setMikudromeQueue({
+    required List<Track> tracks,
+    required List<String> audioUrls,
+    required int initialIndex,
+  }) async {
+    if (_disposed) return;
+    if (tracks.isEmpty) {
+      _tracks = const [];
+      _audioUrls = const [];
+      queue.add(const []);
+      mediaItem.add(null);
+      await _player.stop();
+      return;
+    }
+
+    _tracks = List<Track>.unmodifiable(tracks);
+    _audioUrls = List<String>.unmodifiable(audioUrls);
+    final clampedIndex = initialIndex.clamp(0, _tracks.length - 1);
+    final items = [
+      for (var i = 0; i < _tracks.length; i++)
+        MediaItem(
+          id: _audioUrls[i],
+          title: _tracks[i].title,
+          artist: _tracks[i].vocalLine,
+          duration: Duration(seconds: _tracks[i].durationSeconds),
+        ),
+    ];
+
+    queue.add(items);
+    mediaItem.add(items[clampedIndex]);
+    await _player.setAudioSources(
+      _audioUrls
+          .map(
+            (url) => AudioSource.uri(
+              Uri.parse(url),
+              headers: ApiConfig.defaultHeaders,
+            ),
+          )
+          .toList(growable: false),
+      initialIndex: clampedIndex,
+      initialPosition: Duration.zero,
+    );
+  }
+
+  void _handleCurrentIndexChanged(int? index) {
+    if (index == null || queue.value.isEmpty) return;
+    final clampedIndex = index.clamp(0, queue.value.length - 1);
+    mediaItem.add(queue.value[clampedIndex]);
+  }
+
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    for (final subscription in _subscriptions) {
+      await subscription.cancel();
+    }
+    await _player.dispose();
+  }
 }
 
 class JustAudioMobileAudioPlaybackService
