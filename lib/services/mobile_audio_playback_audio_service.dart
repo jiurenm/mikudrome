@@ -72,6 +72,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     required List<Track> tracks,
     required List<String> audioUrls,
     required int initialIndex,
+    CoverUrlForTrack? coverUrlForTrack,
   }) async {
     if (_disposed) return;
     if (tracks.isEmpty) {
@@ -88,6 +89,9 @@ class MikudromeAudioHandler extends BaseAudioHandler
     final nextTracks = List<Track>.unmodifiable(tracks);
     final nextAudioUrls = List<String>.unmodifiable(audioUrls);
     final clampedIndex = initialIndex.clamp(0, nextTracks.length - 1);
+    final artHeaders = ApiConfig.defaultHeaders.isEmpty
+        ? null
+        : ApiConfig.defaultHeaders;
     final items = [
       for (var i = 0; i < nextTracks.length; i++)
         MediaItem(
@@ -95,6 +99,8 @@ class MikudromeAudioHandler extends BaseAudioHandler
           title: nextTracks[i].title,
           artist: nextTracks[i].vocalLine,
           duration: Duration(seconds: nextTracks[i].durationSeconds),
+          artUri: _artUriForTrack(nextTracks[i], coverUrlForTrack),
+          artHeaders: artHeaders,
         ),
     ];
 
@@ -120,6 +126,12 @@ class MikudromeAudioHandler extends BaseAudioHandler
     _publishPlaybackState();
     _emitMikudromeState(index: clampedIndex, isPlaying: _player.playing);
     await _startPlaybackSafely(clampedIndex);
+  }
+
+  Uri? _artUriForTrack(Track track, CoverUrlForTrack? coverUrlForTrack) {
+    final coverUrl = coverUrlForTrack?.call(track).trim() ?? '';
+    if (coverUrl.isEmpty) return null;
+    return Uri.tryParse(coverUrl);
   }
 
   @override
@@ -319,6 +331,7 @@ class JustAudioMobileAudioPlaybackService
           config: const AudioServiceConfig(
             androidNotificationChannelId: 'com.miku39.mikudrome.playback',
             androidNotificationChannelName: 'Mikudrome playback',
+            androidNotificationIcon: 'drawable/ic_notification',
             androidNotificationOngoing: true,
           ),
         ),
@@ -365,6 +378,7 @@ class JustAudioMobileAudioPlaybackService
     required List<Track> queue,
     required int index,
     required AudioUrlForTrack audioUrlForTrack,
+    CoverUrlForTrack? coverUrlForTrack,
   }) async {
     if (_disposed) return;
 
@@ -377,6 +391,7 @@ class JustAudioMobileAudioPlaybackService
       tracks: nextQueue,
       audioUrls: nextAudioUrls,
       initialIndex: index,
+      coverUrlForTrack: coverUrlForTrack,
     );
   }
 

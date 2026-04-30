@@ -602,6 +602,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       queue: queue,
       index: index,
       audioUrlForTrack: _mobileAudioUrlForTrack,
+      coverUrlForTrack: _coverUrlForTrack,
     );
   }
 
