@@ -14,10 +14,15 @@ import 'package:mikudrome/services/mobile_audio_playback_stub.dart' as stub;
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('audio service factory creates just_audio-backed service', () async {
+  test('audio service factory creates audio-service-backed service', () async {
     final service = audio_service.createMobileAudioPlaybackService();
 
     expect(service, isA<audio_service.JustAudioMobileAudioPlaybackService>());
+    expect(
+      (service as audio_service.JustAudioMobileAudioPlaybackService)
+          .usesAudioService,
+      isTrue,
+    );
 
     await service.dispose();
   });
