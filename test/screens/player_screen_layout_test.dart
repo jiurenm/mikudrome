@@ -27,6 +27,7 @@ Widget _buildPlayer({
   required Size surfaceSize,
   Track? track,
   List<Track>? queue,
+  String? currentCoverUrl,
 }) {
   final resolvedTrack = track ?? _desktopTrack();
   final resolvedQueue = queue ?? [resolvedTrack];
@@ -54,6 +55,7 @@ Widget _buildPlayer({
               required String durationLabel,
             }) {},
         initializeControllerOnStart: false,
+        currentCoverUrl: currentCoverUrl,
       ),
     ),
   );
@@ -64,9 +66,15 @@ Future<void> _pumpPlayer(
   required Size surfaceSize,
   Track? track,
   List<Track>? queue,
+  String? currentCoverUrl,
 }) async {
   await tester.pumpWidget(
-    _buildPlayer(surfaceSize: surfaceSize, track: track, queue: queue),
+    _buildPlayer(
+      surfaceSize: surfaceSize,
+      track: track,
+      queue: queue,
+      currentCoverUrl: currentCoverUrl,
+    ),
   );
   for (var i = 0; i < 40; i++) {
     await tester.pump(const Duration(milliseconds: 16));
@@ -245,6 +253,43 @@ void main() {
     expect(find.text('ヒバナ'), findsOneWidget);
     expect(find.text('ゴーストルール'), findsOneWidget);
     expect(find.text('アンチビート'), findsOneWidget);
+  });
+
+  testWidgets('mobile player uses externally resolved current cover url', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const coverUrl = 'http://127.0.0.1:8080/api/videos/7/thumb';
+    const track = Track(
+      id: 7,
+      title: 'MV only cover',
+      audioPath: '/tmp/7.flac',
+      videoPath: '',
+      vocal: 'Miku',
+    );
+
+    await _pumpPlayer(
+      tester,
+      surfaceSize: const Size(430, 900),
+      track: track,
+      currentCoverUrl: coverUrl,
+    );
+
+    final images = tester.widgetList<Image>(
+      find.byWidgetPredicate(
+        (widget) => widget is Image && widget.image is NetworkImage,
+      ),
+    );
+
+    expect(
+      images
+          .map((image) => image.image)
+          .whereType<NetworkImage>()
+          .map((image) => image.url),
+      contains(coverUrl),
+    );
   });
 
   testWidgets('empty credits use dash instead of unknown credits', (

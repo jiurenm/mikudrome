@@ -207,6 +207,15 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     return _playerQueue[_playerIndex];
   }
 
+  String _coverUrlForTrack(Track track) {
+    return track.coverOverrideUrl ??
+        (track.albumId > 0
+            ? ApiClient(
+                baseUrl: ApiConfig.defaultBaseUrl,
+              ).albumCoverUrl(track.albumId.toString())
+            : '');
+  }
+
   _MobileNavigationSnapshot _currentMobileSnapshot() {
     return _MobileNavigationSnapshot(
       tab: _mobileTab,
@@ -1145,9 +1154,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
               if (currentTrack != null && !_restoredNotStarted)
                 MobilePlayerSheet(
                   track: currentTrack,
-                  coverUrl: ApiClient(
-                    baseUrl: ApiConfig.defaultBaseUrl,
-                  ).albumCoverUrl(currentTrack.albumId.toString()),
+                  coverUrl: _coverUrlForTrack(currentTrack),
                   isPlaying: _isPlaying,
                   progress: _playbackProgress,
                   onPlayPause: _togglePlayback,
@@ -1188,6 +1195,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
                     onExternalPlay: _mobileAudioPlaybackService.play,
                     onExternalPause: _mobileAudioPlaybackService.pause,
                     onExternalSeekToFraction: _seekMobileAudioPlayback,
+                    currentCoverUrl: _coverUrlForTrack(currentTrack),
                   ),
                 ),
             ],

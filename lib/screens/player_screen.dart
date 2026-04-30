@@ -62,6 +62,7 @@ class PlayerScreen extends StatefulWidget {
     this.onExternalPlay,
     this.onExternalPause,
     this.onExternalSeekToFraction,
+    this.currentCoverUrl,
   });
 
   final Track track;
@@ -97,6 +98,7 @@ class PlayerScreen extends StatefulWidget {
   final Future<void> Function()? onExternalPlay;
   final Future<void> Function()? onExternalPause;
   final PlayerSeekToFraction? onExternalSeekToFraction;
+  final String? currentCoverUrl;
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
@@ -154,7 +156,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
         : _api.streamAudioUrl(_track.id);
   }
 
-  String get _albumCoverUrl => _coverUrlForTrack(_track);
+  String get _albumCoverUrl => widget.currentCoverUrl?.isNotEmpty == true
+      ? widget.currentCoverUrl!
+      : _coverUrlForTrack(_track);
 
   String _coverUrlForTrack(Track track) {
     if (track.coverOverrideUrl != null) return track.coverOverrideUrl!;
