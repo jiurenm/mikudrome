@@ -321,7 +321,7 @@ class JustAudioMobileAudioPlaybackService
             androidNotificationChannelName: 'Mikudrome playback',
             androidNotificationOngoing: true,
           ),
-        ).then((handler) => handler as MikudromeAudioHandler),
+        ),
         usesAudioService: true,
       );
 
