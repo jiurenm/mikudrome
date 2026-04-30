@@ -187,7 +187,7 @@ void main() {
     );
   });
 
-  testWidgets('mobile player uses immersive playback layout with queue', (
+  testWidgets('mobile player uses compact immersive layout with queue action', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(430, 900));
@@ -243,15 +243,25 @@ void main() {
     expect(find.text('歌词'), findsOneWidget);
     expect(find.text('Layout Test'), findsNothing);
     expect(find.byIcon(Icons.movie), findsNothing);
-    expect(find.text('已收藏'), findsOneWidget);
+    expect(find.text('HQ'), findsNothing);
+    expect(find.text('已收藏'), findsNothing);
     expect(find.text('加入歌单'), findsOneWidget);
     expect(find.text('下载'), findsOneWidget);
     expect(find.text('音效'), findsOneWidget);
+    expect(find.text('队列'), findsOneWidget);
     expect(find.text('更多'), findsOneWidget);
-    expect(find.text('接下来播放'), findsOneWidget);
-    expect(find.text('清空'), findsOneWidget);
+    expect(find.text('接下来播放'), findsNothing);
+    expect(find.text('清空'), findsNothing);
+    expect(find.byType(SingleChildScrollView), findsNothing);
+    expect(find.text('ヒバナ'), findsNothing);
+    expect(find.text('ゴーストルール'), findsNothing);
+    expect(find.text('アンチビート'), findsNothing);
+
+    await tester.tap(find.text('队列'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Layout Test'), findsOneWidget);
     expect(find.text('ヒバナ'), findsOneWidget);
-    expect(find.text('ゴーストルール'), findsOneWidget);
     expect(find.text('アンチビート'), findsOneWidget);
   });
 

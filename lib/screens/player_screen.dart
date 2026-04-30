@@ -1159,6 +1159,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ? 0.0
         : position.inMilliseconds / duration.inMilliseconds;
     final screenWidth = MediaQuery.sizeOf(context).width;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final artworkSize = (screenWidth - 80).clamp(
+      220.0,
+      screenHeight < 760 ? screenHeight * 0.34 : screenHeight * 0.42,
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFF061116),
@@ -1167,9 +1172,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
           Positioned.fill(child: _buildMobileBackdrop(accentColor)),
           SafeArea(
             bottom: false,
-            child: SingleChildScrollView(
+            child: Padding(
               key: const ValueKey('mobile-player-immersive'),
-              padding: const EdgeInsets.fromLTRB(32, 12, 32, 24),
+              padding: const EdgeInsets.fromLTRB(32, 12, 32, 18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -1213,10 +1218,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       const SizedBox(width: 48),
                     ],
                   ),
-                  const SizedBox(height: 34),
+                  SizedBox(height: screenHeight < 760 ? 16 : 26),
                   if (_showLyrics)
-                    SizedBox(
-                      height: MediaQuery.sizeOf(context).height * 0.58,
+                    Expanded(
                       child: LyricsSection(
                         lyrics: _track.lyrics,
                         timedLyrics: _timedLyrics,
@@ -1224,14 +1228,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       ),
                     )
                   else ...[
-                    Center(
-                      child: _buildMobileArtwork(
-                        context,
-                        size: (screenWidth - 64).clamp(280.0, 650.0),
-                        accentColor: accentColor,
+                    Expanded(
+                      flex: 9,
+                      child: Center(
+                        child: _buildMobileArtwork(
+                          context,
+                          size: artworkSize,
+                          accentColor: accentColor,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 30),
+                    SizedBox(height: screenHeight < 760 ? 12 : 20),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
@@ -1266,40 +1273,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 5,
-                                      vertical: 1,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(3),
-                                      border: Border.all(color: accentColor),
-                                    ),
-                                    child: Text(
-                                      'HQ',
-                                      style: TextStyle(
-                                        color: accentColor,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w800,
-                                        height: 1,
-                                      ),
-                                    ),
-                                  ),
                                 ],
                               ),
                             ],
                           ),
                         ),
-                        IconButton(
-                          onPressed: () {},
-                          icon: const Icon(Icons.favorite_border, size: 36),
-                          color: Colors.white70,
-                          tooltip: '收藏',
-                        ),
                       ],
                     ),
-                    const SizedBox(height: 26),
+                    SizedBox(height: screenHeight < 760 ? 12 : 18),
                     SliderTheme(
                       data: SliderTheme.of(context).copyWith(
                         activeTrackColor: accentColor,
@@ -1336,7 +1317,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    SizedBox(height: screenHeight < 760 ? 8 : 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -1376,15 +1357,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 18),
+                    SizedBox(height: screenHeight < 760 ? 10 : 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _buildMobileAction(
-                          icon: Icons.favorite,
-                          label: '已收藏',
-                          color: accentColor,
-                        ),
                         _buildMobileAction(
                           icon: Icons.playlist_add,
                           label: '加入歌单',
@@ -1401,14 +1377,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           color: Colors.white54,
                         ),
                         _buildMobileAction(
+                          icon: Icons.queue_music,
+                          label: '队列',
+                          color: Colors.white54,
+                          onTap: _toggleQueue,
+                        ),
+                        _buildMobileAction(
                           icon: Icons.more_horiz,
                           label: '更多',
                           color: Colors.white54,
                         ),
                       ],
                     ),
-                    const SizedBox(height: 28),
-                    _buildMobileQueue(context, accentColor),
                   ],
                 ],
               ),
@@ -1554,182 +1534,31 @@ class _PlayerScreenState extends State<PlayerScreen> {
     required IconData icon,
     required String label,
     required Color color,
+    VoidCallback? onTap,
   }) {
-    return SizedBox(
-      width: 64,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 30),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMobileQueue(BuildContext context, Color accentColor) {
-    final nextItems = <({Track track, int index})>[];
-    for (
-      var index = widget.currentIndex + 1;
-      index < widget.queue.length;
-      index++
-    ) {
-      nextItems.add((track: widget.queue[index], index: index));
-      if (nextItems.length == 3) break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(28, 22, 28, 18),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.035),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Text(
-                '接下来播放',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: accentColor,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                '(${nextItems.length})',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.white54,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              TextButton(
-                onPressed: () {},
-                child: Text(
-                  '清空',
-                  style: TextStyle(
-                    color: accentColor,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (nextItems.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Text(
-                '暂无后续歌曲',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: Colors.white54),
-              ),
-            )
-          else
-            for (final item in nextItems)
-              _buildMobileQueueRow(
-                context,
-                track: item.track,
-                index: item.index,
-                showDivider: item != nextItems.last,
-              ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMobileQueueRow(
-    BuildContext context, {
-    required Track track,
-    required int index,
-    required bool showDivider,
-  }) {
-    final coverUrl = _coverUrlForTrack(track);
     return InkWell(
-      onTap: () => widget.onSelectTrack(index),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: coverUrl.isNotEmpty
-                      ? Image.network(
-                          coverUrl,
-                          headers: ApiConfig.defaultHeaders,
-                          width: 46,
-                          height: 46,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              _mobileQueueCoverPlaceholder(),
-                        )
-                      : _mobileQueueCoverPlaceholder(),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        track.title,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                            ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        track.vocalLine.isNotEmpty ? track.vocalLine : '-',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodySmall?.copyWith(color: Colors.white54),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Icon(Icons.drag_handle, color: Colors.white54, size: 26),
-              ],
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: 64,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 30),
+            const SizedBox(height: 7),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-          ),
-          if (showDivider)
-            Divider(
-              height: 1,
-              color: Colors.white.withValues(alpha: 0.08),
-              indent: 62,
-            ),
-        ],
+          ],
+        ),
       ),
-    );
-  }
-
-  Widget _mobileQueueCoverPlaceholder() {
-    return Container(
-      width: 46,
-      height: 46,
-      color: AppTheme.cardBg,
-      child: const Icon(Icons.music_note, color: AppTheme.textMuted, size: 22),
     );
   }
 
