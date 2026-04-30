@@ -21,6 +21,31 @@ void main() {
     await service.dispose();
   });
 
+  test('audio handler publishes media queue and current media item', () async {
+    final player = FakeJustAudioPlayer();
+    final handler = audio_service.MikudromeAudioHandler(player: player);
+
+    await handler.setMikudromeQueue(
+      tracks: [_track(1), _track(2)],
+      audioUrls: const ['http://server/audio/1', 'http://server/audio/2'],
+      initialIndex: 1,
+    );
+
+    expect(handler.queue.value.map((item) => item.id), [
+      'http://server/audio/1',
+      'http://server/audio/2',
+    ]);
+    expect(handler.queue.value.map((item) => item.title), [
+      'Track 1',
+      'Track 2',
+    ]);
+    expect(handler.mediaItem.value?.id, 'http://server/audio/2');
+    expect(handler.mediaItem.value?.title, 'Track 2');
+    expect(handler.mediaItem.value?.duration, const Duration(seconds: 120));
+
+    await handler.dispose();
+  });
+
   test('just_audio service queues tracks and publishes player state', () async {
     final player = FakeJustAudioPlayer();
     final service = audio_service.JustAudioMobileAudioPlaybackService(
@@ -188,7 +213,7 @@ void main() {
       'android/app/src/main/res/xml/network_security_config.xml',
     ).readAsStringSync();
     final mainActivity = File(
-      'android/app/src/main/kotlin/com/example/mikudrome/MainActivity.kt',
+      'android/app/src/main/kotlin/com/miku39/mikudrome/MainActivity.kt',
     ).readAsStringSync();
 
     expect(
