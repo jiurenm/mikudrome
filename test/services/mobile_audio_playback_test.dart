@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:audio_service/audio_service.dart' show AudioProcessingState;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:mikudrome/models/track.dart';
@@ -122,6 +123,40 @@ void main() {
       expect(service.currentState.isPlaying, isFalse);
 
       await service.dispose();
+    },
+  );
+
+  test(
+    'audio handler syncs player streams to playback state and app state',
+    () async {
+      final player = FakeJustAudioPlayer();
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+      final states = <MobileAudioPlaybackState>[];
+      final sub = handler.mikudromeState.listen(states.add);
+
+      await handler.setMikudromeQueue(
+        tracks: [_track(1), _track(2)],
+        audioUrls: const ['http://server/audio/1', 'http://server/audio/2'],
+        initialIndex: 0,
+      );
+
+      player.setCurrentIndex(1);
+      player.setDuration(const Duration(seconds: 90));
+      player.setPosition(const Duration(seconds: 12));
+      player.setProcessingState(ProcessingState.completed);
+
+      expect(handler.mediaItem.value?.title, 'Track 2');
+      expect(states.last.track?.id, 2);
+      expect(states.last.duration, const Duration(seconds: 90));
+      expect(states.last.position, const Duration(seconds: 12));
+      expect(states.last.isCompleted, isTrue);
+      expect(
+        handler.playbackState.value.processingState,
+        AudioProcessingState.completed,
+      );
+
+      await sub.cancel();
+      await handler.dispose();
     },
   );
 

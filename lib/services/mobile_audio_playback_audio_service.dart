@@ -78,6 +78,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
       queue.add(const []);
       mediaItem.add(null);
       await _player.stop();
+      _publishPlaybackState(processingState: AudioProcessingState.idle);
       _emitMikudromeState(empty: true);
       return;
     }
@@ -114,6 +115,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     _position = Duration.zero;
     _duration = Duration(seconds: _tracks[clampedIndex].durationSeconds);
     _isCompleted = false;
+    _publishPlaybackState();
     _emitMikudromeState(index: clampedIndex, isPlaying: _player.playing);
     await _startPlaybackSafely(clampedIndex);
   }
@@ -129,6 +131,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     await _player.seek(position);
     _position = position;
     _isCompleted = false;
+    _publishPlaybackState();
     _emitMikudromeState(position: _position, isCompleted: false);
   }
 
@@ -148,6 +151,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     _isCompleted = false;
     queue.add(const []);
     mediaItem.add(null);
+    _publishPlaybackState(processingState: AudioProcessingState.idle);
     _emitMikudromeState(empty: true);
   }
 
@@ -155,6 +159,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     try {
       await play();
       if (!_disposed) {
+        _publishPlaybackState(isPlaying: true);
         _emitMikudromeState(index: index, isPlaying: true);
       }
     } catch (_) {
@@ -171,6 +176,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     _duration = Duration(seconds: _tracks[clampedIndex].durationSeconds);
     _isCompleted = false;
     mediaItem.add(queue.value[clampedIndex]);
+    _publishPlaybackState();
     _emitMikudromeState(
       index: clampedIndex,
       position: _position,
@@ -180,6 +186,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
 
   void _handlePlayingChanged(bool isPlaying) {
     if (_tracks.isEmpty) return;
+    _publishPlaybackState(isPlaying: isPlaying);
     _emitMikudromeState(
       isPlaying: isPlaying,
       isCompleted: isPlaying ? false : null,
@@ -189,9 +196,18 @@ class MikudromeAudioHandler extends BaseAudioHandler
   void _handleProcessingStateChanged(ProcessingState state) {
     if (state == ProcessingState.completed && _tracks.isNotEmpty) {
       _isCompleted = true;
+      _publishPlaybackState(
+        isPlaying: false,
+        processingState: AudioProcessingState.completed,
+      );
       _emitMikudromeState(isPlaying: false, isCompleted: true);
     } else if (state == ProcessingState.ready ||
         state == ProcessingState.loading) {
+      _publishPlaybackState(
+        processingState: state == ProcessingState.loading
+            ? AudioProcessingState.loading
+            : AudioProcessingState.ready,
+      );
       if (_isCompleted) {
         _isCompleted = false;
         _emitMikudromeState(isCompleted: false);
@@ -202,6 +218,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
   void _handlePositionChanged(Duration position) {
     if (_tracks.isEmpty) return;
     _position = position;
+    _publishPlaybackState();
     _emitMikudromeState(position: position);
   }
 
@@ -214,7 +231,34 @@ class MikudromeAudioHandler extends BaseAudioHandler
     if (currentItem != null) {
       mediaItem.add(currentItem.copyWith(duration: _duration));
     }
+    _publishPlaybackState();
     _emitMikudromeState(duration: _duration);
+  }
+
+  void _publishPlaybackState({
+    bool? isPlaying,
+    AudioProcessingState processingState = AudioProcessingState.ready,
+  }) {
+    if (_disposed) return;
+    playbackState.add(
+      PlaybackState(
+        controls: const [
+          MediaControl.skipToPrevious,
+          MediaControl.play,
+          MediaControl.pause,
+          MediaControl.skipToNext,
+        ],
+        systemActions: const {
+          MediaAction.seek,
+          MediaAction.seekForward,
+          MediaAction.seekBackward,
+        },
+        androidCompactActionIndices: const [0, 1, 3],
+        processingState: processingState,
+        playing: isPlaying ?? _player.playing,
+        updatePosition: _position,
+      ),
+    );
   }
 
   void _emitMikudromeState({
