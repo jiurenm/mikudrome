@@ -63,6 +63,8 @@ class PlayerScreen extends StatefulWidget {
     this.onExternalPause,
     this.onExternalSeekToFraction,
     this.currentCoverUrl,
+    this.shuffleEnabled = false,
+    this.onToggleShuffle,
   });
 
   final Track track;
@@ -99,6 +101,8 @@ class PlayerScreen extends StatefulWidget {
   final Future<void> Function()? onExternalPause;
   final PlayerSeekToFraction? onExternalSeekToFraction;
   final String? currentCoverUrl;
+  final bool shuffleEnabled;
+  final VoidCallback? onToggleShuffle;
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
@@ -1278,6 +1282,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             ],
                           ),
                         ),
+                        const SizedBox(width: 12),
+                        IconButton(
+                          onPressed: () {},
+                          icon: const Icon(Icons.favorite_border, size: 34),
+                          color: Colors.white70,
+                          tooltip: '收藏',
+                        ),
+                        IconButton(
+                          onPressed: () {},
+                          icon: const Icon(Icons.more_vert, size: 32),
+                          color: Colors.white70,
+                          tooltip: '更多',
+                        ),
                       ],
                     ),
                     SizedBox(height: screenHeight < 760 ? 12 : 18),
@@ -1321,9 +1338,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _buildPlaybackOrderButton(
-                          baseColor: Colors.white,
-                          accentColor: accentColor,
+                        IconButton(
+                          onPressed: widget.onToggleShuffle,
+                          icon: const Icon(Icons.shuffle, size: 32),
+                          color: widget.shuffleEnabled
+                              ? accentColor
+                              : Colors.white,
+                          tooltip: widget.shuffleEnabled ? '恢复顺序' : '随机播放',
                         ),
                         IconButton(
                           icon: const Icon(Icons.skip_previous, size: 48),
@@ -1349,43 +1370,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           disabledColor: Colors.white24,
                           onPressed: _hasNext ? widget.onNext : null,
                         ),
-                        IconButton(
-                          onPressed: widget.onCyclePlaybackOrderMode,
-                          icon: const Icon(Icons.repeat, size: 34),
-                          color: accentColor,
-                          tooltip: _playbackOrderTooltip,
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: screenHeight < 760 ? 10 : 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _buildMobileAction(
-                          icon: Icons.playlist_add,
-                          label: '加入歌单',
-                          color: Colors.white54,
-                        ),
-                        _buildMobileAction(
-                          icon: Icons.file_download_outlined,
-                          label: '下载',
-                          color: Colors.white54,
-                        ),
-                        _buildMobileAction(
-                          icon: Icons.graphic_eq,
-                          label: '音效',
-                          color: Colors.white54,
-                        ),
-                        _buildMobileAction(
-                          icon: Icons.queue_music,
-                          label: '队列',
-                          color: Colors.white54,
-                          onTap: _toggleQueue,
-                        ),
-                        _buildMobileAction(
-                          icon: Icons.more_horiz,
-                          label: '更多',
-                          color: Colors.white54,
+                        _buildPlaybackOrderButton(
+                          baseColor: Colors.white,
+                          accentColor: accentColor,
                         ),
                       ],
                     ),
@@ -1526,38 +1513,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 errorBuilder: (_, __, ___) => _audioPlaceholder(),
               )
             : _audioPlaceholder(),
-      ),
-    );
-  }
-
-  Widget _buildMobileAction({
-    required IconData icon,
-    required String label,
-    required Color color,
-    VoidCallback? onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: SizedBox(
-        width: 64,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 30),
-            const SizedBox(height: 7),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
       ),
     );
   }

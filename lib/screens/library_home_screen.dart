@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
@@ -104,7 +105,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   final List<_MobileNavigationSnapshot> _mobileHistory = [];
   bool _showMobileDiscoverHome = true;
   List<Track> _playerQueue = const [];
+  List<Track>? _orderedPlayerQueue;
   int _playerIndex = 0;
+  bool _shuffleEnabled = false;
   bool _showPlayer = false;
   bool _isPlaying = false;
   double _playbackProgress = 0;
@@ -515,7 +518,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   void _clearPlaybackForServerChange() {
     setState(() {
       _playerQueue = const [];
+      _orderedPlayerQueue = null;
       _playerIndex = 0;
+      _shuffleEnabled = false;
       _showPlayer = false;
       _isPlaying = false;
       _playbackProgress = 0;
@@ -630,6 +635,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       _playerIndex = state.queue.isEmpty
           ? 0
           : state.index.clamp(0, state.queue.length - 1);
+      if (!_shuffleEnabled) {
+        _orderedPlayerQueue = null;
+      }
       _isPlaying = state.isPlaying;
       if (track == null) {
         _playbackProgress = 0;
@@ -726,7 +734,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     final selectedTrack = queue[index.clamp(0, queue.length - 1)];
     setState(() {
       _playerQueue = List<Track>.from(queue);
+      _orderedPlayerQueue = null;
       _playerIndex = index.clamp(0, queue.length - 1);
+      _shuffleEnabled = false;
       _playerContextLabel = contextLabel;
       _playbackMode = _defaultModeForTrack(selectedTrack);
       _showPlayer = true;
@@ -768,6 +778,45 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
       };
     });
     _savePlaybackState();
+  }
+
+  void _toggleShufflePlayback() {
+    if (_playerQueue.length < 2) return;
+    final currentTrack = _currentTrack;
+    if (currentTrack == null) return;
+
+    if (_shuffleEnabled) {
+      final ordered = _orderedPlayerQueue;
+      if (ordered == null || ordered.isEmpty) return;
+      final restoredIndex = ordered.indexWhere(
+        (track) => track.id == currentTrack.id,
+      );
+      setState(() {
+        _playerQueue = List<Track>.from(ordered);
+        _playerIndex = restoredIndex < 0 ? 0 : restoredIndex;
+        _orderedPlayerQueue = null;
+        _shuffleEnabled = false;
+      });
+      _savePlaybackState();
+      if (_isMobilePlaybackSurface) {
+        unawaited(_routeMobileAudioPlaybackForCurrentMode());
+      }
+      return;
+    }
+
+    final rest =
+        _playerQueue.where((track) => track.id != currentTrack.id).toList()
+          ..shuffle(Random());
+    setState(() {
+      _orderedPlayerQueue = List<Track>.from(_playerQueue);
+      _playerQueue = [currentTrack, ...rest];
+      _playerIndex = 0;
+      _shuffleEnabled = true;
+    });
+    _savePlaybackState();
+    if (_isMobilePlaybackSurface) {
+      unawaited(_routeMobileAudioPlaybackForCurrentMode());
+    }
   }
 
   void _playPrevious() {
@@ -1196,6 +1245,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
                     onExternalPause: _mobileAudioPlaybackService.pause,
                     onExternalSeekToFraction: _seekMobileAudioPlayback,
                     currentCoverUrl: _coverUrlForTrack(currentTrack),
+                    shuffleEnabled: _shuffleEnabled,
+                    onToggleShuffle: _toggleShufflePlayback,
                   ),
                 ),
             ],

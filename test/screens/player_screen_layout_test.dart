@@ -28,6 +28,8 @@ Widget _buildPlayer({
   Track? track,
   List<Track>? queue,
   String? currentCoverUrl,
+  bool shuffleEnabled = false,
+  VoidCallback? onToggleShuffle,
 }) {
   final resolvedTrack = track ?? _desktopTrack();
   final resolvedQueue = queue ?? [resolvedTrack];
@@ -56,6 +58,8 @@ Widget _buildPlayer({
             }) {},
         initializeControllerOnStart: false,
         currentCoverUrl: currentCoverUrl,
+        shuffleEnabled: shuffleEnabled,
+        onToggleShuffle: onToggleShuffle,
       ),
     ),
   );
@@ -67,6 +71,8 @@ Future<void> _pumpPlayer(
   Track? track,
   List<Track>? queue,
   String? currentCoverUrl,
+  bool shuffleEnabled = false,
+  VoidCallback? onToggleShuffle,
 }) async {
   await tester.pumpWidget(
     _buildPlayer(
@@ -74,6 +80,8 @@ Future<void> _pumpPlayer(
       track: track,
       queue: queue,
       currentCoverUrl: currentCoverUrl,
+      shuffleEnabled: shuffleEnabled,
+      onToggleShuffle: onToggleShuffle,
     ),
   );
   for (var i = 0; i < 40; i++) {
@@ -187,7 +195,7 @@ void main() {
     );
   });
 
-  testWidgets('mobile player uses compact immersive layout with queue action', (
+  testWidgets('mobile player uses compact controls with title actions', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(430, 900));
@@ -245,24 +253,39 @@ void main() {
     expect(find.byIcon(Icons.movie), findsNothing);
     expect(find.text('HQ'), findsNothing);
     expect(find.text('已收藏'), findsNothing);
-    expect(find.text('加入歌单'), findsOneWidget);
-    expect(find.text('下载'), findsOneWidget);
-    expect(find.text('音效'), findsOneWidget);
-    expect(find.text('队列'), findsOneWidget);
-    expect(find.text('更多'), findsOneWidget);
+    expect(find.text('加入歌单'), findsNothing);
+    expect(find.text('下载'), findsNothing);
+    expect(find.text('音效'), findsNothing);
+    expect(find.text('队列'), findsNothing);
+    expect(find.text('更多'), findsNothing);
+    expect(find.byIcon(Icons.favorite_border), findsOneWidget);
+    expect(find.byIcon(Icons.more_vert), findsOneWidget);
+    expect(find.byIcon(Icons.shuffle), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_right_alt), findsOneWidget);
     expect(find.text('接下来播放'), findsNothing);
     expect(find.text('清空'), findsNothing);
     expect(find.byType(SingleChildScrollView), findsNothing);
     expect(find.text('ヒバナ'), findsNothing);
     expect(find.text('ゴーストルール'), findsNothing);
     expect(find.text('アンチビート'), findsNothing);
+  });
 
-    await tester.tap(find.text('队列'));
-    await tester.pumpAndSettle();
+  testWidgets('mobile shuffle button calls toggle callback', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    expect(find.text('Layout Test'), findsOneWidget);
-    expect(find.text('ヒバナ'), findsOneWidget);
-    expect(find.text('アンチビート'), findsOneWidget);
+    var toggles = 0;
+
+    await _pumpPlayer(
+      tester,
+      surfaceSize: const Size(430, 900),
+      onToggleShuffle: () => toggles++,
+    );
+
+    await tester.tap(find.byIcon(Icons.shuffle));
+    await tester.pump();
+
+    expect(toggles, 1);
   });
 
   testWidgets('mobile player uses externally resolved current cover url', (

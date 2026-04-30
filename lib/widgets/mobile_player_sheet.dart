@@ -92,8 +92,7 @@ class _MobilePlayerSheetState extends State<MobilePlayerSheet>
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.sizeOf(context).height;
     const miniPlayerHeight = 64.0;
-    final collapsedTop =
-        screenHeight - miniPlayerHeight - widget.bottomPadding;
+    final collapsedTop = screenHeight - miniPlayerHeight - widget.bottomPadding;
 
     return AnimatedBuilder(
       animation: _controller,
@@ -104,7 +103,7 @@ class _MobilePlayerSheetState extends State<MobilePlayerSheet>
           top: top,
           left: 0,
           right: 0,
-          bottom: widget.bottomPadding,
+          bottom: widget.bottomPadding * (1 - _controller.value),
           child: Material(
             color: AppTheme.mikuDark,
             child: Column(
@@ -131,13 +130,9 @@ class _MobilePlayerSheetState extends State<MobilePlayerSheet>
                 // drag when collapsed so offstage player can't intercept.
                 Expanded(
                   child: GestureDetector(
-                    onVerticalDragUpdate:
-                        isExpanded ? _handleDragUpdate : null,
+                    onVerticalDragUpdate: isExpanded ? _handleDragUpdate : null,
                     onVerticalDragEnd: isExpanded ? _handleDragEnd : null,
-                    child: Offstage(
-                      offstage: !isExpanded,
-                      child: child!,
-                    ),
+                    child: Offstage(offstage: !isExpanded, child: child!),
                   ),
                 ),
               ],
