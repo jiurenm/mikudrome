@@ -1,4 +1,4 @@
-package com.example.mikudrome
+package com.miku39.mikudrome
 
 import com.ryanheise.audioservice.AudioServiceActivity
 
