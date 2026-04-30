@@ -122,9 +122,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool _showLyrics = true;
   bool _showMobileQueue = false;
   bool _mobileDefaultApplied = false;
+  int _mobileMediaPageIndex = 0;
   List<TimedLyricLine> _timedLyrics = const [];
   int _activeLyricIndex = -1;
   Timer? _fullscreenChromeTimer;
+  late final PageController _mobileMediaPageController;
   late final WebMediaSessionService _mediaSession;
   late final WebAudioPlayer _webAudioPlayer;
   final _mediaSessionBinding = MediaSessionHandlerBinding();
@@ -237,6 +239,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   void initState() {
     super.initState();
+    _mobileMediaPageController = PageController();
     _pendingSeekProgress = widget.initialProgress;
     _webAudioPlayer = createWebAudioPlayer();
     _webAudioPlayer.addListener(_handleWebAudioPlayerChanged);
@@ -645,6 +648,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   void dispose() {
+    _mobileMediaPageController.dispose();
     _fullscreenChromeTimer?.cancel();
     _detachControllerListener(_controller);
     widget.onVideoControllerChanged?.call(null);
@@ -1169,10 +1173,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
         : position.inMilliseconds / duration.inMilliseconds;
     final screenWidth = MediaQuery.sizeOf(context).width;
     final screenHeight = MediaQuery.sizeOf(context).height;
-    final artworkSize = (screenWidth - 80).clamp(
-      188.0,
-      screenHeight < 760 ? screenHeight * 0.25 : screenHeight * 0.3,
+    final artworkSize = (screenWidth - 64).clamp(
+      220.0,
+      screenHeight < 760 ? screenHeight * 0.32 : screenHeight * 0.39,
     );
+    final mediaPagerHeight = screenHeight < 760
+        ? screenHeight * 0.36
+        : screenHeight * 0.44;
     final queuePanelHeight = (screenHeight * 0.42).clamp(260.0, 390.0);
 
     return Scaffold(
@@ -1184,7 +1191,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             bottom: false,
             child: Padding(
               key: const ValueKey('mobile-player-immersive'),
-              padding: const EdgeInsets.fromLTRB(32, 6, 32, 52),
+              padding: const EdgeInsets.fromLTRB(32, 6, 32, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -1211,15 +1218,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           children: [
                             _buildMobileTab(
                               label: '播放',
-                              selected: !_showLyrics,
-                              onTap: () => setState(() => _showLyrics = false),
+                              selected: _mobileMediaPageIndex == 0,
+                              onTap: () => _showMobileMediaPage(0),
                               accentColor: accentColor,
                             ),
                             const SizedBox(width: 42),
                             _buildMobileTab(
                               label: '歌词',
-                              selected: _showLyrics,
-                              onTap: () => setState(() => _showLyrics = true),
+                              selected: _mobileMediaPageIndex == 1,
+                              onTap: () => _showMobileMediaPage(1),
                               accentColor: accentColor,
                             ),
                           ],
@@ -1229,184 +1236,175 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     ],
                   ),
                   SizedBox(height: screenHeight < 760 ? 6 : 10),
-                  if (_showLyrics)
-                    Expanded(
-                      child: LyricsSection(
-                        lyrics: _track.lyrics,
-                        timedLyrics: _timedLyrics,
-                        activeIndex: _hasTimedLyrics ? _activeLyricIndex : -1,
-                      ),
-                    )
-                  else ...[
-                    Expanded(
-                      flex: 7,
-                      child: Center(
-                        child: _buildMobileArtwork(
-                          context,
-                          size: artworkSize,
-                          accentColor: accentColor,
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: screenHeight < 760 ? 6 : 10),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SizedBox(
-                                key: const ValueKey('mobile-player-title-box'),
-                                width: 254,
-                                child: _MobileScrollingTitle(
-                                  text: _track.title,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineLarge
-                                      ?.copyWith(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      _queueSubtitle,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium
-                                          ?.copyWith(
-                                            color: Colors.white54,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                  _buildMobileMediaPager(
+                    context: context,
+                    height: mediaPagerHeight,
+                    artworkSize: artworkSize,
+                    accentColor: accentColor,
+                  ),
+                  SizedBox(height: screenHeight < 760 ? 6 : 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              key: const ValueKey('mobile-player-title-box'),
+                              width: 254,
+                              child: _MobileScrollingTitle(
+                                text: _track.title,
+                                style: Theme.of(context).textTheme.headlineLarge
+                                    ?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w900,
                                     ),
-                                  ),
-                                ],
                               ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        IconButton(
-                          onPressed: () {},
-                          icon: const Icon(Icons.favorite_border, size: 34),
-                          color: Colors.white70,
-                          tooltip: '收藏',
-                        ),
-                        IconButton(
-                          onPressed: () {},
-                          icon: const Icon(Icons.more_vert, size: 32),
-                          color: Colors.white70,
-                          tooltip: '更多',
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: screenHeight < 760 ? 6 : 8),
-                    SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        activeTrackColor: accentColor,
-                        inactiveTrackColor: Colors.white24,
-                        thumbColor: accentColor,
-                        overlayColor: accentColor.withValues(alpha: 0.15),
-                        trackHeight: 5,
-                        thumbShape: const RoundSliderThumbShape(
-                          enabledThumbRadius: 7,
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    _queueSubtitle,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                          color: Colors.white54,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                      child: Slider(
-                        value: progress.clamp(0.0, 1.0),
-                        onChanged: duration == Duration.zero ? null : _seekTo,
+                      const SizedBox(width: 12),
+                      IconButton(
+                        onPressed: () {},
+                        icon: const Icon(Icons.favorite_border, size: 34),
+                        color: Colors.white70,
+                        tooltip: '收藏',
+                      ),
+                      IconButton(
+                        onPressed: () {},
+                        icon: const Icon(Icons.more_vert, size: 32),
+                        color: Colors.white70,
+                        tooltip: '更多',
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: screenHeight < 760 ? 6 : 8),
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      activeTrackColor: accentColor,
+                      inactiveTrackColor: Colors.white24,
+                      thumbColor: accentColor,
+                      overlayColor: accentColor.withValues(alpha: 0.15),
+                      trackHeight: 5,
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 7,
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            _formatDuration(position),
-                            key: const ValueKey('player-elapsed-label'),
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: Colors.white),
-                          ),
-                          Text(
-                            _formatDuration(duration),
-                            key: const ValueKey('player-duration-label'),
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: Colors.white54),
-                          ),
-                        ],
-                      ),
+                    child: Slider(
+                      value: progress.clamp(0.0, 1.0),
+                      onChanged: duration == Duration.zero ? null : _seekTo,
                     ),
-                    SizedBox(height: screenHeight < 760 ? 4 : 6),
-                    Row(
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        IconButton(
-                          onPressed: widget.onToggleShuffle,
-                          icon: const Icon(Icons.shuffle, size: 32),
-                          color: widget.shuffleEnabled
-                              ? accentColor
-                              : Colors.white,
-                          tooltip: widget.shuffleEnabled ? '恢复顺序' : '随机播放',
+                        Text(
+                          _formatDuration(position),
+                          key: const ValueKey('player-elapsed-label'),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodyMedium?.copyWith(color: Colors.white),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.skip_previous, size: 48),
-                          color: Colors.white,
-                          disabledColor: Colors.white24,
-                          onPressed: _hasPrevious ? widget.onPrevious : null,
-                        ),
-                        IconButton(
-                          onPressed: _togglePlayback,
-                          icon: Icon(
-                            _isPlaying ? Icons.pause : Icons.play_arrow,
-                            size: 46,
-                            color: const Color(0xFF071015),
-                          ),
-                          style: IconButton.styleFrom(
-                            backgroundColor: accentColor,
-                            fixedSize: const Size(74, 74),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.skip_next, size: 48),
-                          color: Colors.white,
-                          disabledColor: Colors.white24,
-                          onPressed: _hasNext ? widget.onNext : null,
-                        ),
-                        _buildPlaybackOrderButton(
-                          baseColor: Colors.white,
-                          accentColor: accentColor,
+                        Text(
+                          _formatDuration(duration),
+                          key: const ValueKey('player-duration-label'),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: Colors.white54),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 18),
-                    if (!_showMobileQueue) _buildMobileQueuePeek(accentColor),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeOutCubic,
-                      height: _showMobileQueue ? queuePanelHeight : 0,
-                      child: ClipRect(
-                        child: Align(
-                          alignment: Alignment.topCenter,
-                          child: _showMobileQueue
-                              ? _buildMobileQueuePanel(
-                                  context,
-                                  accentColor,
-                                  queuePanelHeight,
-                                )
-                              : const SizedBox.shrink(),
+                  ),
+                  SizedBox(height: screenHeight < 760 ? 4 : 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        onPressed: widget.onToggleShuffle,
+                        icon: const Icon(Icons.shuffle, size: 32),
+                        color: widget.shuffleEnabled
+                            ? accentColor
+                            : Colors.white,
+                        tooltip: widget.shuffleEnabled ? '恢复顺序' : '随机播放',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.skip_previous, size: 48),
+                        color: Colors.white,
+                        disabledColor: Colors.white24,
+                        onPressed: _hasPrevious ? widget.onPrevious : null,
+                      ),
+                      IconButton(
+                        onPressed: _togglePlayback,
+                        icon: Icon(
+                          _isPlaying ? Icons.pause : Icons.play_arrow,
+                          size: 46,
+                          color: const Color(0xFF071015),
+                        ),
+                        style: IconButton.styleFrom(
+                          backgroundColor: accentColor,
+                          fixedSize: const Size(74, 74),
                         ),
                       ),
-                    ),
-                  ],
+                      IconButton(
+                        icon: const Icon(Icons.skip_next, size: 48),
+                        color: Colors.white,
+                        disabledColor: Colors.white24,
+                        onPressed: _hasNext ? widget.onNext : null,
+                      ),
+                      _buildPlaybackOrderButton(
+                        baseColor: Colors.white,
+                        accentColor: accentColor,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  if (!_showMobileQueue) _buildMobileQueuePeek(accentColor),
                 ],
+              ),
+            ),
+          ),
+          Positioned(
+            left: 32,
+            right: 32,
+            bottom: 0,
+            child: SafeArea(
+              top: false,
+              child: AnimatedSlide(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                offset: _showMobileQueue ? Offset.zero : const Offset(0, 1),
+                child: IgnorePointer(
+                  ignoring: !_showMobileQueue,
+                  child: _showMobileQueue
+                      ? _buildMobileQueuePanel(
+                          context,
+                          accentColor,
+                          queuePanelHeight,
+                        )
+                      : SizedBox(height: queuePanelHeight),
+                ),
               ),
             ),
           ),
@@ -1678,6 +1676,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  void _showMobileMediaPage(int page) {
+    setState(() {
+      _mobileMediaPageIndex = page;
+    });
+    _mobileMediaPageController.jumpToPage(page);
+  }
+
   Widget _buildMobileTab({
     required String label,
     required bool selected,
@@ -1756,6 +1761,46 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 errorBuilder: (_, __, ___) => _audioPlaceholder(),
               )
             : _audioPlaceholder(),
+      ),
+    );
+  }
+
+  Widget _buildMobileMediaPager({
+    required BuildContext context,
+    required double height,
+    required double artworkSize,
+    required Color accentColor,
+  }) {
+    return SizedBox(
+      key: const ValueKey('mobile-player-media-pager'),
+      height: height,
+      child: PageView(
+        controller: _mobileMediaPageController,
+        physics: const PageScrollPhysics(),
+        onPageChanged: (page) {
+          setState(() {
+            _mobileMediaPageIndex = page;
+          });
+        },
+        children: [
+          Center(
+            key: const ValueKey('mobile-player-artwork-page'),
+            child: _buildMobileArtwork(
+              context,
+              size: artworkSize,
+              accentColor: accentColor,
+            ),
+          ),
+          KeyedSubtree(
+            key: const ValueKey('mobile-player-lyrics-page'),
+            child: LyricsSection(
+              lyrics: _track.lyrics,
+              timedLyrics: _timedLyrics,
+              activeIndex: _hasTimedLyrics ? _activeLyricIndex : -1,
+              framed: false,
+            ),
+          ),
+        ],
       ),
     );
   }

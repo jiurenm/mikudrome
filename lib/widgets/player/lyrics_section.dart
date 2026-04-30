@@ -12,11 +12,13 @@ class LyricsSection extends StatefulWidget {
     required this.lyrics,
     this.timedLyrics = const [],
     this.activeIndex = -1,
+    this.framed = true,
   });
 
   final String lyrics;
   final List<TimedLyricLine> timedLyrics;
   final int activeIndex;
+  final bool framed;
 
   @override
   State<LyricsSection> createState() => _LyricsSectionState();
@@ -384,7 +386,7 @@ class _LyricsSectionState extends State<LyricsSection> {
   @override
   Widget build(BuildContext context) {
     if (!_hasLyrics) {
-      return _buildFramedContainer(
+      return _buildLyricsContainer(
         child: Align(
           alignment: Alignment.topLeft,
           child: Text(
@@ -406,7 +408,7 @@ class _LyricsSectionState extends State<LyricsSection> {
             return _buildDesktopStage(constraints);
           }
 
-          return _buildFramedContainer(
+          return _buildLyricsContainer(
             child: Scrollbar(
               controller: _scrollController,
               thumbVisibility: true,
@@ -438,7 +440,7 @@ class _LyricsSectionState extends State<LyricsSection> {
       );
     }
 
-    return _buildFramedContainer(
+    return _buildLyricsContainer(
       child: Scrollbar(
         controller: _scrollController,
         thumbVisibility: true,
@@ -451,6 +453,35 @@ class _LyricsSectionState extends State<LyricsSection> {
                   height: 1.7,
                 ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLyricsContainer({required Widget child}) {
+    if (widget.framed) {
+      return _buildFramedContainer(child: child);
+    }
+
+    return SizedBox.expand(
+      child: ShaderMask(
+        shaderCallback: (bounds) {
+          return const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.transparent,
+              Colors.white,
+              Colors.white,
+              Colors.transparent,
+            ],
+            stops: [0.0, 0.12, 0.86, 1.0],
+          ).createShader(bounds);
+        },
+        blendMode: BlendMode.dstIn,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: child,
         ),
       ),
     );

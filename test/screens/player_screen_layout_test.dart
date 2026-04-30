@@ -255,6 +255,10 @@ void main() {
       find.byKey(const ValueKey('mobile-player-immersive')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey('mobile-player-media-pager')),
+      findsOneWidget,
+    );
     expect(find.text('播放'), findsOneWidget);
     expect(find.text('歌词'), findsOneWidget);
     expect(find.text('Layout Test'), findsNothing);
@@ -314,6 +318,90 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('播放的音乐来自'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('mobile-player-queue-peek')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('mobile cover area swipes left into lyrics while controls stay fixed', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const track = Track(
+      id: 18,
+      title: 'Swipe lyrics',
+      audioPath: '/tmp/18.flac',
+      videoPath: '',
+      vocal: 'Miku',
+      lyrics: '[00:00.00]first timed line\n[00:05.00]second timed line',
+    );
+
+    await _pumpPlayer(
+      tester,
+      surfaceSize: const Size(430, 900),
+      track: track,
+      currentCoverUrl: 'http://127.0.0.1:8080/api/covers/18',
+    );
+
+    expect(
+      find.byKey(const ValueKey('mobile-player-media-pager')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('mobile-player-artwork-page')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('mobile-player-lyrics-page')),
+      findsNothing,
+    );
+    expect(find.text('播放'), findsOneWidget);
+    expect(find.text('歌词'), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-player-title-box')), findsOneWidget);
+    expect(find.byKey(const ValueKey('player-elapsed-label')), findsOneWidget);
+    expect(find.byIcon(Icons.shuffle), findsOneWidget);
+    expect(find.byIcon(Icons.skip_previous), findsOneWidget);
+    expect(find.byIcon(Icons.skip_next), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('mobile-player-queue-peek')),
+      findsOneWidget,
+    );
+
+    final pagerRect = tester.getRect(
+      find.byKey(const ValueKey('mobile-player-media-pager')),
+    );
+    expect(pagerRect.height, greaterThanOrEqualTo(370));
+
+    await tester.tap(find.text('歌词'));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(
+      find.byKey(const ValueKey('mobile-player-lyrics-page')),
+      findsOneWidget,
+    );
+    expect(find.text('first timed line'), findsOneWidget);
+    expect(find.text('second timed line'), findsOneWidget);
+
+    await tester.drag(
+      find.byKey(const ValueKey('mobile-player-media-pager')),
+      const Offset(-360, 0),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(
+      find.byKey(const ValueKey('mobile-player-lyrics-page')),
+      findsOneWidget,
+    );
+    expect(find.text('first timed line'), findsOneWidget);
+    expect(find.text('second timed line'), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-player-title-box')), findsOneWidget);
+    expect(find.byKey(const ValueKey('player-elapsed-label')), findsOneWidget);
+    expect(find.byIcon(Icons.shuffle), findsOneWidget);
+    expect(find.byIcon(Icons.skip_previous), findsOneWidget);
+    expect(find.byIcon(Icons.skip_next), findsOneWidget);
     expect(
       find.byKey(const ValueKey('mobile-player-queue-peek')),
       findsOneWidget,
