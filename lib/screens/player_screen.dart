@@ -118,6 +118,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool _isFullscreen = false;
   bool _showFullscreenChrome = true;
   bool _showLyrics = true;
+  bool _showMobileQueue = false;
   bool _mobileDefaultApplied = false;
   List<TimedLyricLine> _timedLyrics = const [];
   int _activeLyricIndex = -1;
@@ -1166,7 +1167,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final screenHeight = MediaQuery.sizeOf(context).height;
     final artworkSize = (screenWidth - 80).clamp(
       220.0,
-      screenHeight < 760 ? screenHeight * 0.34 : screenHeight * 0.42,
+      screenHeight < 760 ? screenHeight * 0.31 : screenHeight * 0.38,
     );
 
     return Scaffold(
@@ -1178,7 +1179,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             bottom: false,
             child: Padding(
               key: const ValueKey('mobile-player-immersive'),
-              padding: const EdgeInsets.fromLTRB(32, 12, 32, 18),
+              padding: const EdgeInsets.fromLTRB(32, 12, 32, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -1222,7 +1223,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       const SizedBox(width: 48),
                     ],
                   ),
-                  SizedBox(height: screenHeight < 760 ? 16 : 26),
+                  SizedBox(height: screenHeight < 760 ? 10 : 16),
                   if (_showLyrics)
                     Expanded(
                       child: LyricsSection(
@@ -1233,7 +1234,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     )
                   else ...[
                     Expanded(
-                      flex: 9,
+                      flex: 8,
                       child: Center(
                         child: _buildMobileArtwork(
                           context,
@@ -1242,7 +1243,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ),
                       ),
                     ),
-                    SizedBox(height: screenHeight < 760 ? 12 : 20),
+                    SizedBox(height: screenHeight < 760 ? 8 : 14),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
@@ -1297,7 +1298,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ),
                       ],
                     ),
-                    SizedBox(height: screenHeight < 760 ? 12 : 18),
+                    SizedBox(height: screenHeight < 760 ? 8 : 12),
                     SliderTheme(
                       data: SliderTheme.of(context).copyWith(
                         activeTrackColor: accentColor,
@@ -1334,7 +1335,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ],
                       ),
                     ),
-                    SizedBox(height: screenHeight < 760 ? 8 : 12),
+                    SizedBox(height: screenHeight < 760 ? 6 : 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -1376,6 +1377,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ),
                       ],
                     ),
+                    SizedBox(height: screenHeight < 760 ? 8 : 12),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeOutCubic,
+                      child: _showMobileQueue
+                          ? _buildMobileQueuePanel(context, accentColor)
+                          : _buildMobileQueuePeek(accentColor),
+                    ),
                   ],
                 ],
               ),
@@ -1383,6 +1393,206 @@ class _PlayerScreenState extends State<PlayerScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMobileQueuePeek(Color accentColor) {
+    return GestureDetector(
+      key: const ValueKey('mobile-player-queue-peek'),
+      behavior: HitTestBehavior.opaque,
+      onTap: () => setState(() => _showMobileQueue = true),
+      onVerticalDragUpdate: (details) {
+        if (details.primaryDelta != null && details.primaryDelta! < -8) {
+          setState(() => _showMobileQueue = true);
+        }
+      },
+      onVerticalDragEnd: (details) {
+        if ((details.primaryVelocity ?? 0) < 0) {
+          setState(() => _showMobileQueue = true);
+        }
+      },
+      child: Padding(
+        padding: const EdgeInsets.only(top: 4, bottom: 2),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 44,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.34),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '上滑查看队列',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.76),
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileQueuePanel(BuildContext context, Color accentColor) {
+    final visibleItems = widget.queue
+        .asMap()
+        .entries
+        .where((entry) => entry.key != widget.currentIndex)
+        .take(4)
+        .toList();
+
+    return GestureDetector(
+      key: const ValueKey('mobile-player-queue-panel'),
+      onVerticalDragEnd: (details) {
+        if ((details.primaryVelocity ?? 0) > 0) {
+          setState(() => _showMobileQueue = false);
+        }
+      },
+      child: SizedBox(
+        height: 230,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 44,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.34),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '播放的音乐来自',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.white60,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        widget.contextLabel,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                            ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () {},
+                  icon: const Icon(Icons.playlist_add, size: 22),
+                  label: const Text('保存'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    backgroundColor: Colors.white.withValues(alpha: 0.1),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Expanded(
+              child: ListView.separated(
+                padding: EdgeInsets.zero,
+                itemCount: visibleItems.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (context, listIndex) {
+                  final entry = visibleItems[listIndex];
+                  return _buildMobileQueueItem(context, entry.key, entry.value);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileQueueItem(BuildContext context, int index, Track track) {
+    final coverUrl = _coverUrlForTrack(track);
+    return InkWell(
+      onTap: () => widget.onSelectTrack(index),
+      borderRadius: BorderRadius.circular(8),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: coverUrl.isNotEmpty
+                ? Image.network(
+                    coverUrl,
+                    headers: ApiConfig.defaultHeaders,
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        _mobileQueueCoverPlaceholder(),
+                  )
+                : _mobileQueueCoverPlaceholder(),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  track.title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  track.vocalLine.isNotEmpty ? track.vocalLine : '-',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: Colors.white54),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Icon(Icons.drag_handle, color: Colors.white70, size: 26),
+        ],
+      ),
+    );
+  }
+
+  Widget _mobileQueueCoverPlaceholder() {
+    return Container(
+      width: 48,
+      height: 48,
+      color: AppTheme.cardBg,
+      child: const Icon(Icons.music_note, color: AppTheme.textMuted, size: 22),
     );
   }
 

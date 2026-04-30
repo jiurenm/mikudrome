@@ -265,9 +265,25 @@ void main() {
     expect(find.text('接下来播放'), findsNothing);
     expect(find.text('清空'), findsNothing);
     expect(find.byType(SingleChildScrollView), findsNothing);
+    expect(
+      find.byKey(const ValueKey('mobile-player-queue-peek')),
+      findsOneWidget,
+    );
+    expect(find.text('上滑查看队列'), findsOneWidget);
     expect(find.text('ヒバナ'), findsNothing);
     expect(find.text('ゴーストルール'), findsNothing);
     expect(find.text('アンチビート'), findsNothing);
+
+    await tester.drag(
+      find.byKey(const ValueKey('mobile-player-queue-peek')),
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('播放的音乐来自'), findsOneWidget);
+    expect(find.text('Layout Test'), findsOneWidget);
+    expect(find.text('ヒバナ'), findsOneWidget);
+    expect(find.text('ゴーストルール'), findsOneWidget);
   });
 
   testWidgets('mobile shuffle button calls toggle callback', (tester) async {
