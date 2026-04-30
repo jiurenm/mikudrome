@@ -46,6 +46,28 @@ void main() {
     await handler.dispose();
   });
 
+  test('audio-service-backed service exposes handler queue state', () async {
+    final player = FakeJustAudioPlayer();
+    final handler = audio_service.MikudromeAudioHandler(player: player);
+    final service = audio_service.JustAudioMobileAudioPlaybackService(
+      handler: handler,
+    );
+
+    await service.playQueue(
+      queue: [_track(1), _track(2)],
+      index: 1,
+      audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+    );
+
+    expect(handler.queue.value.length, 2);
+    expect(handler.mediaItem.value?.title, 'Track 2');
+    expect(player.playCalls, 1);
+    expect(service.currentState.track?.id, 2);
+    expect(service.currentState.isPlaying, isTrue);
+
+    await service.dispose();
+  });
+
   test('just_audio service queues tracks and publishes player state', () async {
     final player = FakeJustAudioPlayer();
     final service = audio_service.JustAudioMobileAudioPlaybackService(
