@@ -298,6 +298,16 @@ void main() {
     expect(find.text('ヒバナ'), findsOneWidget);
     expect(find.text('ゴーストルール'), findsOneWidget);
     expect(find.text('アンチビート'), findsOneWidget);
+    expect(
+      tester
+          .getRect(find.byKey(const ValueKey('mobile-player-media-pager')))
+          .bottom,
+      lessThanOrEqualTo(
+        tester
+            .getRect(find.byKey(const ValueKey('mobile-player-queue-panel')))
+            .top,
+      ),
+    );
 
     final imageUrls = tester
         .widgetList<Image>(

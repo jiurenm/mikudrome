@@ -1177,9 +1177,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
       220.0,
       screenHeight < 760 ? screenHeight * 0.32 : screenHeight * 0.39,
     );
-    final mediaPagerHeight = screenHeight < 760
-        ? screenHeight * 0.36
-        : screenHeight * 0.44;
     final queuePanelHeight = (screenHeight * 0.42).clamp(260.0, 390.0);
 
     return Scaffold(
@@ -1191,7 +1188,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             bottom: false,
             child: Padding(
               key: const ValueKey('mobile-player-immersive'),
-              padding: const EdgeInsets.fromLTRB(32, 6, 32, 0),
+              padding: const EdgeInsets.fromLTRB(32, 6, 32, 52),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -1236,11 +1233,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     ],
                   ),
                   SizedBox(height: screenHeight < 760 ? 6 : 10),
-                  _buildMobileMediaPager(
-                    context: context,
-                    height: mediaPagerHeight,
-                    artworkSize: artworkSize,
-                    accentColor: accentColor,
+                  Expanded(
+                    child: _buildMobileMediaPager(
+                      context: context,
+                      artworkSize: artworkSize,
+                      accentColor: accentColor,
+                    ),
                   ),
                   SizedBox(height: screenHeight < 760 ? 6 : 10),
                   Row(
@@ -1381,30 +1379,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
                   const SizedBox(height: 14),
                   if (!_showMobileQueue) _buildMobileQueuePeek(accentColor),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOutCubic,
+                    height: _showMobileQueue ? queuePanelHeight : 0,
+                    child: ClipRect(
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: _showMobileQueue
+                            ? _buildMobileQueuePanel(
+                                context,
+                                accentColor,
+                                queuePanelHeight,
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                    ),
+                  ),
                 ],
-              ),
-            ),
-          ),
-          Positioned(
-            left: 32,
-            right: 32,
-            bottom: 0,
-            child: SafeArea(
-              top: false,
-              child: AnimatedSlide(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOutCubic,
-                offset: _showMobileQueue ? Offset.zero : const Offset(0, 1),
-                child: IgnorePointer(
-                  ignoring: !_showMobileQueue,
-                  child: _showMobileQueue
-                      ? _buildMobileQueuePanel(
-                          context,
-                          accentColor,
-                          queuePanelHeight,
-                        )
-                      : SizedBox(height: queuePanelHeight),
-                ),
               ),
             ),
           ),
@@ -1767,40 +1759,48 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Widget _buildMobileMediaPager({
     required BuildContext context,
-    required double height,
     required double artworkSize,
     required Color accentColor,
   }) {
     return SizedBox(
       key: const ValueKey('mobile-player-media-pager'),
-      height: height,
-      child: PageView(
-        controller: _mobileMediaPageController,
-        physics: const PageScrollPhysics(),
-        onPageChanged: (page) {
-          setState(() {
-            _mobileMediaPageIndex = page;
-          });
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final availableArtworkSize = constraints.maxHeight.isFinite
+              ? constraints.maxHeight.clamp(160.0, artworkSize).toDouble()
+              : artworkSize;
+
+          return ClipRect(
+            child: PageView(
+              controller: _mobileMediaPageController,
+              physics: const PageScrollPhysics(),
+              onPageChanged: (page) {
+                setState(() {
+                  _mobileMediaPageIndex = page;
+                });
+              },
+              children: [
+                Center(
+                  key: const ValueKey('mobile-player-artwork-page'),
+                  child: _buildMobileArtwork(
+                    context,
+                    size: availableArtworkSize,
+                    accentColor: accentColor,
+                  ),
+                ),
+                KeyedSubtree(
+                  key: const ValueKey('mobile-player-lyrics-page'),
+                  child: LyricsSection(
+                    lyrics: _track.lyrics,
+                    timedLyrics: _timedLyrics,
+                    activeIndex: _hasTimedLyrics ? _activeLyricIndex : -1,
+                    framed: false,
+                  ),
+                ),
+              ],
+            ),
+          );
         },
-        children: [
-          Center(
-            key: const ValueKey('mobile-player-artwork-page'),
-            child: _buildMobileArtwork(
-              context,
-              size: artworkSize,
-              accentColor: accentColor,
-            ),
-          ),
-          KeyedSubtree(
-            key: const ValueKey('mobile-player-lyrics-page'),
-            child: LyricsSection(
-              lyrics: _track.lyrics,
-              timedLyrics: _timedLyrics,
-              activeIndex: _hasTimedLyrics ? _activeLyricIndex : -1,
-              framed: false,
-            ),
-          ),
-        ],
       ),
     );
   }

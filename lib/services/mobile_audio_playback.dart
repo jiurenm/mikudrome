@@ -4,6 +4,7 @@ import '../models/track.dart';
 export 'mobile_audio_playback_service.dart';
 
 typedef AudioUrlForTrack = String Function(Track track);
+typedef CoverUrlForTrack = String Function(Track track);
 
 class MobileAudioPlaybackState {
   const MobileAudioPlaybackState({
@@ -63,6 +64,7 @@ abstract class MobileAudioPlaybackService {
     required List<Track> queue,
     required int index,
     required AudioUrlForTrack audioUrlForTrack,
+    CoverUrlForTrack? coverUrlForTrack,
   });
 
   Future<void> play();
@@ -96,6 +98,7 @@ class FakeMobileAudioPlaybackService implements MobileAudioPlaybackService {
     required List<Track> queue,
     required int index,
     required AudioUrlForTrack audioUrlForTrack,
+    CoverUrlForTrack? coverUrlForTrack,
   }) async {
     _audioUrlForTrack = audioUrlForTrack;
     if (queue.isEmpty) {
@@ -205,6 +208,7 @@ class NoopMobileAudioPlaybackService implements MobileAudioPlaybackService {
     required List<Track> queue,
     required int index,
     required AudioUrlForTrack audioUrlForTrack,
+    CoverUrlForTrack? coverUrlForTrack,
   }) async {}
 
   @override

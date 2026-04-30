@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:audio_service/audio_service.dart' show AudioProcessingState;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:mikudrome/api/config.dart';
 import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/screens/library_home_screen.dart';
 import 'package:mikudrome/services/mobile_audio_playback.dart';
@@ -13,6 +14,8 @@ import 'package:mikudrome/services/mobile_audio_playback_stub.dart' as stub;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  tearDown(ApiConfig.resetRuntimeConfigForTests);
 
   test('audio service factory creates audio-service-backed service', () async {
     final service = audio_service.createMobileAudioPlaybackService();
@@ -30,11 +33,13 @@ void main() {
   test('audio handler publishes media queue and current media item', () async {
     final player = FakeJustAudioPlayer();
     final handler = audio_service.MikudromeAudioHandler(player: player);
+    ApiConfig.setRuntimeCookie('session=abc');
 
     await handler.setMikudromeQueue(
       tracks: [_track(1), _track(2)],
       audioUrls: const ['http://server/audio/1', 'http://server/audio/2'],
       initialIndex: 1,
+      coverUrlForTrack: (track) => 'http://server/cover/${track.albumId}',
     );
 
     expect(handler.queue.value.map((item) => item.id), [
@@ -48,6 +53,8 @@ void main() {
     expect(handler.mediaItem.value?.id, 'http://server/audio/2');
     expect(handler.mediaItem.value?.title, 'Track 2');
     expect(handler.mediaItem.value?.duration, const Duration(seconds: 120));
+    expect(handler.mediaItem.value?.artUri, Uri.parse('http://server/cover/2'));
+    expect(handler.mediaItem.value?.artHeaders, {'Cookie': 'session=abc'});
 
     await handler.dispose();
   });
@@ -63,10 +70,12 @@ void main() {
       queue: [_track(1), _track(2)],
       index: 1,
       audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+      coverUrlForTrack: (track) => 'http://server/cover/${track.albumId}',
     );
 
     expect(handler.queue.value.length, 2);
     expect(handler.mediaItem.value?.title, 'Track 2');
+    expect(handler.mediaItem.value?.artUri, Uri.parse('http://server/cover/2'));
     expect(player.playCalls, 1);
     expect(service.currentState.track?.id, 2);
     expect(service.currentState.isPlaying, isTrue);
@@ -292,6 +301,23 @@ void main() {
     );
     expect(networkSecurityConfig, contains('cleartextTrafficPermitted="true"'));
     expect(mainActivity, contains('AudioServiceActivity'));
+    expect(
+      File(
+        'android/app/src/main/res/drawable/ic_notification.xml',
+      ).existsSync(),
+      isTrue,
+    );
+  });
+
+  test('audio service config uses dedicated android notification icon', () {
+    final source = File(
+      'lib/services/mobile_audio_playback_audio_service.dart',
+    ).readAsStringSync();
+
+    expect(
+      source,
+      contains("androidNotificationIcon: 'drawable/ic_notification'"),
+    );
   });
 
   test('fake service publishes play and pause state', () async {
