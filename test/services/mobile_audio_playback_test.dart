@@ -175,6 +175,32 @@ void main() {
     },
   );
 
+  test(
+    'audio handler keeps paused seek position and reports zero playback speed',
+    () async {
+      final player = FakeJustAudioPlayer();
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+      final states = <MobileAudioPlaybackState>[];
+      final sub = handler.mikudromeState.listen(states.add);
+
+      await handler.setMikudromeQueue(
+        tracks: [_track(1)],
+        audioUrls: const ['http://server/audio/1'],
+        initialIndex: 0,
+      );
+      await handler.pause();
+      await handler.seek(const Duration(seconds: 30));
+      player.setPosition(Duration.zero);
+
+      expect(handler.playbackState.value.speed, 0.0);
+      expect(states.last.position, const Duration(seconds: 30));
+      expect(states.last.isPlaying, isFalse);
+
+      await sub.cancel();
+      await handler.dispose();
+    },
+  );
+
   test('just_audio service publishes timeline and completion state', () async {
     final player = FakeJustAudioPlayer();
     final service = audio_service.JustAudioMobileAudioPlaybackService(

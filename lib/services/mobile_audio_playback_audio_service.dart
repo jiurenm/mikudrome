@@ -63,6 +63,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
   bool _isCompleted = false;
+  Duration? _lastPausedSeekPosition;
   bool _disposed = false;
 
   Stream<MobileAudioPlaybackState> get mikudromeState =>
@@ -123,6 +124,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     _position = Duration.zero;
     _duration = Duration(seconds: _tracks[clampedIndex].durationSeconds);
     _isCompleted = false;
+    _lastPausedSeekPosition = null;
     _publishPlaybackState();
     _emitMikudromeState(index: clampedIndex, isPlaying: _player.playing);
     await _startPlaybackSafely(clampedIndex);
@@ -144,6 +146,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
   Future<void> seek(Duration position) async {
     await _player.seek(position);
     _position = position;
+    _lastPausedSeekPosition = _player.playing ? null : position;
     _isCompleted = false;
     _publishPlaybackState();
     _emitMikudromeState(position: _position, isCompleted: false);
@@ -189,6 +192,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     _position = Duration.zero;
     _duration = Duration(seconds: _tracks[clampedIndex].durationSeconds);
     _isCompleted = false;
+    _lastPausedSeekPosition = null;
     mediaItem.add(queue.value[clampedIndex]);
     _publishPlaybackState();
     _emitMikudromeState(
@@ -200,6 +204,9 @@ class MikudromeAudioHandler extends BaseAudioHandler
 
   void _handlePlayingChanged(bool isPlaying) {
     if (_tracks.isEmpty) return;
+    if (isPlaying) {
+      _lastPausedSeekPosition = null;
+    }
     _publishPlaybackState(isPlaying: isPlaying);
     _emitMikudromeState(
       isPlaying: isPlaying,
@@ -231,6 +238,15 @@ class MikudromeAudioHandler extends BaseAudioHandler
 
   void _handlePositionChanged(Duration position) {
     if (_tracks.isEmpty) return;
+    final pausedSeekPosition = _lastPausedSeekPosition;
+    if (!_player.playing &&
+        pausedSeekPosition != null &&
+        position < pausedSeekPosition) {
+      _publishPlaybackState(isPlaying: false);
+      _emitMikudromeState(position: pausedSeekPosition, isPlaying: false);
+      return;
+    }
+    _lastPausedSeekPosition = null;
     _position = position;
     _publishPlaybackState();
     _emitMikudromeState(position: position);
@@ -254,6 +270,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     AudioProcessingState processingState = AudioProcessingState.ready,
   }) {
     if (_disposed) return;
+    final playing = isPlaying ?? _player.playing;
     playbackState.add(
       PlaybackState(
         controls: const [
@@ -269,8 +286,11 @@ class MikudromeAudioHandler extends BaseAudioHandler
         },
         androidCompactActionIndices: const [0, 1, 3],
         processingState: processingState,
-        playing: isPlaying ?? _player.playing,
+        playing: playing,
         updatePosition: _position,
+        speed: playing && processingState == AudioProcessingState.ready
+            ? 1.0
+            : 0.0,
       ),
     );
   }
