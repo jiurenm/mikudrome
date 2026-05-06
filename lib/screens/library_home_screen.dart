@@ -60,6 +60,19 @@ Future<void> routeMobileAudioPlaybackForMode({
   await service.stop();
 }
 
+@visibleForTesting
+Future<void> pauseMobileAudioPlaybackForLifecycle({
+  required AppLifecycleState lifecycleState,
+  required bool isMobile,
+  required PlaybackMode playbackMode,
+  required MobileAudioPlaybackService service,
+}) async {
+  if (!isMobile) return;
+  if (playbackMode != PlaybackMode.audio) return;
+  if (lifecycleState != AppLifecycleState.paused) return;
+  await service.pause();
+}
+
 /// Root screen: app shell + route-based content. Album detail is shown in-shell (sidebar stays).
 class LibraryHomeScreen extends StatefulWidget {
   const LibraryHomeScreen({super.key, this.appConfigController});
@@ -92,7 +105,8 @@ class _MobileNavigationSnapshot {
   final bool showDiscoverHome;
 }
 
-class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
+class _LibraryHomeScreenState extends State<LibraryHomeScreen>
+    with WidgetsBindingObserver {
   static Future<void> _noopTogglePlayback() async {}
 
   static Future<void> _noopSeekToFraction(double _) async {}
@@ -129,6 +143,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _webAudioPlaybackController = WebAudioPlaybackController();
     _mobileAudioPlaybackService = createMobileAudioPlaybackService();
     _mobileAudioSubscription = _mobileAudioPlaybackService.states.listen(
@@ -140,9 +155,22 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     unawaited(_mobileAudioSubscription?.cancel());
     unawaited(_mobileAudioPlaybackService.dispose());
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    unawaited(
+      pauseMobileAudioPlaybackForLifecycle(
+        lifecycleState: state,
+        isMobile: _isMobilePlaybackSurface,
+        playbackMode: _playbackMode,
+        service: _mobileAudioPlaybackService,
+      ),
+    );
   }
 
   String _formatDuration(int totalSeconds) {

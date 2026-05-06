@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:audio_service/audio_service.dart' show AudioProcessingState;
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:mikudrome/api/config.dart';
@@ -480,6 +481,40 @@ void main() {
     expect(service.stopCalls, 1);
     expect(playQueueCalls, 0);
   });
+
+  test('mobile audio lifecycle pauses service when app backgrounds', () async {
+    final service = RecordingMobileAudioPlaybackService();
+
+    await pauseMobileAudioPlaybackForLifecycle(
+      lifecycleState: AppLifecycleState.inactive,
+      isMobile: true,
+      playbackMode: PlaybackMode.audio,
+      service: service,
+    );
+    await pauseMobileAudioPlaybackForLifecycle(
+      lifecycleState: AppLifecycleState.paused,
+      isMobile: false,
+      playbackMode: PlaybackMode.audio,
+      service: service,
+    );
+    await pauseMobileAudioPlaybackForLifecycle(
+      lifecycleState: AppLifecycleState.paused,
+      isMobile: true,
+      playbackMode: PlaybackMode.video,
+      service: service,
+    );
+
+    expect(service.pauseCalls, 0);
+
+    await pauseMobileAudioPlaybackForLifecycle(
+      lifecycleState: AppLifecycleState.paused,
+      isMobile: true,
+      playbackMode: PlaybackMode.audio,
+      service: service,
+    );
+
+    expect(service.pauseCalls, 1);
+  });
 }
 
 Track _track(int id) => Track(
@@ -631,9 +666,15 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
 class RecordingMobileAudioPlaybackService
     extends NoopMobileAudioPlaybackService {
   int stopCalls = 0;
+  int pauseCalls = 0;
 
   @override
   Future<void> stop() async {
     stopCalls += 1;
+  }
+
+  @override
+  Future<void> pause() async {
+    pauseCalls += 1;
   }
 }

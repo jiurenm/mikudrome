@@ -32,6 +32,14 @@ typedef PlayerControlsReady =
       required PlayerSeekToFraction seekToFraction,
     });
 
+@visibleForTesting
+VideoPlayerController createMikudromeVideoController(Uri uri) {
+  return VideoPlayerController.networkUrl(
+    uri,
+    httpHeaders: ApiConfig.defaultHeaders,
+  );
+}
+
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
     super.key,
@@ -382,11 +390,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return;
     }
 
-    final controller = VideoPlayerController.networkUrl(
-      Uri.parse(_mediaUrl),
-      httpHeaders: ApiConfig.defaultHeaders,
-      videoPlayerOptions: VideoPlayerOptions(allowBackgroundPlayback: true),
-    );
+    final controller = createMikudromeVideoController(Uri.parse(_mediaUrl));
     _controller = controller;
 
     try {

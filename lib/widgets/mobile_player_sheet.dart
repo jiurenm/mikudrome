@@ -132,7 +132,10 @@ class _MobilePlayerSheetState extends State<MobilePlayerSheet>
                   child: GestureDetector(
                     onVerticalDragUpdate: isExpanded ? _handleDragUpdate : null,
                     onVerticalDragEnd: isExpanded ? _handleDragEnd : null,
-                    child: Offstage(offstage: !isExpanded, child: child!),
+                    child: TickerMode(
+                      enabled: isExpanded,
+                      child: Offstage(offstage: !isExpanded, child: child!),
+                    ),
                   ),
                 ),
               ],
