@@ -140,13 +140,39 @@ class MikudromeAudioHandler extends BaseAudioHandler
   Future<void> play() => _player.play();
 
   @override
-  Future<void> pause() => _player.pause();
+  Future<void> pause() async {
+    if (_disposed || _tracks.isEmpty) {
+      await _player.pause();
+      return;
+    }
+
+    _lastPausedSeekPosition = null;
+    _publishPlaybackState(isPlaying: false);
+    _emitMikudromeState(isPlaying: false);
+
+    try {
+      await _player.pause();
+    } catch (_) {
+      if (!_disposed) {
+        _publishPlaybackState(isPlaying: _player.playing);
+        _emitMikudromeState(isPlaying: _player.playing);
+      }
+      rethrow;
+    }
+  }
 
   @override
   Future<void> seek(Duration position) async {
+    final wasPlaying = _player.playing;
+    if (!wasPlaying) {
+      _lastPausedSeekPosition = position;
+      _position = position;
+    }
     await _player.seek(position);
     _position = position;
-    _lastPausedSeekPosition = _player.playing ? null : position;
+    if (wasPlaying) {
+      _lastPausedSeekPosition = null;
+    }
     _isCompleted = false;
     _publishPlaybackState();
     _emitMikudromeState(position: _position, isCompleted: false);
@@ -242,11 +268,14 @@ class MikudromeAudioHandler extends BaseAudioHandler
     if (!_player.playing &&
         pausedSeekPosition != null &&
         position < pausedSeekPosition) {
+      _position = pausedSeekPosition;
       _publishPlaybackState(isPlaying: false);
       _emitMikudromeState(position: pausedSeekPosition, isPlaying: false);
       return;
     }
-    _lastPausedSeekPosition = null;
+    if (pausedSeekPosition != null && position >= pausedSeekPosition) {
+      _lastPausedSeekPosition = null;
+    }
     _position = position;
     _publishPlaybackState();
     _emitMikudromeState(position: position);
@@ -271,6 +300,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
   }) {
     if (_disposed) return;
     final playing = isPlaying ?? _player.playing;
+    final updatePosition = _lastPausedSeekPosition ?? _position;
     playbackState.add(
       PlaybackState(
         controls: const [
@@ -287,7 +317,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
         androidCompactActionIndices: const [0, 1, 3],
         processingState: processingState,
         playing: playing,
-        updatePosition: _position,
+        updatePosition: updatePosition,
         speed: playing && processingState == AudioProcessingState.ready
             ? 1.0
             : 0.0,

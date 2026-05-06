@@ -176,9 +176,73 @@ void main() {
   );
 
   test(
-    'audio handler keeps paused seek position and reports zero playback speed',
+    'audio handler publishes paused playback state immediately',
     () async {
-      final player = FakeJustAudioPlayer();
+      final player = LaggyPauseFakeJustAudioPlayer();
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+      final states = <MobileAudioPlaybackState>[];
+      final sub = handler.mikudromeState.listen(states.add);
+
+      await handler.setMikudromeQueue(
+        tracks: [_track(1)],
+        audioUrls: const ['http://server/audio/1'],
+        initialIndex: 0,
+      );
+      player.setPosition(const Duration(seconds: 12));
+
+      await handler.pause();
+
+      expect(handler.playbackState.value.playing, isFalse);
+      expect(handler.playbackState.value.speed, 0.0);
+      expect(handler.playbackState.value.position, const Duration(seconds: 12));
+      expect(states.last.isPlaying, isFalse);
+      expect(states.last.position, const Duration(seconds: 12));
+
+      await sub.cancel();
+      await handler.dispose();
+    },
+  );
+
+  test(
+    'audio handler keeps paused seek position stable during seek',
+    () async {
+      final player = LaggySeekFakeJustAudioPlayer();
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+      final states = <MobileAudioPlaybackState>[];
+      final sub = handler.mikudromeState.listen(states.add);
+
+      await handler.setMikudromeQueue(
+        tracks: [_track(1)],
+        audioUrls: const ['http://server/audio/1'],
+        initialIndex: 0,
+      );
+      await handler.pause();
+      expect(handler.playbackState.value.playing, isFalse);
+      expect(handler.playbackState.value.speed, 0.0);
+      final stateCountBeforeSeek = states.length;
+
+      await handler.seek(const Duration(seconds: 30));
+
+      expect(handler.playbackState.value.playing, isFalse);
+      expect(handler.playbackState.value.speed, 0.0);
+      expect(handler.playbackState.value.position, const Duration(seconds: 30));
+      expect(states.length, greaterThan(stateCountBeforeSeek));
+      expect(
+        states.skip(stateCountBeforeSeek).first.position,
+        const Duration(seconds: 30),
+      );
+      expect(states.last.position, const Duration(seconds: 30));
+      expect(states.last.isPlaying, isFalse);
+
+      await sub.cancel();
+      await handler.dispose();
+    },
+  );
+
+  test(
+    'audio handler ignores delayed stale paused position updates after seek',
+    () async {
+      final player = SilentSeekFakeJustAudioPlayer();
       final handler = audio_service.MikudromeAudioHandler(player: player);
       final states = <MobileAudioPlaybackState>[];
       final sub = handler.mikudromeState.listen(states.add);
@@ -190,9 +254,12 @@ void main() {
       );
       await handler.pause();
       await handler.seek(const Duration(seconds: 30));
+
       player.setPosition(Duration.zero);
 
+      expect(handler.playbackState.value.playing, isFalse);
       expect(handler.playbackState.value.speed, 0.0);
+      expect(handler.playbackState.value.position, const Duration(seconds: 30));
       expect(states.last.position, const Duration(seconds: 30));
       expect(states.last.isPlaying, isFalse);
 
@@ -686,6 +753,28 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
 
   void setProcessingState(ProcessingState value) {
     _processingState.add(value);
+  }
+}
+
+class LaggySeekFakeJustAudioPlayer extends FakeJustAudioPlayer {
+  @override
+  Future<void> seek(Duration position) async {
+    seekPositions.add(position);
+    setPosition(Duration.zero);
+  }
+}
+
+class LaggyPauseFakeJustAudioPlayer extends FakeJustAudioPlayer {
+  @override
+  Future<void> pause() async {
+    pauseCalls += 1;
+  }
+}
+
+class SilentSeekFakeJustAudioPlayer extends FakeJustAudioPlayer {
+  @override
+  Future<void> seek(Duration position) async {
+    seekPositions.add(position);
   }
 }
 
