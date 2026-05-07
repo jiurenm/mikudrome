@@ -175,22 +175,52 @@ void main() {
     },
   );
 
+  test('audio handler publishes paused playback state immediately', () async {
+    final player = LaggyPauseFakeJustAudioPlayer();
+    final handler = audio_service.MikudromeAudioHandler(player: player);
+    final states = <MobileAudioPlaybackState>[];
+    final sub = handler.mikudromeState.listen(states.add);
+
+    await handler.setMikudromeQueue(
+      tracks: [_track(1)],
+      audioUrls: const ['http://server/audio/1'],
+      initialIndex: 0,
+    );
+    player.setPosition(const Duration(seconds: 12));
+
+    await handler.pause();
+
+    expect(handler.playbackState.value.playing, isFalse);
+    expect(handler.playbackState.value.speed, 0.0);
+    expect(handler.playbackState.value.position, const Duration(seconds: 12));
+    expect(states.last.isPlaying, isFalse);
+    expect(states.last.position, const Duration(seconds: 12));
+
+    await sub.cancel();
+    await handler.dispose();
+  });
+
   test(
-    'audio handler publishes paused playback state immediately',
+    'audio handler does not re-emit playing when initial play completes on pause',
     () async {
-      final player = LaggyPauseFakeJustAudioPlayer();
+      final player = PlayCompletesOnPauseFakeJustAudioPlayer();
       final handler = audio_service.MikudromeAudioHandler(player: player);
       final states = <MobileAudioPlaybackState>[];
       final sub = handler.mikudromeState.listen(states.add);
 
-      await handler.setMikudromeQueue(
+      final queueFuture = handler.setMikudromeQueue(
         tracks: [_track(1)],
         audioUrls: const ['http://server/audio/1'],
         initialIndex: 0,
       );
+      await pumpEventQueue();
+      expect(player.playCalls, 1);
+      expect(states.last.isPlaying, isTrue);
       player.setPosition(const Duration(seconds: 12));
 
       await handler.pause();
+      await pumpEventQueue();
+      await queueFuture;
 
       expect(handler.playbackState.value.playing, isFalse);
       expect(handler.playbackState.value.speed, 0.0);
@@ -204,9 +234,9 @@ void main() {
   );
 
   test(
-    'audio handler keeps paused seek position stable during seek',
+    'audio handler freezes paused playback position at the latest player position',
     () async {
-      final player = LaggySeekFakeJustAudioPlayer();
+      final player = SilentPositionFakeJustAudioPlayer();
       final handler = audio_service.MikudromeAudioHandler(player: player);
       final states = <MobileAudioPlaybackState>[];
       final sub = handler.mikudromeState.listen(states.add);
@@ -216,28 +246,144 @@ void main() {
         audioUrls: const ['http://server/audio/1'],
         initialIndex: 0,
       );
+      player.setPositionSilently(const Duration(seconds: 18));
+
       await handler.pause();
-      expect(handler.playbackState.value.playing, isFalse);
-      expect(handler.playbackState.value.speed, 0.0);
-      final stateCountBeforeSeek = states.length;
-
-      await handler.seek(const Duration(seconds: 30));
 
       expect(handler.playbackState.value.playing, isFalse);
       expect(handler.playbackState.value.speed, 0.0);
-      expect(handler.playbackState.value.position, const Duration(seconds: 30));
-      expect(states.length, greaterThan(stateCountBeforeSeek));
-      expect(
-        states.skip(stateCountBeforeSeek).first.position,
-        const Duration(seconds: 30),
-      );
-      expect(states.last.position, const Duration(seconds: 30));
+      expect(handler.playbackState.value.position, const Duration(seconds: 18));
+      expect(states.last.position, const Duration(seconds: 18));
+      expect(states.last.isPlaying, isFalse);
+
+      player.emitPosition(Duration.zero);
+      player.emitPosition(const Duration(seconds: 21));
+
+      expect(handler.playbackState.value.position, const Duration(seconds: 18));
+      expect(states.last.position, const Duration(seconds: 18));
       expect(states.last.isPlaying, isFalse);
 
       await sub.cancel();
       await handler.dispose();
     },
   );
+
+  test(
+    'audio handler keeps paused position frozen while the player still emits updates',
+    () async {
+      final player = FakeJustAudioPlayer();
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+      final states = <MobileAudioPlaybackState>[];
+      final sub = handler.mikudromeState.listen(states.add);
+
+      await handler.setMikudromeQueue(
+        tracks: [_track(1)],
+        audioUrls: const ['http://server/audio/1'],
+        initialIndex: 0,
+      );
+      player.setPosition(const Duration(seconds: 12));
+
+      await handler.pause();
+      player.setPosition(const Duration(seconds: 13));
+      player.setPosition(const Duration(seconds: 0));
+
+      expect(handler.playbackState.value.playing, isFalse);
+      expect(handler.playbackState.value.speed, 0.0);
+      expect(handler.playbackState.value.position, const Duration(seconds: 12));
+      expect(states.last.position, const Duration(seconds: 12));
+      expect(states.last.isPlaying, isFalse);
+
+      await sub.cancel();
+      await handler.dispose();
+    },
+  );
+
+  test(
+    'audio handler treats seek as paused while player playing flag is stale',
+    () async {
+      final player = LaggyPauseAndSeekFakeJustAudioPlayer();
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+      final states = <MobileAudioPlaybackState>[];
+      final sub = handler.mikudromeState.listen(states.add);
+
+      await handler.setMikudromeQueue(
+        tracks: [_track(1)],
+        audioUrls: const ['http://server/audio/1'],
+        initialIndex: 0,
+      );
+      player.setPosition(const Duration(seconds: 12));
+
+      await handler.pause();
+      await handler.seek(const Duration(seconds: 30));
+
+      expect(handler.playbackState.value.playing, isFalse);
+      expect(handler.playbackState.value.speed, 0.0);
+      expect(handler.playbackState.value.position, const Duration(seconds: 30));
+      expect(states.last.isPlaying, isFalse);
+      expect(states.last.position, const Duration(seconds: 30));
+
+      await sub.cancel();
+      await handler.dispose();
+    },
+  );
+
+  test('audio handler clears paused freeze lock when pause fails', () async {
+    final player = FailingPauseFakeJustAudioPlayer();
+    final handler = audio_service.MikudromeAudioHandler(player: player);
+    final states = <MobileAudioPlaybackState>[];
+    final sub = handler.mikudromeState.listen(states.add);
+
+    await handler.setMikudromeQueue(
+      tracks: [_track(1)],
+      audioUrls: const ['http://server/audio/1'],
+      initialIndex: 0,
+    );
+    player.setPosition(const Duration(seconds: 14));
+
+    await expectLater(handler.pause(), throwsStateError);
+
+    player.setPosition(const Duration(seconds: 15));
+
+    expect(handler.playbackState.value.playing, isTrue);
+    expect(states.last.isPlaying, isTrue);
+    expect(states.last.position, const Duration(seconds: 15));
+
+    await sub.cancel();
+    await handler.dispose();
+  });
+
+  test('audio handler keeps paused seek position stable during seek', () async {
+    final player = LaggySeekFakeJustAudioPlayer();
+    final handler = audio_service.MikudromeAudioHandler(player: player);
+    final states = <MobileAudioPlaybackState>[];
+    final sub = handler.mikudromeState.listen(states.add);
+
+    await handler.setMikudromeQueue(
+      tracks: [_track(1)],
+      audioUrls: const ['http://server/audio/1'],
+      initialIndex: 0,
+    );
+    await handler.pause();
+    expect(handler.playbackState.value.playing, isFalse);
+    expect(handler.playbackState.value.speed, 0.0);
+    final stateCountBeforeSeek = states.length;
+
+    await handler.seek(const Duration(seconds: 30));
+
+    expect(handler.playbackState.value.playing, isFalse);
+    expect(handler.playbackState.value.speed, 0.0);
+    expect(handler.playbackState.value.position, const Duration(seconds: 30));
+    expect(states.length, greaterThan(stateCountBeforeSeek));
+    expect(
+      states.skip(stateCountBeforeSeek).first.position,
+      const Duration(seconds: 30),
+    );
+    expect(states.last.position, const Duration(seconds: 30));
+    expect(states.last.isPlaying, isFalse);
+
+    await sub.cancel();
+    await handler.dispose();
+  });
 
   test(
     'audio handler ignores delayed stale paused position updates after seek',
@@ -261,6 +407,35 @@ void main() {
       expect(handler.playbackState.value.speed, 0.0);
       expect(handler.playbackState.value.position, const Duration(seconds: 30));
       expect(states.last.position, const Duration(seconds: 30));
+      expect(states.last.isPlaying, isFalse);
+
+      await sub.cancel();
+      await handler.dispose();
+    },
+  );
+
+  test(
+    'audio handler keeps paused position when player emits zero after pause',
+    () async {
+      final player = FakeJustAudioPlayer();
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+      final states = <MobileAudioPlaybackState>[];
+      final sub = handler.mikudromeState.listen(states.add);
+
+      await handler.setMikudromeQueue(
+        tracks: [_track(1)],
+        audioUrls: const ['http://server/audio/1'],
+        initialIndex: 0,
+      );
+      player.setPosition(const Duration(seconds: 18));
+
+      await handler.pause();
+      player.setPosition(Duration.zero);
+
+      expect(handler.playbackState.value.playing, isFalse);
+      expect(handler.playbackState.value.speed, 0.0);
+      expect(handler.playbackState.value.position, const Duration(seconds: 18));
+      expect(states.last.position, const Duration(seconds: 18));
       expect(states.last.isPlaying, isFalse);
 
       await sub.cancel();
@@ -771,10 +946,59 @@ class LaggyPauseFakeJustAudioPlayer extends FakeJustAudioPlayer {
   }
 }
 
+class PlayCompletesOnPauseFakeJustAudioPlayer extends FakeJustAudioPlayer {
+  Completer<void>? _playCompleter;
+
+  @override
+  Future<void> play() {
+    playCalls += 1;
+    setPlaying(true);
+    final completer = Completer<void>();
+    _playCompleter = completer;
+    return completer.future;
+  }
+
+  @override
+  Future<void> pause() async {
+    pauseCalls += 1;
+    setPlaying(false);
+    _playCompleter?.complete();
+    _playCompleter = null;
+  }
+}
+
+class LaggyPauseAndSeekFakeJustAudioPlayer
+    extends LaggyPauseFakeJustAudioPlayer {
+  @override
+  Future<void> seek(Duration position) async {
+    seekPositions.add(position);
+    setPosition(Duration.zero);
+  }
+}
+
 class SilentSeekFakeJustAudioPlayer extends FakeJustAudioPlayer {
   @override
   Future<void> seek(Duration position) async {
     seekPositions.add(position);
+  }
+}
+
+class FailingPauseFakeJustAudioPlayer extends FakeJustAudioPlayer {
+  @override
+  Future<void> pause() async {
+    pauseCalls += 1;
+    throw StateError('pause failed');
+  }
+}
+
+class SilentPositionFakeJustAudioPlayer extends FakeJustAudioPlayer {
+  void setPositionSilently(Duration value) {
+    position = value;
+  }
+
+  void emitPosition(Duration value) {
+    position = value;
+    _position.add(value);
   }
 }
 

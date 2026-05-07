@@ -79,6 +79,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     if (tracks.isEmpty) {
       _tracks = const [];
       _audioUrls = const [];
+      _lastPausedSeekPosition = null;
       queue.add(const []);
       mediaItem.add(null);
       await _player.stop();
@@ -137,7 +138,32 @@ class MikudromeAudioHandler extends BaseAudioHandler
   }
 
   @override
-  Future<void> play() => _player.play();
+  Future<void> play() async {
+    if (_disposed) return;
+    _lastPausedSeekPosition = null;
+    _isCompleted = false;
+
+    try {
+      final playFuture = _player.play();
+      if (_tracks.isNotEmpty) {
+        _publishPlaybackState(isPlaying: true);
+        _emitMikudromeState(isPlaying: true, isCompleted: false);
+      }
+      unawaited(
+        playFuture.catchError((Object _) {
+          if (!_disposed && _tracks.isNotEmpty) {
+            _publishPlaybackState(isPlaying: false);
+            _emitMikudromeState(isPlaying: false);
+          }
+        }),
+      );
+    } catch (_) {
+      if (!_disposed && _tracks.isNotEmpty) {
+        _publishPlaybackState(isPlaying: false);
+        _emitMikudromeState(isPlaying: false);
+      }
+    }
+  }
 
   @override
   Future<void> pause() async {
@@ -146,7 +172,9 @@ class MikudromeAudioHandler extends BaseAudioHandler
       return;
     }
 
-    _lastPausedSeekPosition = null;
+    final previousPosition = _position;
+    _lastPausedSeekPosition = _positionForPause();
+    _position = _lastPausedSeekPosition!;
     _publishPlaybackState(isPlaying: false);
     _emitMikudromeState(isPlaying: false);
 
@@ -154,8 +182,10 @@ class MikudromeAudioHandler extends BaseAudioHandler
       await _player.pause();
     } catch (_) {
       if (!_disposed) {
+        _lastPausedSeekPosition = null;
+        _position = previousPosition;
         _publishPlaybackState(isPlaying: _player.playing);
-        _emitMikudromeState(isPlaying: _player.playing);
+        _emitMikudromeState(position: _position, isPlaying: _player.playing);
       }
       rethrow;
     }
@@ -163,7 +193,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
 
   @override
   Future<void> seek(Duration position) async {
-    final wasPlaying = _player.playing;
+    final wasPlaying = _effectiveIsPlaying;
     if (!wasPlaying) {
       _lastPausedSeekPosition = position;
       _position = position;
@@ -192,19 +222,24 @@ class MikudromeAudioHandler extends BaseAudioHandler
     _position = Duration.zero;
     _duration = Duration.zero;
     _isCompleted = false;
+    _lastPausedSeekPosition = null;
     queue.add(const []);
     mediaItem.add(null);
     _publishPlaybackState(processingState: AudioProcessingState.idle);
     _emitMikudromeState(empty: true);
   }
 
+  Duration _positionForPause() {
+    final playerPosition = _player.position;
+    if (playerPosition > _position) {
+      return playerPosition;
+    }
+    return _position;
+  }
+
   Future<void> _startPlaybackSafely(int index) async {
     try {
       await play();
-      if (!_disposed) {
-        _publishPlaybackState(isPlaying: true);
-        _emitMikudromeState(index: index, isPlaying: true);
-      }
     } catch (_) {
       if (!_disposed) {
         _emitMikudromeState(index: index, isPlaying: false);
@@ -230,6 +265,11 @@ class MikudromeAudioHandler extends BaseAudioHandler
 
   void _handlePlayingChanged(bool isPlaying) {
     if (_tracks.isEmpty) return;
+    if (_lastPausedSeekPosition != null) {
+      _publishPlaybackState(isPlaying: false);
+      _emitMikudromeState(isPlaying: false, isCompleted: null);
+      return;
+    }
     if (isPlaying) {
       _lastPausedSeekPosition = null;
     }
@@ -265,16 +305,11 @@ class MikudromeAudioHandler extends BaseAudioHandler
   void _handlePositionChanged(Duration position) {
     if (_tracks.isEmpty) return;
     final pausedSeekPosition = _lastPausedSeekPosition;
-    if (!_player.playing &&
-        pausedSeekPosition != null &&
-        position < pausedSeekPosition) {
+    if (pausedSeekPosition != null) {
       _position = pausedSeekPosition;
       _publishPlaybackState(isPlaying: false);
       _emitMikudromeState(position: pausedSeekPosition, isPlaying: false);
       return;
-    }
-    if (pausedSeekPosition != null && position >= pausedSeekPosition) {
-      _lastPausedSeekPosition = null;
     }
     _position = position;
     _publishPlaybackState();
@@ -299,7 +334,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     AudioProcessingState processingState = AudioProcessingState.ready,
   }) {
     if (_disposed) return;
-    final playing = isPlaying ?? _player.playing;
+    final playing = isPlaying ?? _effectiveIsPlaying;
     final updatePosition = _lastPausedSeekPosition ?? _position;
     playbackState.add(
       PlaybackState(
@@ -352,7 +387,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
       MobileAudioPlaybackState(
         queue: _tracks,
         index: effectiveIndex,
-        isPlaying: isPlaying ?? _player.playing,
+        isPlaying: isPlaying ?? _effectiveIsPlaying,
         position: effectivePosition,
         duration: effectiveDuration,
         isCompleted: effectiveCompleted,
@@ -360,6 +395,9 @@ class MikudromeAudioHandler extends BaseAudioHandler
       ),
     );
   }
+
+  bool get _effectiveIsPlaying =>
+      _lastPausedSeekPosition == null && _player.playing;
 
   Future<void> dispose() async {
     if (_disposed) return;

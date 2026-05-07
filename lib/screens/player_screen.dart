@@ -347,7 +347,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
         _isInitializing = false;
         _error = null;
       });
-      _emitPlaybackState();
       return;
     }
 
@@ -682,8 +681,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _play() async {
     if (_usesExternalAudioPlayback) {
       await widget.onExternalPlay?.call();
-      _emitPlaybackState();
-      if (mounted) setState(() {});
       return;
     }
     if (_usesWebAudioPlayer) {
@@ -702,8 +699,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _pause() async {
     if (_usesExternalAudioPlayback) {
       await widget.onExternalPause?.call();
-      _emitPlaybackState();
-      if (mounted) setState(() {});
       return;
     }
     if (_usesWebAudioPlayer) {
@@ -730,7 +725,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _seekTo(double value) async {
     if (_usesExternalAudioPlayback) {
       await widget.onExternalSeekToFraction?.call(value);
-      _emitPlaybackState();
       return;
     }
     if (_usesWebAudioPlayer) {
@@ -1309,8 +1303,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       thumbColor: accentColor,
                       overlayColor: accentColor.withValues(alpha: 0.15),
                       trackHeight: 5,
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 7,
+                      thumbShape: const AssetSliderThumbShape(
+                        image: AssetImage('lib/assets/thumb.png'),
+                        size: 18,
                       ),
                     ),
                     child: Slider(
