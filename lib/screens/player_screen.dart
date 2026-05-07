@@ -1548,57 +1548,74 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _buildMobileQueueItem(BuildContext context, int index, Track track) {
+    final isActive = index == widget.currentIndex;
     final coverUrl = index == widget.currentIndex
         ? _albumCoverUrl
         : _coverUrlForTrack(track);
     return InkWell(
       onTap: () => widget.onSelectTrack(index),
       borderRadius: BorderRadius.circular(8),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: coverUrl.isNotEmpty
-                ? Image.network(
-                    coverUrl,
-                    headers: ApiConfig.defaultHeaders,
-                    width: 48,
-                    height: 48,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) =>
-                        _mobileQueueCoverPlaceholder(),
-                  )
-                : _mobileQueueCoverPlaceholder(),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  track.title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  track.vocalLine.isNotEmpty ? track.vocalLine : '-',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: Colors.white54),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? Colors.white.withValues(alpha: 0.08) : null,
+          borderRadius: BorderRadius.circular(8),
+          border: isActive
+              ? const Border(
+                  left: BorderSide(color: AppTheme.mikuGreen, width: 4),
+                )
+              : null,
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: coverUrl.isNotEmpty
+                  ? Image.network(
+                      coverUrl,
+                      headers: ApiConfig.defaultHeaders,
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          _mobileQueueCoverPlaceholder(),
+                    )
+                  : _mobileQueueCoverPlaceholder(),
             ),
-          ),
-          const SizedBox(width: 10),
-          const Icon(Icons.drag_handle, color: Colors.white70, size: 26),
-        ],
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    track.title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: isActive ? AppTheme.mikuGreen : Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    track.vocalLine.isNotEmpty ? track.vocalLine : '-',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: Colors.white54),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Icon(
+              isActive ? Icons.graphic_eq : Icons.drag_handle,
+              color: isActive ? AppTheme.mikuGreen : Colors.white70,
+              size: 26,
+            ),
+          ],
+        ),
       ),
     );
   }
