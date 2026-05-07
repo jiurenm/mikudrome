@@ -57,3 +57,25 @@ PlaybackCompletionCommand resolvePlaybackCompletionCommand({
       return PlaybackCompletionCommand.restartTrack;
   }
 }
+
+int? resolveRelativePlaybackIndex({
+  required PlaybackOrderMode orderMode,
+  required int currentIndex,
+  required int queueLength,
+  required int delta,
+}) {
+  if (queueLength <= 0 || delta == 0) {
+    return null;
+  }
+
+  final candidate = currentIndex + delta;
+  if (candidate >= 0 && candidate < queueLength) {
+    return candidate;
+  }
+
+  if (orderMode == PlaybackOrderMode.listLoop && queueLength > 1) {
+    return delta > 0 ? 0 : queueLength - 1;
+  }
+
+  return null;
+}

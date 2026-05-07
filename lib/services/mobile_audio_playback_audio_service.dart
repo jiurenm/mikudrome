@@ -35,6 +35,7 @@ abstract class MobileAudioPlayerAdapter {
   Future<void> seek(Duration position);
   Future<void> seekToNext();
   Future<void> seekToPrevious();
+  Future<void> setLoopMode(LoopMode loopMode);
   Future<void> stop();
   Future<void> dispose();
 }
@@ -64,6 +65,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
   bool _isCompleted = false;
+  MobilePlaybackOrderMode _orderMode = MobilePlaybackOrderMode.sequential;
   Duration? _lastPausedSeekPosition;
   bool _disposed = false;
 
@@ -75,8 +77,10 @@ class MikudromeAudioHandler extends BaseAudioHandler
     required List<String> audioUrls,
     required int initialIndex,
     CoverUrlForTrack? coverUrlForTrack,
+    MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
   }) async {
     if (_disposed) return;
+    _orderMode = orderMode;
     if (tracks.isEmpty) {
       _tracks = const [];
       _audioUrls = const [];
@@ -120,6 +124,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
       initialIndex: clampedIndex,
       initialPosition: Duration.zero,
     );
+    await _player.setLoopMode(_loopModeForOrderMode(_orderMode));
     _tracks = nextTracks;
     _audioUrls = nextAudioUrls;
     queue.add(items);
@@ -132,6 +137,20 @@ class MikudromeAudioHandler extends BaseAudioHandler
     _publishPlaybackState();
     _emitMikudromeState(index: clampedIndex, isPlaying: _player.playing);
     await _startPlaybackSafely(clampedIndex);
+  }
+
+  Future<void> setPlaybackOrderMode(MobilePlaybackOrderMode orderMode) async {
+    if (_disposed) return;
+    _orderMode = orderMode;
+    await _player.setLoopMode(_loopModeForOrderMode(orderMode));
+  }
+
+  LoopMode _loopModeForOrderMode(MobilePlaybackOrderMode orderMode) {
+    return switch (orderMode) {
+      MobilePlaybackOrderMode.sequential => LoopMode.off,
+      MobilePlaybackOrderMode.listLoop => LoopMode.all,
+      MobilePlaybackOrderMode.singleLoop => LoopMode.one,
+    };
   }
 
   Uri? _artUriForTrack(Track track, CoverUrlForTrack? coverUrlForTrack) {
@@ -477,6 +496,7 @@ class JustAudioMobileAudioPlaybackService
     required int index,
     required AudioUrlForTrack audioUrlForTrack,
     CoverUrlForTrack? coverUrlForTrack,
+    MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
   }) async {
     if (_disposed) return;
 
@@ -490,7 +510,15 @@ class JustAudioMobileAudioPlaybackService
       audioUrls: nextAudioUrls,
       initialIndex: index,
       coverUrlForTrack: coverUrlForTrack,
+      orderMode: orderMode,
     );
+  }
+
+  @override
+  Future<void> setPlaybackOrderMode(MobilePlaybackOrderMode orderMode) async {
+    if (_disposed) return;
+    final handler = await _effectiveHandler();
+    await handler.setPlaybackOrderMode(orderMode);
   }
 
   @override
@@ -639,6 +667,9 @@ class JustAudioPlayerAdapter implements MobileAudioPlayerAdapter {
 
   @override
   Future<void> seekToPrevious() => _player.seekToPrevious();
+
+  @override
+  Future<void> setLoopMode(LoopMode loopMode) => _player.setLoopMode(loopMode);
 
   @override
   Future<void> stop() => _player.stop();

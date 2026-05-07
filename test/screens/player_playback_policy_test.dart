@@ -71,39 +71,103 @@ void main() {
     });
   });
 
-  group('PlaybackCompletionGate', () {
-    test('emits completion command only once until playback leaves end state',
-        () {
-      final gate = PlaybackCompletionGate();
-
+  group('resolveRelativePlaybackIndex', () {
+    test('sequential mode does not move before the first track', () {
       expect(
-        gate.take(
-          reachedEnd: true,
-          command: PlaybackCompletionCommand.playNext,
-        ),
-        PlaybackCompletionCommand.playNext,
-      );
-      expect(
-        gate.take(
-          reachedEnd: true,
-          command: PlaybackCompletionCommand.playNext,
+        resolveRelativePlaybackIndex(
+          orderMode: PlaybackOrderMode.sequential,
+          currentIndex: 0,
+          queueLength: 3,
+          delta: -1,
         ),
         isNull,
-      );
-      expect(
-        gate.take(
-          reachedEnd: false,
-          command: PlaybackCompletionCommand.playNext,
-        ),
-        isNull,
-      );
-      expect(
-        gate.take(
-          reachedEnd: true,
-          command: PlaybackCompletionCommand.playNext,
-        ),
-        PlaybackCompletionCommand.playNext,
       );
     });
+
+    test('sequential mode does not move after the last track', () {
+      expect(
+        resolveRelativePlaybackIndex(
+          orderMode: PlaybackOrderMode.sequential,
+          currentIndex: 2,
+          queueLength: 3,
+          delta: 1,
+        ),
+        isNull,
+      );
+    });
+
+    test('list loop wraps previous from first track to last track', () {
+      expect(
+        resolveRelativePlaybackIndex(
+          orderMode: PlaybackOrderMode.listLoop,
+          currentIndex: 0,
+          queueLength: 3,
+          delta: -1,
+        ),
+        2,
+      );
+    });
+
+    test('list loop wraps next from last track to first track', () {
+      expect(
+        resolveRelativePlaybackIndex(
+          orderMode: PlaybackOrderMode.listLoop,
+          currentIndex: 2,
+          queueLength: 3,
+          delta: 1,
+        ),
+        0,
+      );
+    });
+
+    test('single loop manual navigation still moves within queue bounds', () {
+      expect(
+        resolveRelativePlaybackIndex(
+          orderMode: PlaybackOrderMode.singleLoop,
+          currentIndex: 1,
+          queueLength: 3,
+          delta: 1,
+        ),
+        2,
+      );
+    });
+  });
+
+  group('PlaybackCompletionGate', () {
+    test(
+      'emits completion command only once until playback leaves end state',
+      () {
+        final gate = PlaybackCompletionGate();
+
+        expect(
+          gate.take(
+            reachedEnd: true,
+            command: PlaybackCompletionCommand.playNext,
+          ),
+          PlaybackCompletionCommand.playNext,
+        );
+        expect(
+          gate.take(
+            reachedEnd: true,
+            command: PlaybackCompletionCommand.playNext,
+          ),
+          isNull,
+        );
+        expect(
+          gate.take(
+            reachedEnd: false,
+            command: PlaybackCompletionCommand.playNext,
+          ),
+          isNull,
+        );
+        expect(
+          gate.take(
+            reachedEnd: true,
+            command: PlaybackCompletionCommand.playNext,
+          ),
+          PlaybackCompletionCommand.playNext,
+        );
+      },
+    );
   });
 }

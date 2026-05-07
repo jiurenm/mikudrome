@@ -117,6 +117,54 @@ void main() {
   });
 
   test(
+    'just_audio service applies list loop mode to the player queue',
+    () async {
+      final player = FakeJustAudioPlayer();
+      final service = audio_service.JustAudioMobileAudioPlaybackService(
+        player: player,
+      );
+
+      await service.playQueue(
+        queue: [_track(1), _track(2)],
+        index: 0,
+        audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+        orderMode: MobilePlaybackOrderMode.listLoop,
+      );
+
+      expect(player.loopMode, LoopMode.all);
+
+      await service.dispose();
+    },
+  );
+
+  test(
+    'just_audio service updates loop mode without resetting queue',
+    () async {
+      final player = FakeJustAudioPlayer();
+      final service = audio_service.JustAudioMobileAudioPlaybackService(
+        player: player,
+      );
+
+      await service.playQueue(
+        queue: [_track(1), _track(2)],
+        index: 0,
+        audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+      );
+
+      await service.setPlaybackOrderMode(MobilePlaybackOrderMode.singleLoop);
+
+      expect(player.loopMode, LoopMode.one);
+      expect(player.sources.map((source) => source.uri.toString()), [
+        'http://server/audio/1',
+        'http://server/audio/2',
+      ]);
+      expect(player.playCalls, 1);
+
+      await service.dispose();
+    },
+  );
+
+  test(
     'just_audio service follows current index and playback streams',
     () async {
       final player = FakeJustAudioPlayer();
@@ -850,6 +898,7 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
   int nextCalls = 0;
   int previousCalls = 0;
   int disposeCalls = 0;
+  LoopMode loopMode = LoopMode.off;
   Object? setAudioSourcesError;
   Object? playError;
   final seekPositions = <Duration>[];
@@ -918,6 +967,11 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
     previousCalls += 1;
     final previous = ((currentIndex ?? 0) - 1).clamp(0, sources.length - 1);
     setCurrentIndex(previous);
+  }
+
+  @override
+  Future<void> setLoopMode(LoopMode loopMode) async {
+    this.loopMode = loopMode;
   }
 
   @override

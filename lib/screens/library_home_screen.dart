@@ -26,6 +26,7 @@ import 'mv_gallery_screen.dart';
 import 'producers_screen.dart';
 import 'vocalist_detail_screen.dart';
 import 'vocalists_screen.dart';
+import 'player_playback_policy.dart';
 import '../models/album.dart';
 import '../models/producer.dart';
 import '../models/vocalist.dart';
@@ -72,9 +73,14 @@ Future<void> pauseMobileAudioPlaybackForLifecycle({
 
 /// Root screen: app shell + route-based content. Album detail is shown in-shell (sidebar stays).
 class LibraryHomeScreen extends StatefulWidget {
-  const LibraryHomeScreen({super.key, this.appConfigController});
+  const LibraryHomeScreen({
+    super.key,
+    this.appConfigController,
+    this.mobileAudioPlaybackService,
+  });
 
   final AppConfigController? appConfigController;
+  final MobileAudioPlaybackService? mobileAudioPlaybackService;
 
   @override
   State<LibraryHomeScreen> createState() => _LibraryHomeScreenState();
@@ -131,6 +137,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   PlayerSeekToFraction _playerSeekToFraction = _noopSeekToFraction;
   late final WebAudioPlaybackController _webAudioPlaybackController;
   late final MobileAudioPlaybackService _mobileAudioPlaybackService;
+  late final bool _ownsMobileAudioPlaybackService;
   StreamSubscription<MobileAudioPlaybackState>? _mobileAudioSubscription;
 
   bool _restoredNotStarted = false;
@@ -142,7 +149,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _webAudioPlaybackController = WebAudioPlaybackController();
-    _mobileAudioPlaybackService = createMobileAudioPlaybackService();
+    final injectedMobileAudioService = widget.mobileAudioPlaybackService;
+    _ownsMobileAudioPlaybackService = injectedMobileAudioService == null;
+    _mobileAudioPlaybackService =
+        injectedMobileAudioService ?? createMobileAudioPlaybackService();
     _mobileAudioSubscription = _mobileAudioPlaybackService.states.listen(
       _handleMobileAudioState,
     );
@@ -154,7 +164,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_mobileAudioSubscription?.cancel());
-    unawaited(_mobileAudioPlaybackService.dispose());
+    if (_ownsMobileAudioPlaybackService) {
+      unawaited(_mobileAudioPlaybackService.dispose());
+    }
     super.dispose();
   }
 
@@ -619,6 +631,13 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     return ApiClient().streamAudioUrl(track.id);
   }
 
+  MobilePlaybackOrderMode get _mobilePlaybackOrderMode =>
+      switch (_playbackOrderMode) {
+        PlaybackOrderMode.sequential => MobilePlaybackOrderMode.sequential,
+        PlaybackOrderMode.listLoop => MobilePlaybackOrderMode.listLoop,
+        PlaybackOrderMode.singleLoop => MobilePlaybackOrderMode.singleLoop,
+      };
+
   Future<void> _playMobileAudioQueue({
     required List<Track> queue,
     required int index,
@@ -628,6 +647,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       index: index,
       audioUrlForTrack: _mobileAudioUrlForTrack,
       coverUrlForTrack: _coverUrlForTrack,
+      orderMode: _mobilePlaybackOrderMode,
     );
   }
 
@@ -639,6 +659,19 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       playAudioQueue: () =>
           _playMobileAudioQueue(queue: _playerQueue, index: _playerIndex),
     );
+  }
+
+  Future<void> _syncMobileAudioQueuePreservingProgress() async {
+    if (!_isMobilePlaybackSurface) return;
+    if (_playbackMode != PlaybackMode.audio) {
+      await _mobileAudioPlaybackService.stop();
+      return;
+    }
+
+    final progress = _playbackProgress;
+    await _playMobileAudioQueue(queue: _playerQueue, index: _playerIndex);
+    if (progress <= 0 || _currentTrack == null) return;
+    await _seekMobileAudioPlayback(progress);
   }
 
   void _handleMobileAudioState(MobileAudioPlaybackState state) {
@@ -803,14 +836,23 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   }
 
   void _cyclePlaybackOrderMode() {
+    late final PlaybackOrderMode nextMode;
     setState(() {
-      _playbackOrderMode = switch (_playbackOrderMode) {
+      nextMode = switch (_playbackOrderMode) {
         PlaybackOrderMode.sequential => PlaybackOrderMode.listLoop,
         PlaybackOrderMode.listLoop => PlaybackOrderMode.singleLoop,
         PlaybackOrderMode.singleLoop => PlaybackOrderMode.sequential,
       };
+      _playbackOrderMode = nextMode;
     });
     _savePlaybackState();
+    if (_isMobilePlaybackSurface) {
+      unawaited(
+        _mobileAudioPlaybackService.setPlaybackOrderMode(
+          _mobilePlaybackOrderMode,
+        ),
+      );
+    }
   }
 
   void _toggleShufflePlayback() {
@@ -831,6 +873,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
         _shuffleEnabled = false;
       });
       _savePlaybackState();
+      unawaited(_syncMobileAudioQueuePreservingProgress());
       return;
     }
 
@@ -844,18 +887,17 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       _shuffleEnabled = true;
     });
     _savePlaybackState();
+    unawaited(_syncMobileAudioQueuePreservingProgress());
   }
 
   void _playPrevious() {
     if (_playerQueue.isEmpty) return;
-    final nextIndex = switch (_playbackOrderMode) {
-      PlaybackOrderMode.listLoop =>
-        _playerIndex > 0
-            ? _playerIndex - 1
-            : (_playerQueue.length > 1 ? _playerQueue.length - 1 : null),
-      PlaybackOrderMode.sequential || PlaybackOrderMode.singleLoop =>
-        _playerIndex > 0 ? _playerIndex - 1 : null,
-    };
+    final nextIndex = resolveRelativePlaybackIndex(
+      orderMode: _playbackOrderMode,
+      currentIndex: _playerIndex,
+      queueLength: _playerQueue.length,
+      delta: -1,
+    );
     if (nextIndex == null) return;
     final nextTrack = _playerQueue[nextIndex];
     setState(() {
@@ -873,14 +915,12 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
 
   void _playNext() {
     if (_playerQueue.isEmpty) return;
-    final nextIndex = switch (_playbackOrderMode) {
-      PlaybackOrderMode.listLoop =>
-        _playerIndex < _playerQueue.length - 1
-            ? _playerIndex + 1
-            : (_playerQueue.length > 1 ? 0 : null),
-      PlaybackOrderMode.sequential || PlaybackOrderMode.singleLoop =>
-        _playerIndex < _playerQueue.length - 1 ? _playerIndex + 1 : null,
-    };
+    final nextIndex = resolveRelativePlaybackIndex(
+      orderMode: _playbackOrderMode,
+      currentIndex: _playerIndex,
+      queueLength: _playerQueue.length,
+      delta: 1,
+    );
     if (nextIndex == null) return;
     final nextTrack = _playerQueue[nextIndex];
     setState(() {

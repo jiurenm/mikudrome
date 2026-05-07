@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/screens/library_home_screen.dart';
+import 'package:mikudrome/services/mobile_audio_playback.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -91,6 +93,70 @@ void main() {
 
     expect(find.text('Ghost Track'), findsOneWidget);
     expect(find.text('专辑推荐'), findsNothing);
+  });
+
+  testWidgets('mobile shuffle resubmits the visible queue to audio playback', (
+    tester,
+  ) async {
+    final service = _RecordingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('GHOST').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '播放全部'));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(service.playedQueues.last.map((track) => track.id), [
+        101,
+        102,
+        103,
+      ]);
+
+      await tester.tap(find.byTooltip('随机播放'));
+      await tester.pump(const Duration(milliseconds: 500));
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(service.playedQueues, hasLength(greaterThanOrEqualTo(2)));
+    expect(service.playedQueues.last.first.id, 101);
+    expect(
+      service.playedQueues.last.map((track) => track.id),
+      containsAll([101, 102, 103]),
+    );
+  });
+
+  testWidgets('mobile playback order button updates audio loop mode', (
+    tester,
+  ) async {
+    final service = _RecordingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('GHOST').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '播放全部'));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      await tester.tap(find.byTooltip('播放顺序：顺序播放'));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byTooltip('播放顺序：列表循环'));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byTooltip('播放顺序：单曲循环'));
+      await tester.pump(const Duration(milliseconds: 100));
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(service.orderModes, [
+      MobilePlaybackOrderMode.sequential,
+      MobilePlaybackOrderMode.listLoop,
+      MobilePlaybackOrderMode.singleLoop,
+      MobilePlaybackOrderMode.sequential,
+    ]);
   });
 
   testWidgets('system back returns from a mobile destination to My Music', (
@@ -234,6 +300,28 @@ class _LibraryFakeHttpClientResponse extends Stream<List<int>>
             'composer': 'DECO*27',
             'vocal': '初音ミク',
           },
+          {
+            'id': 102,
+            'title': 'Ghost Track 2',
+            'audio_path': 'ghost-2.flac',
+            'album_id': 1,
+            'track_number': 2,
+            'duration_seconds': 201,
+            'artists': 'DECO*27 feat. 初音ミク',
+            'composer': 'DECO*27',
+            'vocal': '初音ミク',
+          },
+          {
+            'id': 103,
+            'title': 'Ghost Track 3',
+            'audio_path': 'ghost-3.flac',
+            'album_id': 1,
+            'track_number': 3,
+            'duration_seconds': 222,
+            'artists': 'DECO*27 feat. 初音ミク',
+            'composer': 'DECO*27',
+            'vocal': '初音ミク',
+          },
         ],
       }),
       '/api/producers' => jsonEncode({
@@ -347,7 +435,41 @@ class _LibraryFakeHttpHeaders implements HttpHeaders {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Future<void> _pumpMobileLibrary(WidgetTester tester) {
+class _RecordingMobileAudioPlaybackService
+    extends FakeMobileAudioPlaybackService {
+  final playedQueues = <List<Track>>[];
+  final orderModes = <MobilePlaybackOrderMode>[];
+
+  @override
+  Future<void> playQueue({
+    required List<Track> queue,
+    required int index,
+    required AudioUrlForTrack audioUrlForTrack,
+    CoverUrlForTrack? coverUrlForTrack,
+    MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
+  }) {
+    playedQueues.add(List<Track>.from(queue));
+    orderModes.add(orderMode);
+    return super.playQueue(
+      queue: queue,
+      index: index,
+      audioUrlForTrack: audioUrlForTrack,
+      coverUrlForTrack: coverUrlForTrack,
+      orderMode: orderMode,
+    );
+  }
+
+  @override
+  Future<void> setPlaybackOrderMode(MobilePlaybackOrderMode orderMode) async {
+    orderModes.add(orderMode);
+    await super.setPlaybackOrderMode(orderMode);
+  }
+}
+
+Future<void> _pumpMobileLibrary(
+  WidgetTester tester, {
+  MobileAudioPlaybackService? mobileAudioPlaybackService,
+}) {
   tester.view.physicalSize = const Size(390, 844);
   tester.view.devicePixelRatio = 1;
   addTearDown(() {
@@ -355,5 +477,11 @@ Future<void> _pumpMobileLibrary(WidgetTester tester) {
     tester.view.resetDevicePixelRatio();
   });
 
-  return tester.pumpWidget(const MaterialApp(home: LibraryHomeScreen()));
+  return tester.pumpWidget(
+    MaterialApp(
+      home: LibraryHomeScreen(
+        mobileAudioPlaybackService: mobileAudioPlaybackService,
+      ),
+    ),
+  );
 }

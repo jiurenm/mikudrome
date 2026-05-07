@@ -509,14 +509,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (widget.queue.isEmpty) {
       return null;
     }
-    final previousIndex = switch (widget.playbackOrderMode) {
-      PlaybackOrderMode.listLoop =>
-        widget.currentIndex > 0
-            ? widget.currentIndex - 1
-            : (widget.queue.length > 1 ? widget.queue.length - 1 : null),
-      PlaybackOrderMode.sequential || PlaybackOrderMode.singleLoop =>
-        widget.currentIndex > 0 ? widget.currentIndex - 1 : null,
-    };
+    final previousIndex = resolveRelativePlaybackIndex(
+      orderMode: widget.playbackOrderMode,
+      currentIndex: widget.currentIndex,
+      queueLength: widget.queue.length,
+      delta: -1,
+    );
     if (previousIndex == null) {
       return null;
     }
@@ -527,16 +525,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (widget.queue.isEmpty) {
       return null;
     }
-    final nextIndex = switch (widget.playbackOrderMode) {
-      PlaybackOrderMode.listLoop =>
-        widget.currentIndex < widget.queue.length - 1
-            ? widget.currentIndex + 1
-            : (widget.queue.length > 1 ? 0 : null),
-      PlaybackOrderMode.sequential || PlaybackOrderMode.singleLoop =>
-        widget.currentIndex < widget.queue.length - 1
-            ? widget.currentIndex + 1
-            : null,
-    };
+    final nextIndex = resolveRelativePlaybackIndex(
+      orderMode: widget.playbackOrderMode,
+      currentIndex: widget.currentIndex,
+      queueLength: widget.queue.length,
+      delta: 1,
+    );
     if (nextIndex == null) {
       return null;
     }

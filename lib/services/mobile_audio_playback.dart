@@ -6,6 +6,8 @@ export 'mobile_audio_playback_service.dart';
 typedef AudioUrlForTrack = String Function(Track track);
 typedef CoverUrlForTrack = String Function(Track track);
 
+enum MobilePlaybackOrderMode { sequential, listLoop, singleLoop }
+
 class MobileAudioPlaybackState {
   const MobileAudioPlaybackState({
     required this.queue,
@@ -65,8 +67,10 @@ abstract class MobileAudioPlaybackService {
     required int index,
     required AudioUrlForTrack audioUrlForTrack,
     CoverUrlForTrack? coverUrlForTrack,
+    MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
   });
 
+  Future<void> setPlaybackOrderMode(MobilePlaybackOrderMode orderMode);
   Future<void> play();
   Future<void> pause();
   Future<void> seek(Duration position);
@@ -99,6 +103,7 @@ class FakeMobileAudioPlaybackService implements MobileAudioPlaybackService {
     required int index,
     required AudioUrlForTrack audioUrlForTrack,
     CoverUrlForTrack? coverUrlForTrack,
+    MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
   }) async {
     _audioUrlForTrack = audioUrlForTrack;
     if (queue.isEmpty) {
@@ -119,6 +124,9 @@ class FakeMobileAudioPlaybackService implements MobileAudioPlaybackService {
       ),
     );
   }
+
+  @override
+  Future<void> setPlaybackOrderMode(MobilePlaybackOrderMode orderMode) async {}
 
   @override
   Future<void> play() async {
@@ -209,7 +217,11 @@ class NoopMobileAudioPlaybackService implements MobileAudioPlaybackService {
     required int index,
     required AudioUrlForTrack audioUrlForTrack,
     CoverUrlForTrack? coverUrlForTrack,
+    MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
   }) async {}
+
+  @override
+  Future<void> setPlaybackOrderMode(MobilePlaybackOrderMode orderMode) async {}
 
   @override
   Future<void> play() async {}
