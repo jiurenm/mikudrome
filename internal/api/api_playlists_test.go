@@ -653,6 +653,62 @@ func TestPlaylistItemsHTTP_GroupedReadReturnsUngroupedWithItems(t *testing.T) {
 	}
 }
 
+func TestPlaylistItemsHTTP_TrackUsesEffectiveComposerAndLyricist(t *testing.T) {
+	h := newTestHandler(t)
+	trackID := seedMetadataTrack(
+		t,
+		h,
+		store.Track{
+			Title:           "Fallback Credits",
+			AudioPath:       "/tmp/fallback-credits.flac",
+			DiscNumber:      1,
+			TrackNumber:     1,
+			ComposerScanned: "scan composer",
+			LyricistScanned: "scan lyricist",
+		},
+		store.Album{Title: "Fallback Album"},
+		store.Producer{},
+	)
+	playlistID := createTestPlaylist(t, h, "FallbackCredits")
+	playlistIDStr := mustJSON(t, playlistID)
+
+	addBody := mustJSON(t, map[string][]int64{"track_ids": []int64{trackID}})
+	rr := doReq(h, "POST", "/api/playlists/"+playlistIDStr+"/tracks", addBody)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("addPlaylistTracks: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	rr = doReq(h, "GET", "/api/playlists/"+playlistIDStr+"/items", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("getPlaylistItems: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Groups []struct {
+			Items []struct {
+				Track struct {
+					Composer string `json:"composer"`
+					Lyricist string `json:"lyricist"`
+				} `json:"track"`
+			} `json:"items"`
+		} `json:"groups"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Groups) != 1 || len(resp.Groups[0].Items) != 1 {
+		t.Fatalf("expected one playlist item, got %+v", resp.Groups)
+	}
+
+	track := resp.Groups[0].Items[0].Track
+	if track.Composer != "scan composer" {
+		t.Fatalf("composer = %q, want %q", track.Composer, "scan composer")
+	}
+	if track.Lyricist != "scan lyricist" {
+		t.Fatalf("lyricist = %q, want %q", track.Lyricist, "scan lyricist")
+	}
+}
+
 func TestPlaylistItemsHTTP_EmptyGroupIncludesItemsArray(t *testing.T) {
 	h := newTestHandler(t)
 	playlistID := createTestPlaylist(t, h, "EmptyGroup")

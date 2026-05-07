@@ -60,12 +60,7 @@ func (s *Store) GetFavoriteSet() (map[int64]bool, error) {
 // ordered by created_at DESC (most recently favorited first).
 func (s *Store) ListFavorites() ([]Track, error) {
 	rows, err := s.db.Query(
-		`SELECT t.id, t.title, t.audio_path, t.video_path, COALESCE(t.video_thumb_path, ''), COALESCE(t.album_id, 0),
-		 COALESCE(t.disc_number, 1), COALESCE(t.track_number, 0), COALESCE(t.artists, ''), COALESCE(t.year, 0),
-		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''), COALESCE(t.composer, ''), COALESCE(t.lyricist, ''),
-		 COALESCE(t.arranger, ''), COALESCE(t.remix, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''), COALESCE(t.illustrator, ''),
-		 COALESCE(t.movie, ''), COALESCE(t.source, ''), COALESCE(t.lyrics, ''), COALESCE(t.comment, ''),
-		 COALESCE(a.album_artist, '')
+		`SELECT ` + trackSelectColumns("t", "a") + `
 		 FROM favorites f
 		 INNER JOIN tracks t ON t.id = f.track_id
 		 LEFT JOIN albums a ON t.album_id = a.id
@@ -77,11 +72,8 @@ func (s *Store) ListFavorites() ([]Track, error) {
 	defer rows.Close()
 	var out []Track
 	for rows.Next() {
-		var t Track
-		if err := rows.Scan(&t.ID, &t.Title, &t.AudioPath, &t.VideoPath, &t.VideoThumbPath, &t.AlbumID,
-			&t.DiscNumber, &t.TrackNumber, &t.Artists, &t.Year, &t.DurationSeconds, &t.Format,
-			&t.Composer, &t.Lyricist, &t.Arranger, &t.Remix, &t.Vocal, &t.VoiceManipulator, &t.Illustrator,
-			&t.Movie, &t.Source, &t.Lyrics, &t.Comment, &t.AlbumArtist); err != nil {
+		t, err := scanTrack(rows)
+		if err != nil {
 			return nil, err
 		}
 		out = append(out, t)
@@ -470,13 +462,7 @@ func (s *Store) GetPlaylistDetail(id int64) (PlaylistDetail, bool, error) {
 		`SELECT pi.id, pi.playlist_id, pi.track_id, pi.group_id, pi.position, pi.note,
 		        pi.cover_mode, pi.library_cover_id, pi.cached_cover_url, pi.custom_cover_path,
 		        pi.created_at, pi.updated_at,
-		        t.id, t.title, t.audio_path, t.video_path, COALESCE(t.video_thumb_path, ''),
-		        COALESCE(t.album_id, 0), COALESCE(t.disc_number, 1), COALESCE(t.track_number, 0),
-		        COALESCE(t.artists, ''), COALESCE(t.year, 0), COALESCE(t.duration_seconds, 0),
-		        COALESCE(t.format, ''), COALESCE(t.composer, ''), COALESCE(t.lyricist, ''),
-		        COALESCE(t.arranger, ''), COALESCE(t.remix, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''),
-		        COALESCE(t.illustrator, ''), COALESCE(t.movie, ''), COALESCE(t.source, ''),
-		        COALESCE(t.lyrics, ''), COALESCE(t.comment, ''), COALESCE(a.album_artist, '')
+		        `+trackSelectColumns("t", "a")+`
 		 FROM playlist_items pi
 		 INNER JOIN playlist_groups pg ON pg.id = pi.group_id
 		 INNER JOIN tracks t ON t.id = pi.track_id
@@ -492,7 +478,7 @@ func (s *Store) GetPlaylistDetail(id int64) (PlaylistDetail, bool, error) {
 
 	for itemRows.Next() {
 		var item PlaylistItem
-		if err := itemRows.Scan(
+		dest := []any{
 			&item.ID,
 			&item.PlaylistID,
 			&item.TrackID,
@@ -505,31 +491,9 @@ func (s *Store) GetPlaylistDetail(id int64) (PlaylistDetail, bool, error) {
 			&item.CustomCoverPath,
 			&item.CreatedAt,
 			&item.UpdatedAt,
-			&item.Track.ID,
-			&item.Track.Title,
-			&item.Track.AudioPath,
-			&item.Track.VideoPath,
-			&item.Track.VideoThumbPath,
-			&item.Track.AlbumID,
-			&item.Track.DiscNumber,
-			&item.Track.TrackNumber,
-			&item.Track.Artists,
-			&item.Track.Year,
-			&item.Track.DurationSeconds,
-			&item.Track.Format,
-			&item.Track.Composer,
-			&item.Track.Lyricist,
-			&item.Track.Arranger,
-			&item.Track.Remix,
-			&item.Track.Vocal,
-			&item.Track.VoiceManipulator,
-			&item.Track.Illustrator,
-			&item.Track.Movie,
-			&item.Track.Source,
-			&item.Track.Lyrics,
-			&item.Track.Comment,
-			&item.Track.AlbumArtist,
-		); err != nil {
+		}
+		dest = append(dest, trackScanDest(&item.Track)...)
+		if err := itemRows.Scan(dest...); err != nil {
 			return PlaylistDetail{}, false, err
 		}
 		idx, exists := groupIndex[item.GroupID]
@@ -553,12 +517,7 @@ func (s *Store) GetPlaylistDetail(id int64) (PlaylistDetail, bool, error) {
 // then item position.
 func (s *Store) GetPlaylistTracks(playlistID int64) ([]Track, error) {
 	rows, err := s.db.Query(
-		`SELECT t.id, t.title, t.audio_path, t.video_path, COALESCE(t.video_thumb_path, ''), COALESCE(t.album_id, 0),
-		 COALESCE(t.disc_number, 1), COALESCE(t.track_number, 0), COALESCE(t.artists, ''), COALESCE(t.year, 0),
-		 COALESCE(t.duration_seconds, 0), COALESCE(t.format, ''), COALESCE(t.composer, ''), COALESCE(t.lyricist, ''),
-		 COALESCE(t.arranger, ''), COALESCE(t.remix, ''), COALESCE(t.vocal, ''), COALESCE(t.voice_manipulator, ''), COALESCE(t.illustrator, ''),
-		 COALESCE(t.movie, ''), COALESCE(t.source, ''), COALESCE(t.lyrics, ''), COALESCE(t.comment, ''),
-		 COALESCE(a.album_artist, '')
+		`SELECT `+trackSelectColumns("t", "a")+`
 		 FROM playlist_items pi
 		 INNER JOIN playlist_groups pg ON pg.id = pi.group_id
 		 INNER JOIN tracks t ON t.id = pi.track_id
@@ -573,11 +532,8 @@ func (s *Store) GetPlaylistTracks(playlistID int64) ([]Track, error) {
 	defer rows.Close()
 	var out []Track
 	for rows.Next() {
-		var t Track
-		if err := rows.Scan(&t.ID, &t.Title, &t.AudioPath, &t.VideoPath, &t.VideoThumbPath, &t.AlbumID,
-			&t.DiscNumber, &t.TrackNumber, &t.Artists, &t.Year, &t.DurationSeconds, &t.Format,
-			&t.Composer, &t.Lyricist, &t.Arranger, &t.Remix, &t.Vocal, &t.VoiceManipulator, &t.Illustrator,
-			&t.Movie, &t.Source, &t.Lyrics, &t.Comment, &t.AlbumArtist); err != nil {
+		t, err := scanTrack(rows)
+		if err != nil {
 			return nil, err
 		}
 		out = append(out, t)
