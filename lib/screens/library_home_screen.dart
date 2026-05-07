@@ -67,10 +67,7 @@ Future<void> pauseMobileAudioPlaybackForLifecycle({
   required PlaybackMode playbackMode,
   required MobileAudioPlaybackService service,
 }) async {
-  if (!isMobile) return;
-  if (playbackMode != PlaybackMode.audio) return;
-  if (lifecycleState != AppLifecycleState.paused) return;
-  await service.pause();
+  return;
 }
 
 /// Root screen: app shell + route-based content. Album detail is shown in-shell (sidebar stays).

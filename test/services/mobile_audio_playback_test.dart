@@ -327,6 +327,36 @@ void main() {
     },
   );
 
+  test(
+    'audio handler keeps paused seek when player re-emits the same index',
+    () async {
+      final player = SameIndexAfterSeekFakeJustAudioPlayer();
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+      final states = <MobileAudioPlaybackState>[];
+      final sub = handler.mikudromeState.listen(states.add);
+
+      await handler.setMikudromeQueue(
+        tracks: [_track(1)],
+        audioUrls: const ['http://server/audio/1'],
+        initialIndex: 0,
+      );
+      player.setPosition(const Duration(seconds: 12));
+
+      await handler.pause();
+      await handler.seek(const Duration(seconds: 30));
+      await pumpEventQueue();
+
+      expect(handler.playbackState.value.playing, isFalse);
+      expect(handler.playbackState.value.speed, 0.0);
+      expect(handler.playbackState.value.position, const Duration(seconds: 30));
+      expect(states.last.isPlaying, isFalse);
+      expect(states.last.position, const Duration(seconds: 30));
+
+      await sub.cancel();
+      await handler.dispose();
+    },
+  );
+
   test('audio handler clears paused freeze lock when pause fails', () async {
     final player = FailingPauseFakeJustAudioPlayer();
     final handler = audio_service.MikudromeAudioHandler(player: player);
@@ -750,39 +780,39 @@ void main() {
     expect(playQueueCalls, 0);
   });
 
-  test('mobile audio lifecycle pauses service when app backgrounds', () async {
-    final service = RecordingMobileAudioPlaybackService();
+  test(
+    'mobile audio lifecycle keeps service playing when app backgrounds',
+    () async {
+      final service = RecordingMobileAudioPlaybackService();
 
-    await pauseMobileAudioPlaybackForLifecycle(
-      lifecycleState: AppLifecycleState.inactive,
-      isMobile: true,
-      playbackMode: PlaybackMode.audio,
-      service: service,
-    );
-    await pauseMobileAudioPlaybackForLifecycle(
-      lifecycleState: AppLifecycleState.paused,
-      isMobile: false,
-      playbackMode: PlaybackMode.audio,
-      service: service,
-    );
-    await pauseMobileAudioPlaybackForLifecycle(
-      lifecycleState: AppLifecycleState.paused,
-      isMobile: true,
-      playbackMode: PlaybackMode.video,
-      service: service,
-    );
+      await pauseMobileAudioPlaybackForLifecycle(
+        lifecycleState: AppLifecycleState.inactive,
+        isMobile: true,
+        playbackMode: PlaybackMode.audio,
+        service: service,
+      );
+      await pauseMobileAudioPlaybackForLifecycle(
+        lifecycleState: AppLifecycleState.paused,
+        isMobile: false,
+        playbackMode: PlaybackMode.audio,
+        service: service,
+      );
+      await pauseMobileAudioPlaybackForLifecycle(
+        lifecycleState: AppLifecycleState.paused,
+        isMobile: true,
+        playbackMode: PlaybackMode.video,
+        service: service,
+      );
+      await pauseMobileAudioPlaybackForLifecycle(
+        lifecycleState: AppLifecycleState.paused,
+        isMobile: true,
+        playbackMode: PlaybackMode.audio,
+        service: service,
+      );
 
-    expect(service.pauseCalls, 0);
-
-    await pauseMobileAudioPlaybackForLifecycle(
-      lifecycleState: AppLifecycleState.paused,
-      isMobile: true,
-      playbackMode: PlaybackMode.audio,
-      service: service,
-    );
-
-    expect(service.pauseCalls, 1);
-  });
+      expect(service.pauseCalls, 0);
+    },
+  );
 }
 
 Track _track(int id) => Track(
@@ -973,6 +1003,17 @@ class LaggyPauseAndSeekFakeJustAudioPlayer
   Future<void> seek(Duration position) async {
     seekPositions.add(position);
     setPosition(Duration.zero);
+  }
+}
+
+class SameIndexAfterSeekFakeJustAudioPlayer extends FakeJustAudioPlayer {
+  @override
+  Future<void> seek(Duration position) async {
+    seekPositions.add(position);
+    Timer.run(() {
+      setCurrentIndex(currentIndex);
+      setPosition(Duration.zero);
+    });
   }
 }
 

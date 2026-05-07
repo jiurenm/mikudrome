@@ -60,6 +60,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
   final List<StreamSubscription<Object?>> _subscriptions = [];
   List<Track> _tracks = const [];
   List<String> _audioUrls = const [];
+  int? _currentIndex;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
   bool _isCompleted = false;
@@ -79,6 +80,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     if (tracks.isEmpty) {
       _tracks = const [];
       _audioUrls = const [];
+      _currentIndex = null;
       _lastPausedSeekPosition = null;
       queue.add(const []);
       mediaItem.add(null);
@@ -122,6 +124,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     _audioUrls = nextAudioUrls;
     queue.add(items);
     mediaItem.add(items[clampedIndex]);
+    _currentIndex = clampedIndex;
     _position = Duration.zero;
     _duration = Duration(seconds: _tracks[clampedIndex].durationSeconds);
     _isCompleted = false;
@@ -219,6 +222,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     await _player.stop();
     _tracks = const [];
     _audioUrls = const [];
+    _currentIndex = null;
     _position = Duration.zero;
     _duration = Duration.zero;
     _isCompleted = false;
@@ -250,11 +254,18 @@ class MikudromeAudioHandler extends BaseAudioHandler
   void _handleCurrentIndexChanged(int? index) {
     if (index == null || _tracks.isEmpty || queue.value.isEmpty) return;
     final clampedIndex = index.clamp(0, queue.value.length - 1);
+    final didChangeTrack = _currentIndex != clampedIndex;
+    _currentIndex = clampedIndex;
+    mediaItem.add(queue.value[clampedIndex]);
+    if (!didChangeTrack) {
+      _publishPlaybackState();
+      _emitMikudromeState(index: clampedIndex);
+      return;
+    }
     _position = Duration.zero;
     _duration = Duration(seconds: _tracks[clampedIndex].durationSeconds);
     _isCompleted = false;
     _lastPausedSeekPosition = null;
-    mediaItem.add(queue.value[clampedIndex]);
     _publishPlaybackState();
     _emitMikudromeState(
       index: clampedIndex,
@@ -373,10 +384,9 @@ class MikudromeAudioHandler extends BaseAudioHandler
       _mikudromeStates.add(MobileAudioPlaybackState.empty());
       return;
     }
-    final effectiveIndex = (index ?? _player.currentIndex ?? 0).clamp(
-      0,
-      _tracks.length - 1,
-    );
+    final effectiveIndex = (index ?? _currentIndex ?? _player.currentIndex ?? 0)
+        .clamp(0, _tracks.length - 1);
+    _currentIndex = effectiveIndex;
     final effectivePosition = position ?? _position;
     final effectiveDuration = duration ?? _duration;
     final effectiveCompleted = isCompleted ?? _isCompleted;
