@@ -46,6 +46,11 @@ Future<void> _pumpDesktopStage(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 400));
 }
 
+Future<void> _pumpMobileLyrics(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 250));
+}
+
 void main() {
   const desktopWidth = 1280.0;
   const desktopHeight = 720.0;
@@ -418,12 +423,16 @@ void main() {
         find.byKey(const ValueKey<String>('lyrics-stage-mask')),
         findsNothing,
       );
+      expect(
+        find.byKey(const ValueKey<String>('mobile-lyrics-follow-scroll')),
+        findsOneWidget,
+      );
       expect(find.byType(ListView), findsOneWidget);
-      expect(find.byType(Scrollbar), findsOneWidget);
+      expect(find.byType(Scrollbar), findsNothing);
       expect(find.text('Line 3'), findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('lyrics-line-3')),
-        findsNothing,
+        findsOneWidget,
       );
     },
   );
@@ -456,6 +465,171 @@ void main() {
         AppTheme.textPrimary.withValues(alpha: 0.72),
       );
       expect(nearbyLineText.style?.fontWeight, FontWeight.w500);
+    },
+  );
+
+  testWidgets(
+    'mobile timed lyrics pause follow on manual scroll and return to current',
+    (tester) async {
+      final timedLyrics = _timedLyrics(40);
+
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: timedLyrics,
+          activeIndex: 10,
+          width: 420,
+          height: 320,
+          platform: TargetPlatform.android,
+        ),
+      );
+      await _pumpMobileLyrics(tester);
+
+      expect(
+        find.byKey(const ValueKey<String>('mobile-lyrics-return-current')),
+        findsNothing,
+      );
+
+      await tester.drag(find.byType(ListView), const Offset(0, -120));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey<String>('mobile-lyrics-return-current')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mobile-lyrics-return-current')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(
+        find.byKey(const ValueKey<String>('mobile-lyrics-return-current')),
+        findsNothing,
+      );
+      expect(find.text('Line 10'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'mobile timed lyrics automatically resume follow after manual scroll idle',
+    (tester) async {
+      final timedLyrics = _timedLyrics(40);
+
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: timedLyrics,
+          activeIndex: 12,
+          width: 420,
+          height: 320,
+          platform: TargetPlatform.android,
+        ),
+      );
+      await _pumpMobileLyrics(tester);
+
+      await tester.drag(find.byType(ListView), const Offset(0, -120));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey<String>('mobile-lyrics-return-current')),
+        findsOneWidget,
+      );
+
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(
+        find.byKey(const ValueKey<String>('mobile-lyrics-return-current')),
+        findsNothing,
+      );
+      expect(find.text('Line 12'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'mobile timed lyrics auto-follow does not enter manual pause',
+    (tester) async {
+      final timedLyrics = _timedLyrics(60);
+
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: timedLyrics,
+          activeIndex: 1,
+          width: 420,
+          height: 320,
+          platform: TargetPlatform.android,
+        ),
+      );
+      await _pumpMobileLyrics(tester);
+
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: timedLyrics,
+          activeIndex: 35,
+          width: 420,
+          height: 320,
+          platform: TargetPlatform.android,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(
+        find.byKey(const ValueKey<String>('mobile-lyrics-return-current')),
+        findsNothing,
+      );
+      expect(find.text('Line 35'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'mobile timed lyrics clear manual pause when timed lyrics change',
+    (tester) async {
+      final firstLyrics = _timedLyrics(40);
+      final secondLyrics = List<TimedLyricLine>.generate(
+        20,
+        (index) => TimedLyricLine(
+          start: Duration(seconds: index * 4),
+          texts: <String>['Next $index'],
+        ),
+      );
+
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: firstLyrics,
+          activeIndex: 10,
+          width: 420,
+          height: 320,
+          platform: TargetPlatform.android,
+        ),
+      );
+      await _pumpMobileLyrics(tester);
+
+      await tester.drag(find.byType(ListView), const Offset(0, -120));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey<String>('mobile-lyrics-return-current')),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: secondLyrics,
+          activeIndex: 2,
+          lyrics: secondLyrics.map((line) => line.texts.join(' / ')).join('\n'),
+          width: 420,
+          height: 320,
+          platform: TargetPlatform.android,
+        ),
+      );
+      await _pumpMobileLyrics(tester);
+
+      expect(
+        find.byKey(const ValueKey<String>('mobile-lyrics-return-current')),
+        findsNothing,
+      );
+      expect(find.text('Next 2'), findsOneWidget);
     },
   );
 
