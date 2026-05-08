@@ -1275,11 +1275,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      IconButton(
-                        onPressed: () {},
-                        icon: const Icon(Icons.favorite_border, size: 34),
-                        color: Colors.white70,
-                        tooltip: '收藏',
+                      FavoriteButton(
+                        trackId: _track.id,
+                        client: _api,
+                        size: 34,
                       ),
                       IconButton(
                         onPressed: () {},

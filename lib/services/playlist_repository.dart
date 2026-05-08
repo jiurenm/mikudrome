@@ -56,20 +56,39 @@ class PlaylistRepository extends ChangeNotifier {
     if (changed) notifyListeners();
   }
 
+  /// Replace the cached favorite IDs with an authoritative favorites response.
+  bool replaceFavoritesFromTracks(Iterable<Track> tracks) {
+    final next = tracks.map((track) => track.id).toSet();
+    if (setEquals(_favoriteTrackIds, next)) return false;
+    _favoriteTrackIds
+      ..clear()
+      ..addAll(next);
+    notifyListeners();
+    return true;
+  }
+
   /// Optimistic toggle. On failure, rolls back and rethrows.
   Future<void> toggleFavorite(int trackId, ApiClient client) async {
+    await setFavorite(trackId, !_favoriteTrackIds.contains(trackId), client);
+  }
+
+  /// Optimistically set an absolute favorite state. On failure, rolls back and
+  /// rethrows.
+  Future<void> setFavorite(int trackId, bool favorite, ApiClient client) async {
     final wasFav = _favoriteTrackIds.contains(trackId);
-    if (wasFav) {
-      _favoriteTrackIds.remove(trackId);
-    } else {
+    if (wasFav == favorite) return;
+
+    if (favorite) {
       _favoriteTrackIds.add(trackId);
+    } else {
+      _favoriteTrackIds.remove(trackId);
     }
     notifyListeners();
     try {
-      if (wasFav) {
-        await client.removeFavorite(trackId);
-      } else {
+      if (favorite) {
         await client.addFavorite(trackId);
+      } else {
+        await client.removeFavorite(trackId);
       }
     } catch (e) {
       // Rollback

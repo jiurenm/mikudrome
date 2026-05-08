@@ -18,6 +18,7 @@ class PlaylistTrackRow extends StatefulWidget {
     this.dragHandle,
     this.desktopTitleWidth,
     this.isCurrentlyPlaying = false,
+    this.removeLabel = 'Remove from playlist',
   }) : track = null;
 
   const PlaylistTrackRow.track({
@@ -31,6 +32,7 @@ class PlaylistTrackRow extends StatefulWidget {
     this.dragHandle,
     this.desktopTitleWidth,
     this.isCurrentlyPlaying = false,
+    this.removeLabel = 'Remove from playlist',
   }) : item = null;
 
   final PlaylistItem? item;
@@ -43,6 +45,7 @@ class PlaylistTrackRow extends StatefulWidget {
   final Widget? dragHandle;
   final double? desktopTitleWidth;
   final bool isCurrentlyPlaying;
+  final String removeLabel;
 
   @override
   State<PlaylistTrackRow> createState() => _PlaylistTrackRowState();
@@ -316,19 +319,19 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
                         }
                       },
                       itemBuilder: (context) => [
-                        const PopupMenuItem<String>(
+                        PopupMenuItem<String>(
                           value: 'remove',
                           child: Row(
                             children: [
-                              Icon(
+                              const Icon(
                                 Icons.remove_circle_outline,
                                 size: 18,
                                 color: AppTheme.textMuted,
                               ),
-                              SizedBox(width: 12),
+                              const SizedBox(width: 12),
                               Flexible(
                                 child: Text(
-                                  'Remove from playlist',
+                                  widget.removeLabel,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),

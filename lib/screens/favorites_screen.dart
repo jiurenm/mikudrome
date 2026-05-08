@@ -14,15 +14,20 @@ import '../widgets/playlist_detail/playlist_track_row.dart';
 const _kMessageDuration = Duration(seconds: 3);
 const _kMessageTopOffset = 16.0;
 const _kMessageHorizontalPadding = 24.0;
-const _kMessageInternalPadding =
-    EdgeInsets.symmetric(horizontal: 20, vertical: 14);
+const _kMessageInternalPadding = EdgeInsets.symmetric(
+  horizontal: 20,
+  vertical: 14,
+);
 const _kMessageBorderRadius = 8.0;
 const _kMessageIconSize = 22.0;
 
 /// Shows a temporary message at the top of the screen.
 /// Returns a Timer that can be cancelled to prevent the message from being removed.
-Timer _showTopMessage(BuildContext context, String message,
-    {required bool isError}) {
+Timer _showTopMessage(
+  BuildContext context,
+  String message, {
+  required bool isError,
+}) {
   final overlay = Overlay.of(context);
   late OverlayEntry entry;
   entry = OverlayEntry(
@@ -135,6 +140,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     try {
       final tracks = await _client.listFavorites();
       if (!mounted) return;
+      PlaylistRepository.instance.replaceFavoritesFromTracks(tracks);
       setState(() {
         _tracks = tracks;
         _loading = false;
@@ -189,7 +195,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
     // Call API via repository
     try {
-      await PlaylistRepository.instance.toggleFavorite(track.id, _client);
+      await PlaylistRepository.instance.setFavorite(track.id, false, _client);
     } catch (e) {
       // Revert on error
       if (!mounted) return;
@@ -278,10 +284,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                           const SizedBox(height: 16),
                           Text(
                             'No favorite tracks yet',
-                            style:
-                                Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                      color: AppTheme.textMuted,
-                                    ),
+                            style: Theme.of(context).textTheme.bodyLarge
+                                ?.copyWith(color: AppTheme.textMuted),
                           ),
                         ],
                       ),
@@ -295,23 +299,21 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     vertical: 16,
                   ),
                   sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final track = _tracks[index];
-                        return PlaylistTrackRow.track(
-                          key: ValueKey(track.id),
-                          track: track,
-                          baseUrl: widget._effectiveBaseUrl,
-                          onTap: () => _playTrack(track, index),
-                          onRemove: () => _handleRemoveFavorite(track),
-                          showDragHandle: false,
-                          isCurrentlyPlaying:
-                              widget.currentPlayingTrackId == track.id &&
-                                  widget.isPlaying,
-                        );
-                      },
-                      childCount: _tracks.length,
-                    ),
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final track = _tracks[index];
+                      return PlaylistTrackRow.track(
+                        key: ValueKey(track.id),
+                        track: track,
+                        baseUrl: widget._effectiveBaseUrl,
+                        onTap: () => _playTrack(track, index),
+                        onRemove: () => _handleRemoveFavorite(track),
+                        removeLabel: 'Remove from favorites',
+                        showDragHandle: false,
+                        isCurrentlyPlaying:
+                            widget.currentPlayingTrackId == track.id &&
+                            widget.isPlaying,
+                      );
+                    }, childCount: _tracks.length),
                   ),
                 ),
             ],
@@ -321,9 +323,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             Positioned.fill(
               child: Container(
                 color: Colors.black.withValues(alpha: 0.3),
-                child: const Center(
-                  child: CircularProgressIndicator(),
-                ),
+                child: const Center(child: CircularProgressIndicator()),
               ),
             ),
         ],
