@@ -14,7 +14,18 @@ const _track = Track(
   composer: 'Composer',
 );
 
+const _timedLyricTrack = Track(
+  id: 2,
+  title: 'External audio timed lyrics',
+  audioPath: '/tmp/2.flac',
+  videoPath: '',
+  durationSeconds: 100,
+  composer: 'Composer',
+  lyrics: '[00:00.00]first line\n[00:30.00]second line',
+);
+
 Widget _buildPlayer({
+  Track track = _track,
   required double externalProgress,
   required bool externalIsPlaying,
   required Future<void> Function() onExternalPause,
@@ -32,8 +43,8 @@ Widget _buildPlayer({
     home: MediaQuery(
       data: const MediaQueryData(size: Size(430, 900)),
       child: PlayerScreen(
-        track: _track,
-        queue: const [_track],
+        track: track,
+        queue: [track],
         currentIndex: 0,
         contextLabel: 'External Audio Test',
         playbackMode: PlaybackMode.audio,
@@ -140,6 +151,70 @@ void main() {
 
     expect(parentProgress, 0.5);
     expect(emittedProgresses, isNot(contains(0.0)));
+  });
+
+  testWidgets('external audio progress updates active mobile lyrics', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _buildPlayer(
+        track: _timedLyricTrack,
+        externalProgress: 0,
+        externalIsPlaying: true,
+        onExternalPause: () async {},
+        onExternalSeekToFraction: (_) async {},
+        onControlsReady:
+            ({required togglePlayback, required seekToFraction}) {},
+        onPlaybackStateChanged:
+            ({
+              required bool isPlaying,
+              required double progress,
+              required String elapsedLabel,
+              required String durationLabel,
+            }) {},
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('歌词'));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('lyrics-line-active-0')),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(
+      _buildPlayer(
+        track: _timedLyricTrack,
+        externalProgress: 0.35,
+        externalIsPlaying: true,
+        onExternalPause: () async {},
+        onExternalSeekToFraction: (_) async {},
+        onControlsReady:
+            ({required togglePlayback, required seekToFraction}) {},
+        onPlaybackStateChanged:
+            ({
+              required bool isPlaying,
+              required double progress,
+              required String elapsedLabel,
+              required String durationLabel,
+            }) {},
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(
+      find.byKey(const ValueKey<String>('lyrics-line-active-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('lyrics-line-active-0')),
+      findsNothing,
+    );
   });
 
   testWidgets('mobile player timeline uses the asset thumb', (tester) async {

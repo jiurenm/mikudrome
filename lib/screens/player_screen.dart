@@ -295,6 +295,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _syncLyricsForTrack();
     }
 
+    if (_usesExternalAudioPlayback &&
+        (trackChanged ||
+            oldWidget.track.lyrics != widget.track.lyrics ||
+            oldWidget.externalProgress != widget.externalProgress ||
+            oldWidget.useExternalAudioPlayback != widget.useExternalAudioPlayback)) {
+      _syncActiveLyricIndexForPosition(_position);
+    }
+
     final shouldReinitializeController =
         trackChanged ||
         oldWidget.playbackMode != widget.playbackMode ||
@@ -323,6 +331,26 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void _syncLyricsForTrack() {
     _timedLyrics = parseLrcLyrics(_track.lyrics);
     _activeLyricIndex = -1;
+    if (_usesExternalAudioPlayback) {
+      _syncActiveLyricIndexForPosition(_position);
+    }
+  }
+
+  void _syncActiveLyricIndexForPosition(
+    Duration position, {
+    bool notify = false,
+  }) {
+    final nextActiveIndex = findActiveLyricIndex(_timedLyrics, position);
+    if (nextActiveIndex == _activeLyricIndex) {
+      return;
+    }
+    if (notify && mounted) {
+      setState(() {
+        _activeLyricIndex = nextActiveIndex;
+      });
+      return;
+    }
+    _activeLyricIndex = nextActiveIndex;
   }
 
   Future<void> _initializePlayback() async {
@@ -570,17 +598,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
             break;
         }
       }
-      final nextActiveIndex = findActiveLyricIndex(
-        _timedLyrics,
-        value.position,
-      );
       _emitPlaybackState();
-      if (nextActiveIndex == _activeLyricIndex) {
-        return;
-      }
-      setState(() {
-        _activeLyricIndex = nextActiveIndex;
-      });
+      _syncActiveLyricIndexForPosition(value.position, notify: true);
     };
     controller.addListener(_controllerListener!);
   }
@@ -626,14 +645,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       }
     }
 
-    final nextActiveIndex = findActiveLyricIndex(_timedLyrics, value.position);
     _emitPlaybackState();
-    if (nextActiveIndex == _activeLyricIndex) {
-      return;
-    }
-    setState(() {
-      _activeLyricIndex = nextActiveIndex;
-    });
+    _syncActiveLyricIndexForPosition(value.position, notify: true);
   }
 
   void _detachControllerListener(VideoPlayerController? controller) {
