@@ -667,6 +667,22 @@ void main() {
     );
   });
 
+  test('audio handler stops playback when Android task is removed', () async {
+    final player = FakeJustAudioPlayer();
+    final handler = audio_service.MikudromeAudioHandler(player: player);
+
+    await handler.setMikudromeQueue(
+      tracks: [_track(1)],
+      audioUrls: const ['http://server/audio/1'],
+      initialIndex: 0,
+    );
+
+    await handler.onTaskRemoved();
+
+    expect(player.stopCalls, 1);
+    await handler.dispose();
+  });
+
   test('fake service publishes play and pause state', () async {
     final service = FakeMobileAudioPlaybackService();
     final states = <MobileAudioPlaybackState>[];

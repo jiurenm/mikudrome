@@ -252,6 +252,9 @@ class MikudromeAudioHandler extends BaseAudioHandler
     _emitMikudromeState(empty: true);
   }
 
+  @override
+  Future<void> onTaskRemoved() => stop();
+
   Duration _positionForPause() {
     final playerPosition = _player.position;
     if (playerPosition > _position) {
