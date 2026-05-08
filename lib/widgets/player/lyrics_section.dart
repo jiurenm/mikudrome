@@ -33,6 +33,8 @@ class _LyricsSectionState extends State<LyricsSection> {
   static const _estimatedLineHeight = 68.0;
   static const _lyricsAnimationDuration = Duration(milliseconds: 200);
   static const _lyricsAnimationCurve = Curves.easeOutCubic;
+  static const _mobileFollowAnchor = 0.46;
+  static const _manualFollowResumeDelay = Duration(seconds: 4);
 
   late final ScrollController _scrollController;
   final Map<int, GlobalKey> _lineKeys = <int, GlobalKey>{};
@@ -45,14 +47,17 @@ class _LyricsSectionState extends State<LyricsSection> {
   bool? _lastTimedLyricsDesktopMode;
   int _lastAutoScrolledIndex = -1;
   bool _isAutoScrolling = false;
+  bool _manualFollowPaused = false;
   bool _lineHeightFlushScheduled = false;
   int? _pendingAutoScrollIndex;
   Timer? _highlightSyncTimer;
+  Timer? _manualFollowResumeTimer;
 
   bool get _hasLyrics => widget.lyrics.trim().isNotEmpty;
   bool get _hasTimedLyrics => widget.timedLyrics.isNotEmpty;
   bool get _hasActiveTimedLine =>
       widget.activeIndex >= 0 && widget.activeIndex < widget.timedLyrics.length;
+  bool get _canReturnToActiveLyric => _hasTimedLyrics && _hasActiveTimedLine;
 
   @override
   void initState() {
@@ -80,7 +85,10 @@ class _LyricsSectionState extends State<LyricsSection> {
       _lastAutoScrolledIndex = -1;
       _pendingAutoScrollIndex = null;
       _isAutoScrolling = false;
+      _manualFollowPaused = false;
       _highlightSyncTimer?.cancel();
+      _manualFollowResumeTimer?.cancel();
+      _manualFollowResumeTimer = null;
       return;
     }
 
@@ -95,7 +103,10 @@ class _LyricsSectionState extends State<LyricsSection> {
       _lastAutoScrolledIndex = -1;
       _pendingAutoScrollIndex = null;
       _isAutoScrolling = false;
+      _manualFollowPaused = false;
       _highlightSyncTimer?.cancel();
+      _manualFollowResumeTimer?.cancel();
+      _manualFollowResumeTimer = null;
       // Jump to top instantly on track change — no visible scroll-back.
       if (!usesDesktopStage && _scrollController.hasClients) {
         _scrollController.jumpTo(0);
@@ -117,6 +128,7 @@ class _LyricsSectionState extends State<LyricsSection> {
   @override
   void dispose() {
     _highlightSyncTimer?.cancel();
+    _manualFollowResumeTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -282,21 +294,70 @@ class _LyricsSectionState extends State<LyricsSection> {
     final position = _scrollController.position;
     final minScrollExtent = position.minScrollExtent;
     final maxScrollExtent = position.maxScrollExtent;
-    final maxIndex = widget.timedLyrics.length - 1;
-    if (maxIndex <= 0) return minScrollExtent;
+    final lineCount = widget.timedLyrics.length;
+    if (lineCount <= 1) return minScrollExtent;
 
-    // Estimate by list progress instead of a fixed line height so large
-    // jumps, such as after a tab resumes, do not overshoot to the bottom.
-    final progress = index / maxIndex;
-    final target =
-        (minScrollExtent + (maxScrollExtent - minScrollExtent) * progress)
-            .clamp(minScrollExtent, maxScrollExtent)
-            .toDouble();
+    final viewportHeight = position.viewportDimension;
+    final estimatedContentHeight = maxScrollExtent - minScrollExtent +
+        viewportHeight -
+        56; // ListView vertical padding.
+    final estimatedLineStride = estimatedContentHeight / lineCount;
+    final estimatedLineCenter = 28 + estimatedLineStride * (index + 0.5);
+    final target = (estimatedLineCenter - viewportHeight * _mobileFollowAnchor)
+        .clamp(minScrollExtent, maxScrollExtent)
+        .toDouble();
     return target;
   }
 
+  void _pauseManualFollow() {
+    _manualFollowResumeTimer?.cancel();
+    _manualFollowResumeTimer = Timer(_manualFollowResumeDelay, () {
+      _resumeManualFollow(scrollToActive: true);
+    });
+
+    if (_manualFollowPaused) return;
+    setState(() {
+      _manualFollowPaused = true;
+    });
+  }
+
+  void _resumeManualFollow({required bool scrollToActive}) {
+    _manualFollowResumeTimer?.cancel();
+    _manualFollowResumeTimer = null;
+    _pendingAutoScrollIndex = null;
+
+    if (mounted && _manualFollowPaused) {
+      setState(() {
+        _manualFollowPaused = false;
+      });
+    } else {
+      _manualFollowPaused = false;
+    }
+
+    if (scrollToActive) {
+      _scheduleAutoScrollToActive(force: true);
+    }
+  }
+
+  bool _handleMobileFollowScrollNotification(ScrollNotification notification) {
+    if (_isAutoScrolling || notification.depth != 0) return false;
+
+    final isManualScroll = switch (notification) {
+      UserScrollNotification(direction: final direction) =>
+        direction != ScrollDirection.idle,
+      ScrollUpdateNotification(dragDetails: final dragDetails) =>
+        dragDetails != null,
+      _ => false,
+    };
+
+    if (isManualScroll) {
+      _pauseManualFollow();
+    }
+    return false;
+  }
+
   void _scheduleAutoScrollToActive({bool force = false}) {
-    if (!_hasTimedLyrics) return;
+    if (!_hasTimedLyrics || _manualFollowPaused) return;
 
     final activeIndex = widget.activeIndex;
     if (activeIndex < 0 || activeIndex >= widget.timedLyrics.length) return;
@@ -313,6 +374,7 @@ class _LyricsSectionState extends State<LyricsSection> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
+      if (_manualFollowPaused) return;
 
       final targetIndex = widget.activeIndex;
       if (targetIndex < 0 || targetIndex >= widget.timedLyrics.length) return;
@@ -330,7 +392,7 @@ class _LyricsSectionState extends State<LyricsSection> {
             .whenComplete(() {
           if (!mounted) return;
           _isAutoScrolling = false;
-          _pendingAutoScrollIndex = targetIndex;
+          _pendingAutoScrollIndex = widget.activeIndex;
           _scheduleAutoScrollToActive(force: true);
         });
         return;
@@ -357,13 +419,25 @@ class _LyricsSectionState extends State<LyricsSection> {
 
       final targetOffset = (_scrollController.offset +
               (lineTop + lineBottom) / 2 -
-              viewportHeight * 0.42)
+              viewportHeight * _mobileFollowAnchor)
           .clamp(
         _scrollController.position.minScrollExtent,
         _scrollController.position.maxScrollExtent,
       );
 
       _isAutoScrolling = true;
+      if (force) {
+        _scrollController.jumpTo(targetOffset);
+        _isAutoScrolling = false;
+        _lastAutoScrolledIndex = targetIndex;
+        final pendingIndex = _pendingAutoScrollIndex;
+        _pendingAutoScrollIndex = null;
+        if (pendingIndex != null && pendingIndex != _lastAutoScrolledIndex) {
+          _scheduleAutoScrollToActive(force: true);
+        }
+        return;
+      }
+
       _scrollController
           .animateTo(
         targetOffset,
@@ -408,34 +482,7 @@ class _LyricsSectionState extends State<LyricsSection> {
             return _buildDesktopStage(constraints);
           }
 
-          return _buildLyricsContainer(
-            child: Scrollbar(
-              controller: _scrollController,
-              thumbVisibility: true,
-              child: ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                itemCount: widget.timedLyrics.length,
-                itemBuilder: (context, index) {
-                  return Padding(
-                    padding: EdgeInsets.only(
-                      top: index == 0 ? 0 : _mobileLineSpacing,
-                    ),
-                    child: _LyricLineItem(
-                      lineKey: _keyForLine(index),
-                      activeMarkerKey: null,
-                      activeGlowKey: null,
-                      line: widget.timedLyrics[index],
-                      isActive: index == _displayedActiveIndex,
-                      visualStyle: _mobileVisualStyleForIndex(index),
-                      animationDuration: _lyricsAnimationDuration,
-                      animationCurve: _lyricsAnimationCurve,
-                    ),
-                  );
-                },
-              ),
-            ),
-          );
+          return _buildMobileFollowScroll();
         },
       );
     }
@@ -454,6 +501,61 @@ class _LyricsSectionState extends State<LyricsSection> {
                 ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildMobileFollowScroll() {
+    return _buildLyricsContainer(
+      child: Stack(
+        key: const ValueKey<String>('mobile-lyrics-follow-scroll'),
+        children: [
+          NotificationListener<ScrollNotification>(
+            onNotification: _handleMobileFollowScrollNotification,
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.symmetric(vertical: 28),
+              itemCount: widget.timedLyrics.length,
+              itemBuilder: (context, index) {
+                return Padding(
+                  padding: EdgeInsets.only(
+                    top: index == 0 ? 0 : _mobileLineSpacing,
+                  ),
+                  child: KeyedSubtree(
+                    key: ValueKey<String>('lyrics-line-$index'),
+                    child: _LyricLineItem(
+                      lineKey: _keyForLine(index),
+                      activeMarkerKey: index == _displayedActiveIndex
+                          ? ValueKey<String>('lyrics-line-active-$index')
+                          : null,
+                      activeGlowKey: null,
+                      line: widget.timedLyrics[index],
+                      isActive: index == _displayedActiveIndex,
+                      visualStyle: _mobileVisualStyleForIndex(index),
+                      animationDuration: _lyricsAnimationDuration,
+                      animationCurve: _lyricsAnimationCurve,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          if (_manualFollowPaused && _canReturnToActiveLyric)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 16,
+              child: Center(
+                child: FilledButton.tonal(
+                  key: const ValueKey<String>('mobile-lyrics-return-current'),
+                  onPressed: () {
+                    _resumeManualFollow(scrollToActive: true);
+                  },
+                  child: const Text('回到当前歌词'),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
