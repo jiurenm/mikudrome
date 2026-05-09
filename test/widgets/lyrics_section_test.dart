@@ -469,6 +469,92 @@ void main() {
   );
 
   testWidgets(
+    'mobile timed lyrics render a tighter lyric stack on app runtimes',
+    (tester) async {
+      final timedLyrics = <TimedLyricLine>[
+        const TimedLyricLine(
+          start: Duration.zero,
+          texts: <String>['Primary line', 'Translated line'],
+        ),
+      ];
+
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: timedLyrics,
+          activeIndex: 0,
+          width: 420,
+          height: 320,
+          platform: TargetPlatform.android,
+        ),
+      );
+      await _pumpMobileLyrics(tester);
+
+      final primaryText = tester.widget<Text>(find.text('Primary line'));
+      final translatedText = tester.widget<Text>(find.text('Translated line'));
+
+      expect(primaryText.style?.fontSize, 18);
+      expect(primaryText.style?.fontWeight, FontWeight.w600);
+      expect(primaryText.style?.height, 1.46);
+      expect(translatedText.style?.fontSize, 13);
+      expect(translatedText.style?.height, 1.1);
+    },
+  );
+
+  testWidgets(
+    'mobile timed lyrics center the lyric block on app runtimes',
+    (tester) async {
+      final timedLyrics = <TimedLyricLine>[
+        const TimedLyricLine(
+          start: Duration.zero,
+          texts: <String>['Primary line', 'Translated line'],
+        ),
+      ];
+
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: timedLyrics,
+          activeIndex: 0,
+          width: 420,
+          height: 320,
+          platform: TargetPlatform.android,
+        ),
+      );
+      await _pumpMobileLyrics(tester);
+
+      final primaryText = tester.widget<Text>(find.text('Primary line'));
+      final translatedText = tester.widget<Text>(find.text('Translated line'));
+
+      expect(primaryText.textAlign, TextAlign.center);
+      expect(translatedText.textAlign, TextAlign.center);
+    },
+  );
+
+  testWidgets(
+    'mobile timed lyrics keep a clearer gap between lyric blocks',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildLyricsSection(
+          timedLyrics: _timedLyrics(3),
+          activeIndex: 1,
+          width: 420,
+          height: 320,
+          platform: TargetPlatform.android,
+        ),
+      );
+      await _pumpMobileLyrics(tester);
+
+      final line0 = tester.getTopLeft(find.byKey(
+        const ValueKey<String>('lyrics-line-0'),
+      ));
+      final line1 = tester.getTopLeft(find.byKey(
+        const ValueKey<String>('lyrics-line-1'),
+      ));
+
+      expect(line1.dy - line0.dy, greaterThan(20));
+    },
+  );
+
+  testWidgets(
     'mobile timed lyrics pause follow on manual scroll and return to current',
     (tester) async {
       final timedLyrics = _timedLyrics(40);

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -26,7 +27,7 @@ class LyricsSection extends StatefulWidget {
 
 class _LyricsSectionState extends State<LyricsSection> {
   static const _lineSpacing = 12.0;
-  static const _mobileLineSpacing = 8.0;
+  static const _mobileLineSpacing = 12.0;
   static const _stageAnimationDuration = Duration(milliseconds: 320);
   static const _stageAnimationCurve = Curves.easeInOut;
   static const _stageAnchor = 0.49;
@@ -58,6 +59,7 @@ class _LyricsSectionState extends State<LyricsSection> {
   bool get _hasActiveTimedLine =>
       widget.activeIndex >= 0 && widget.activeIndex < widget.timedLyrics.length;
   bool get _canReturnToActiveLyric => _hasTimedLyrics && _hasActiveTimedLine;
+  bool get _isAppRuntime => !kIsWeb;
 
   @override
   void initState() {
@@ -531,6 +533,7 @@ class _LyricsSectionState extends State<LyricsSection> {
                       activeGlowKey: null,
                       line: widget.timedLyrics[index],
                       isActive: index == _displayedActiveIndex,
+                      centerText: _isAppRuntime,
                       visualStyle: _mobileVisualStyleForIndex(index),
                       animationDuration: _lyricsAnimationDuration,
                       animationCurve: _lyricsAnimationCurve,
@@ -669,6 +672,7 @@ class _LyricsSectionState extends State<LyricsSection> {
                                 : null,
                             line: widget.timedLyrics[index],
                             isActive: index == _displayedActiveIndex,
+                            centerText: false,
                             visualStyle: _desktopVisualStyleForIndex(index),
                             animationDuration: _lyricsAnimationDuration,
                             animationCurve: _lyricsAnimationCurve,
@@ -744,6 +748,64 @@ class _LyricsSectionState extends State<LyricsSection> {
   }
 
   _LyricLineVisualStyle _mobileVisualStyleForIndex(int index) {
+    if (!_isAppRuntime) {
+      final distance = _displayedActiveIndex < 0
+          ? null
+          : (index - _displayedActiveIndex).abs();
+      return switch (distance) {
+        null => const _LyricLineVisualStyle(
+            primaryAlpha: 0.82,
+            secondaryAlpha: 0.4264,
+            primaryFontWeight: FontWeight.w400,
+            secondaryFontWeight: FontWeight.w400,
+            primaryFontSize: 22,
+            secondaryFontSize: 15,
+            primaryLineHeight: 1.7,
+            secondaryLineHeight: 1.18,
+          ),
+        0 => const _LyricLineVisualStyle(
+            primaryAlpha: 1.0,
+            secondaryAlpha: 0.62,
+            primaryFontWeight: FontWeight.w700,
+            secondaryFontWeight: FontWeight.w400,
+            primaryFontSize: 22,
+            secondaryFontSize: 15,
+            primaryLineHeight: 1.7,
+            secondaryLineHeight: 1.18,
+          ),
+        1 => const _LyricLineVisualStyle(
+            primaryAlpha: 0.72,
+            secondaryAlpha: 0.3744,
+            primaryFontWeight: FontWeight.w500,
+            secondaryFontWeight: FontWeight.w500,
+            primaryFontSize: 22,
+            secondaryFontSize: 15,
+            primaryLineHeight: 1.7,
+            secondaryLineHeight: 1.18,
+          ),
+        2 => const _LyricLineVisualStyle(
+            primaryAlpha: 0.56,
+            secondaryAlpha: 0.2912,
+            primaryFontWeight: FontWeight.w400,
+            secondaryFontWeight: FontWeight.w400,
+            primaryFontSize: 22,
+            secondaryFontSize: 15,
+            primaryLineHeight: 1.7,
+            secondaryLineHeight: 1.18,
+          ),
+        _ => const _LyricLineVisualStyle(
+            primaryAlpha: 0.36,
+            secondaryAlpha: 0.1872,
+            primaryFontWeight: FontWeight.w400,
+            secondaryFontWeight: FontWeight.w400,
+            primaryFontSize: 22,
+            secondaryFontSize: 15,
+            primaryLineHeight: 1.7,
+            secondaryLineHeight: 1.18,
+          ),
+      };
+    }
+
     final distance = _displayedActiveIndex < 0
         ? null
         : (index - _displayedActiveIndex).abs();
@@ -753,50 +815,50 @@ class _LyricsSectionState extends State<LyricsSection> {
           secondaryAlpha: 0.4264,
           primaryFontWeight: FontWeight.w400,
           secondaryFontWeight: FontWeight.w400,
-          primaryFontSize: 22,
-          secondaryFontSize: 15,
-          primaryLineHeight: 1.7,
-          secondaryLineHeight: 1.18,
+          primaryFontSize: 18,
+          secondaryFontSize: 13,
+          primaryLineHeight: 1.46,
+          secondaryLineHeight: 1.1,
         ),
       0 => const _LyricLineVisualStyle(
           primaryAlpha: 1.0,
           secondaryAlpha: 0.62,
-          primaryFontWeight: FontWeight.w700,
+          primaryFontWeight: FontWeight.w600,
           secondaryFontWeight: FontWeight.w400,
-          primaryFontSize: 22,
-          secondaryFontSize: 15,
-          primaryLineHeight: 1.7,
-          secondaryLineHeight: 1.18,
+          primaryFontSize: 18,
+          secondaryFontSize: 13,
+          primaryLineHeight: 1.46,
+          secondaryLineHeight: 1.1,
         ),
       1 => const _LyricLineVisualStyle(
           primaryAlpha: 0.72,
           secondaryAlpha: 0.3744,
           primaryFontWeight: FontWeight.w500,
           secondaryFontWeight: FontWeight.w500,
-          primaryFontSize: 22,
-          secondaryFontSize: 15,
-          primaryLineHeight: 1.7,
-          secondaryLineHeight: 1.18,
+          primaryFontSize: 18,
+          secondaryFontSize: 13,
+          primaryLineHeight: 1.46,
+          secondaryLineHeight: 1.1,
         ),
       2 => const _LyricLineVisualStyle(
           primaryAlpha: 0.56,
           secondaryAlpha: 0.2912,
           primaryFontWeight: FontWeight.w400,
           secondaryFontWeight: FontWeight.w400,
-          primaryFontSize: 22,
-          secondaryFontSize: 15,
-          primaryLineHeight: 1.7,
-          secondaryLineHeight: 1.18,
+          primaryFontSize: 17,
+          secondaryFontSize: 12,
+          primaryLineHeight: 1.42,
+          secondaryLineHeight: 1.08,
         ),
       _ => const _LyricLineVisualStyle(
           primaryAlpha: 0.36,
           secondaryAlpha: 0.1872,
           primaryFontWeight: FontWeight.w400,
           secondaryFontWeight: FontWeight.w400,
-          primaryFontSize: 22,
-          secondaryFontSize: 15,
-          primaryLineHeight: 1.7,
-          secondaryLineHeight: 1.18,
+          primaryFontSize: 17,
+          secondaryFontSize: 12,
+          primaryLineHeight: 1.42,
+          secondaryLineHeight: 1.08,
         ),
     };
   }
@@ -841,6 +903,7 @@ class _LyricLineItem extends StatelessWidget {
     required this.activeGlowKey,
     required this.line,
     required this.isActive,
+    required this.centerText,
     required this.visualStyle,
     required this.animationDuration,
     required this.animationCurve,
@@ -851,6 +914,7 @@ class _LyricLineItem extends StatelessWidget {
   final Key? activeGlowKey;
   final TimedLyricLine line;
   final bool isActive;
+  final bool centerText;
   final _LyricLineVisualStyle visualStyle;
   final Duration animationDuration;
   final Curve animationCurve;
@@ -878,7 +942,9 @@ class _LyricLineItem extends StatelessWidget {
       ),
     ];
     Widget content = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment:
+          centerText ? CrossAxisAlignment.center : CrossAxisAlignment.start,
       children: [
         for (var textIndex = 0; textIndex < line.texts.length; textIndex++)
           TweenAnimationBuilder<Color?>(
@@ -900,6 +966,7 @@ class _LyricLineItem extends StatelessWidget {
             builder: (context, color, child) {
               return Text(
                 line.texts[textIndex],
+                textAlign: centerText ? TextAlign.center : TextAlign.start,
                 style: baseStyle.copyWith(
                   color: color,
                   height: line.texts.length > 1
@@ -927,7 +994,7 @@ class _LyricLineItem extends StatelessWidget {
         child: AnimatedScale(
           duration: animationDuration,
           curve: animationCurve,
-          alignment: Alignment.centerLeft,
+          alignment: centerText ? Alignment.center : Alignment.centerLeft,
           scale: 1.1,
           child: content,
         ),
@@ -936,13 +1003,18 @@ class _LyricLineItem extends StatelessWidget {
 
     return Container(
       key: lineKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (activeMarkerKey != null)
-            SizedBox(key: activeMarkerKey, width: 0, height: 0),
-          content,
-        ],
+      child: Align(
+        alignment: centerText ? Alignment.center : Alignment.centerLeft,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment:
+              centerText ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+          children: [
+            if (activeMarkerKey != null)
+              SizedBox(key: activeMarkerKey, width: 0, height: 0),
+            content,
+          ],
+        ),
       ),
     );
   }
