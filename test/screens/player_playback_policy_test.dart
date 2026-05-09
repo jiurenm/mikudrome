@@ -1,8 +1,32 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/screens/library_home_screen.dart';
 import 'package:mikudrome/screens/player_playback_policy.dart';
 
+const _trackWithVideo = Track(
+  id: 1,
+  title: 'Track with MV',
+  audioPath: '/audio/1.flac',
+  videoPath: '/video/1.mp4',
+);
+
 void main() {
+  group('defaultPlaybackModeForTrack', () {
+    test('uses audio by default on mobile even when the track has an MV', () {
+      expect(
+        defaultPlaybackModeForTrack(_trackWithVideo, isMobileSurface: true),
+        PlaybackMode.audio,
+      );
+    });
+
+    test('keeps MV as the desktop default when the track has an MV', () {
+      expect(
+        defaultPlaybackModeForTrack(_trackWithVideo, isMobileSurface: false),
+        PlaybackMode.video,
+      );
+    });
+  });
+
   group('didPlaybackReachEnd', () {
     test('treats completed state as ended even before position catches up', () {
       expect(

@@ -47,6 +47,17 @@ enum PlaybackMode { video, audio }
 enum PlaybackOrderMode { sequential, listLoop, singleLoop }
 
 @visibleForTesting
+PlaybackMode defaultPlaybackModeForTrack(
+  Track track, {
+  required bool isMobileSurface,
+}) {
+  if (isMobileSurface) {
+    return PlaybackMode.audio;
+  }
+  return track.hasVideo ? PlaybackMode.video : PlaybackMode.audio;
+}
+
+@visibleForTesting
 Future<void> routeMobileAudioPlaybackForMode({
   required bool isMobile,
   required PlaybackMode playbackMode,
@@ -609,8 +620,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     }
   }
 
-  PlaybackMode _defaultModeForTrack(Track track) =>
-      track.hasVideo ? PlaybackMode.video : PlaybackMode.audio;
+  PlaybackMode _defaultModeForTrack(Track track) => defaultPlaybackModeForTrack(
+    track,
+    isMobileSurface: _isMobilePlaybackSurface,
+  );
 
   bool get _canUseSharedWebAudio =>
       _playbackMode == PlaybackMode.audio &&
