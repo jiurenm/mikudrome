@@ -19,7 +19,7 @@ import 'endpoints.dart';
 /// Use [ApiConfig.defaultBaseUrl] or pass a custom [baseUrl].
 class ApiClient {
   ApiClient({String? baseUrl, String? serverCookie})
-    : _baseUrl = baseUrl,
+    : _baseUrl = _normalizeBaseUrl(baseUrl),
       _serverCookie = serverCookie?.trim();
 
   final String? _baseUrl;
@@ -28,6 +28,14 @@ class ApiClient {
   String get baseUrl => _baseUrl ?? ApiConfig.defaultBaseUrl;
 
   String _url(String path) => '$baseUrl$path';
+
+  static String? _normalizeBaseUrl(String? baseUrl) {
+    final trimmed = baseUrl?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
+  }
 
   Map<String, String> headersForRequest([Map<String, String>? headers]) {
     final merged = <String, String>{...ApiConfig.defaultHeaders};
