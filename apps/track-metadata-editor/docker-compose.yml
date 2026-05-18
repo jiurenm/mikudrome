@@ -1,0 +1,9 @@
+services:
+  track-metadata-editor:
+    build:
+      context: .
+    environment:
+      API_BASE_URL: ${API_BASE_URL:-}
+      API_COOKIE: ${API_COOKIE:-}
+    ports:
+      - "4173:80"
