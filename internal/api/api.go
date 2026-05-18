@@ -59,6 +59,17 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.getLibraryRescanStatus(w, r)
 		return
 	}
+	if r.URL.Path == "/api/playback/history" {
+		switch r.Method {
+		case http.MethodGet:
+			h.listPlaybackHistory(w, r)
+		case http.MethodPost:
+			h.savePlaybackHistory(w, r)
+		default:
+			jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+		return
+	}
 	if r.URL.Path == "/api/tracks" && r.Method == http.MethodGet {
 		h.listTracks(w, r)
 		return

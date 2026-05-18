@@ -9,9 +9,11 @@ import '../models/producer.dart';
 import '../models/playlist.dart';
 import '../models/playlist_detail_data.dart';
 import '../models/playlist_group.dart';
+import '../models/playback_history_item.dart';
 import '../models/track.dart';
 import '../models/video.dart';
 import '../models/vocalist.dart';
+import '../screens/library_home_screen.dart';
 import 'config.dart';
 import 'endpoints.dart';
 
@@ -351,6 +353,48 @@ class ApiClient {
     if (res.statusCode != 204) {
       throw ApiException('Failed to remove favorite', res.statusCode);
     }
+  }
+
+  // --- Playback history ---
+
+  Future<void> savePlaybackHistory({
+    required int trackId,
+    required int positionMs,
+    required int durationMs,
+    required PlaybackMode mode,
+    required String contextLabel,
+  }) async {
+    final res = await http.post(
+      Uri.parse(_url(ApiEndpoints.playbackHistory)),
+      headers: headersForRequest({'Content-Type': 'application/json'}),
+      body: jsonEncode({
+        'track_id': trackId,
+        'position_ms': positionMs,
+        'duration_ms': durationMs,
+        'playback_mode': mode.name,
+        'context_label': contextLabel,
+      }),
+    );
+    if (res.statusCode != 204) {
+      throw ApiException('Failed to save playback history', res.statusCode);
+    }
+  }
+
+  Future<List<PlaybackHistoryItem>> getPlaybackHistory({int limit = 50}) async {
+    final uri = Uri.parse(
+      _url(ApiEndpoints.playbackHistory),
+    ).replace(queryParameters: {'limit': limit.toString()});
+    final res = await http.get(uri, headers: headersForRequest());
+    if (res.statusCode != 200) {
+      throw ApiException('Failed to load playback history', res.statusCode);
+    }
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    final list = data['items'] as List<dynamic>? ?? [];
+    return list
+        .map(
+          (item) => PlaybackHistoryItem.fromJson(item as Map<String, dynamic>),
+        )
+        .toList();
   }
 
   // --- Playlists ---

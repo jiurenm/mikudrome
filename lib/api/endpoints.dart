@@ -41,6 +41,9 @@ abstract final class ApiEndpoints {
   static const String favorites = '$_prefix/favorites';
   static String favorite(int trackId) => '$_prefix/favorites/$trackId';
 
+  // Playback
+  static const String playbackHistory = '$_prefix/playback/history';
+
   // Playlists
   static const String playlists = '$_prefix/playlists';
   static String playlist(int id) => '$_prefix/playlists/$id';

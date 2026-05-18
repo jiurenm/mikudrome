@@ -247,6 +247,27 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       orderMode: _playbackOrderMode,
       contextLabel: _playerContextLabel,
     );
+    _savePlaybackHistoryToCloud();
+  }
+
+  void _savePlaybackHistoryToCloud() {
+    final track = _currentTrack;
+    if (track == null || track.id <= 0) return;
+    final durationMs = max(0, track.durationSeconds * 1000);
+    final positionMs = durationMs == 0
+        ? 0
+        : (durationMs * _playbackProgress.clamp(0.0, 1.0)).round();
+    unawaited(
+      ApiClient()
+          .savePlaybackHistory(
+            trackId: track.id,
+            positionMs: positionMs,
+            durationMs: durationMs,
+            mode: _playbackMode,
+            contextLabel: _playerContextLabel,
+          )
+          .catchError((_) {}),
+    );
   }
 
   Track? get _currentTrack {

@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/api/api_client.dart';
 import 'package:mikudrome/api/config.dart';
+import 'package:mikudrome/screens/library_home_screen.dart';
 
 void main() {
   tearDown(ApiConfig.resetRuntimeConfigForTests);
@@ -21,6 +22,85 @@ void main() {
     expect(httpClient.requests, [
       'POST http://192.168.1.10:8080/api/favorites/7',
     ]);
+  });
+
+  test('savePlaybackHistory posts expected JSON payload', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(server.close);
+    final requestBody = Completer<Map<String, dynamic>>();
+    unawaited(
+      server.listen((request) async {
+        expect(request.method, 'POST');
+        expect(request.uri.path, '/api/playback/history');
+        expect(request.headers.contentType?.mimeType, 'application/json');
+        requestBody.complete(
+          jsonDecode(await utf8.decoder.bind(request).join())
+              as Map<String, dynamic>,
+        );
+        request.response.statusCode = HttpStatus.noContent;
+        await request.response.close();
+      }).asFuture<void>(),
+    );
+    final client = ApiClient(baseUrl: 'http://127.0.0.1:${server.port}');
+
+    await client.savePlaybackHistory(
+      trackId: 7,
+      positionMs: 12000,
+      durationMs: 30000,
+      mode: PlaybackMode.video,
+      contextLabel: 'Album / Test',
+    );
+
+    expect(await requestBody.future, {
+      'track_id': 7,
+      'position_ms': 12000,
+      'duration_ms': 30000,
+      'playback_mode': 'video',
+      'context_label': 'Album / Test',
+    });
+  });
+
+  test('getPlaybackHistory decodes items', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(server.close);
+    unawaited(
+      server.listen((request) async {
+        expect(request.method, 'GET');
+        expect(request.uri.path, '/api/playback/history');
+        expect(request.uri.queryParameters['limit'], '1');
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(
+          jsonEncode({
+            'items': [
+              {
+                'track': {
+                  'id': 7,
+                  'title': 'Track',
+                  'audio_path': '/track.flac',
+                },
+                'position_ms': 12000,
+                'duration_ms': 30000,
+                'playback_mode': 'audio',
+                'context_label': 'Album / Test',
+                'played_at': 1779072000,
+              },
+            ],
+          }),
+        );
+        await request.response.close();
+      }).asFuture<void>(),
+    );
+    final client = ApiClient(baseUrl: 'http://127.0.0.1:${server.port}');
+
+    final items = await client.getPlaybackHistory(limit: 1);
+
+    expect(items, hasLength(1));
+    expect(items.single.track.id, 7);
+    expect(items.single.positionMs, 12000);
+    expect(items.single.durationMs, 30000);
+    expect(items.single.mode, PlaybackMode.audio);
+    expect(items.single.contextLabel, 'Album / Test');
+    expect(items.single.playedAt, 1779072000);
   });
 }
 

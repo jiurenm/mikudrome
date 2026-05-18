@@ -70,6 +70,28 @@ type Track struct {
 	FileSize         int64  `json:"-"` // File size in bytes
 }
 
+const playbackHistoryMaxRows = 200
+
+// PlaybackHistoryUpdate is the client-reported state for one library track.
+type PlaybackHistoryUpdate struct {
+	TrackID      int64
+	PositionMS   int64
+	DurationMS   int64
+	PlaybackMode string
+	ContextLabel string
+	PlayedAt     int64
+}
+
+// PlaybackHistoryItem is a recently played row joined with its track.
+type PlaybackHistoryItem struct {
+	Track        Track  `json:"track"`
+	PositionMS   int64  `json:"position_ms"`
+	DurationMS   int64  `json:"duration_ms"`
+	PlaybackMode string `json:"playback_mode"`
+	ContextLabel string `json:"context_label"`
+	PlayedAt     int64  `json:"played_at"`
+}
+
 type trackScanner interface {
 	Scan(dest ...any) error
 }
@@ -359,6 +381,18 @@ func migrate(db *sql.DB) error {
 			ON playlist_items(playlist_id);
 		CREATE INDEX IF NOT EXISTS idx_playlist_items_group_order
 			ON playlist_items(group_id, position);
+
+		CREATE TABLE IF NOT EXISTS playback_history (
+			track_id      INTEGER PRIMARY KEY
+			              REFERENCES tracks(id) ON DELETE CASCADE,
+			position_ms   INTEGER NOT NULL DEFAULT 0,
+			duration_ms   INTEGER NOT NULL DEFAULT 0,
+			playback_mode TEXT NOT NULL DEFAULT 'audio',
+			context_label TEXT NOT NULL DEFAULT '',
+			played_at     INTEGER NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_playback_history_played_at
+			ON playback_history(played_at DESC);
 	`)
 	if err != nil {
 		return err

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mikudrome/config/app_config_controller.dart';
+import 'package:mikudrome/services/playback_storage.dart';
 import 'package:mikudrome/theme/app_theme.dart';
 import 'package:mikudrome/widgets/app_root.dart';
 
@@ -12,6 +13,7 @@ _bundledFonts = <({String family, String assetPath})>[
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await PlaybackStorage.ensureInitialized();
   await loadBundledFonts();
   final appConfigController = AppConfigController();
   await appConfigController.load();

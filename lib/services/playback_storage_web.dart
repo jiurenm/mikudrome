@@ -22,6 +22,8 @@ class PlaybackStorage {
     }
   }
 
+  static Future<void> ensureInitialized() async {}
+
   static void save({
     required List<Track> queue,
     required int index,
