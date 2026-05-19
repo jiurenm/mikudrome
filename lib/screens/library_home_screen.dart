@@ -24,6 +24,7 @@ import 'player_screen.dart';
 import 'producer_detail_screen.dart';
 import 'mv_gallery_screen.dart';
 import 'producers_screen.dart';
+import 'recent_playback_screen.dart';
 import 'vocalist_detail_screen.dart';
 import 'vocalists_screen.dart';
 import 'player_playback_policy.dart';
@@ -426,6 +427,19 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
           currentPlayingTrackId: _currentTrack?.id,
           isPlaying: _isPlaying,
         );
+      case ShellRoute.recentPlayed:
+        return RecentPlaybackScreen(
+          onBack: _mobileHistory.isNotEmpty ? _handleMobileBack : null,
+          onPlayTrack: (track) => _openPlayerForQueue(
+            track: track,
+            queue: [track],
+            index: 0,
+            contextLabel: '最近播放',
+          ),
+          onAddToQueue: _addTrackToCurrentQueue,
+          currentPlayingTrackId: _currentTrack?.id,
+          isPlaying: _isPlaying,
+        );
       case ShellRoute.localMv:
         return MvGalleryScreen(onVideoTap: _playVideo);
       case ShellRoute.more:
@@ -568,7 +582,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
                 setState(() {
                   _mobileTab = switch (route) {
                     ShellRoute.favorites ||
-                    ShellRoute.playlists => MobileAppTab.myMusic,
+                    ShellRoute.playlists ||
+                    ShellRoute.recentPlayed => MobileAppTab.myMusic,
                     _ => MobileAppTab.discover,
                   };
                   _route = route;
@@ -867,6 +882,16 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     } else if (_canUseSharedWebAudio) {
       unawaited(_activateSharedWebAudioTrack(nextTrack));
     }
+  }
+
+  void _addTrackToCurrentQueue(Track track) {
+    if (_playerQueue.any((item) => item.id == track.id)) return;
+    setState(() {
+      _playerQueue = [..._playerQueue, track];
+      _orderedPlayerQueue = null;
+    });
+    _savePlaybackState();
+    unawaited(_syncMobileAudioQueuePreservingProgress());
   }
 
   void _cyclePlaybackOrderMode() {
@@ -1257,7 +1282,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       final bottomPadding = MediaQuery.of(context).padding.bottom + 56;
 
       final showMyMusicContent =
-          _route == ShellRoute.favorites || _route == ShellRoute.playlists;
+          _route == ShellRoute.favorites ||
+          _route == ShellRoute.playlists ||
+          _route == ShellRoute.recentPlayed;
       final appShell = MobileAppShell(
         currentTab: _mobileTab,
         onTabChanged: _selectMobileTab,

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mikudrome/api/api_client.dart';
+import 'package:mikudrome/models/playback_history_item.dart';
 import 'package:mikudrome/models/playlist.dart';
 import 'package:mikudrome/models/track.dart';
+import 'package:mikudrome/screens/library_home_screen.dart';
 import 'package:mikudrome/widgets/app_shell.dart';
 import 'package:mikudrome/widgets/my_music_screen.dart';
 
@@ -67,6 +70,42 @@ void main() {
     expect(find.text('暂无最近播放记录'), findsNothing);
   });
 
+  testWidgets('shows latest cloud playback history in recent section', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MyMusicScreen(
+            client: _PlaybackHistoryClient([
+              const PlaybackHistoryItem(
+                track: Track(
+                  id: 9,
+                  title: 'メルト',
+                  audioPath: '/music/melt.mp3',
+                  videoPath: '',
+                  composer: 'ryo',
+                  vocal: '初音ミク',
+                ),
+                positionMs: 12000,
+                durationMs: 240000,
+                mode: PlaybackMode.audio,
+                contextLabel: 'Album',
+                playedAt: 1779072000,
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('メルト'), findsOneWidget);
+    expect(find.text('ryo feat. 初音ミク'), findsOneWidget);
+    expect(find.text('暂无最近播放记录'), findsNothing);
+  });
+
   testWidgets('opens playlist detail from created playlist card', (
     tester,
   ) async {
@@ -129,4 +168,15 @@ void main() {
     expect(firstCardSize.width, lessThanOrEqualTo(116));
     expect(firstCardSize.height, firstCardSize.width);
   });
+}
+
+class _PlaybackHistoryClient extends ApiClient {
+  _PlaybackHistoryClient(this.items);
+
+  final List<PlaybackHistoryItem> items;
+
+  @override
+  Future<List<PlaybackHistoryItem>> getPlaybackHistory({int limit = 50}) async {
+    return items.take(limit).toList();
+  }
 }

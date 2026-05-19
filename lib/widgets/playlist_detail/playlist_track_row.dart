@@ -14,6 +14,7 @@ class PlaylistTrackRow extends StatefulWidget {
     required this.onTap,
     this.onEdit,
     this.onRemove,
+    this.onAddToQueue,
     this.showDragHandle = false,
     this.dragHandle,
     this.desktopTitleWidth,
@@ -28,6 +29,7 @@ class PlaylistTrackRow extends StatefulWidget {
     required this.onTap,
     this.onEdit,
     this.onRemove,
+    this.onAddToQueue,
     this.showDragHandle = false,
     this.dragHandle,
     this.desktopTitleWidth,
@@ -41,6 +43,7 @@ class PlaylistTrackRow extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback? onEdit;
   final VoidCallback? onRemove;
+  final VoidCallback? onAddToQueue;
   final bool showDragHandle;
   final Widget? dragHandle;
   final double? desktopTitleWidth;
@@ -297,11 +300,12 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
                   ),
                   const SizedBox(width: 8),
                 ],
-                if (widget.onRemove != null)
+                if (widget.onRemove != null || widget.onAddToQueue != null)
                   Semantics(
                     label: 'More options',
                     button: true,
                     child: PopupMenuButton<String>(
+                      tooltip: '更多操作',
                       icon: const Icon(
                         Icons.more_horiz,
                         color: AppTheme.textMuted,
@@ -316,28 +320,51 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
                       onSelected: (value) {
                         if (value == 'remove') {
                           widget.onRemove?.call();
+                        } else if (value == 'add_to_queue') {
+                          widget.onAddToQueue?.call();
                         }
                       },
                       itemBuilder: (context) => [
-                        PopupMenuItem<String>(
-                          value: 'remove',
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.remove_circle_outline,
-                                size: 18,
-                                color: AppTheme.textMuted,
-                              ),
-                              const SizedBox(width: 12),
-                              Flexible(
-                                child: Text(
-                                  widget.removeLabel,
-                                  overflow: TextOverflow.ellipsis,
+                        if (widget.onAddToQueue != null)
+                          const PopupMenuItem<String>(
+                            value: 'add_to_queue',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.queue_music,
+                                  size: 18,
+                                  color: AppTheme.textMuted,
                                 ),
-                              ),
-                            ],
+                                SizedBox(width: 12),
+                                Flexible(
+                                  child: Text(
+                                    '加入当前队列',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
+                        if (widget.onRemove != null)
+                          PopupMenuItem<String>(
+                            value: 'remove',
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.remove_circle_outline,
+                                  size: 18,
+                                  color: AppTheme.textMuted,
+                                ),
+                                const SizedBox(width: 12),
+                                Flexible(
+                                  child: Text(
+                                    widget.removeLabel,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
                   ),

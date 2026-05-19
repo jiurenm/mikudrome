@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
 import '../api/config.dart';
+import '../models/playback_history_item.dart';
 import '../models/playlist.dart';
 import '../models/track.dart';
 import '../services/playlist_repository.dart';
@@ -88,6 +89,11 @@ class _MyMusicContent extends StatelessWidget {
     final playlistTap = onNavigate == null
         ? null
         : () => onNavigate?.call(ShellRoute.playlists);
+    final recentPlayedTap =
+        onRecentPlayed ??
+        (onNavigate == null
+            ? null
+            : () => onNavigate?.call(ShellRoute.recentPlayed));
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 22, 16, 96),
@@ -129,7 +135,7 @@ class _MyMusicContent extends StatelessWidget {
               iconColor: const Color(0xFF48A9D8),
               title: '最近播放',
               subtitle: '继续听歌',
-              onTap: onRecentPlayed ?? onQueue,
+              onTap: recentPlayedTap,
             ),
             const _QuickActionCard(
               icon: Icons.download_rounded,
@@ -140,16 +146,17 @@ class _MyMusicContent extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 24),
-        _SectionHeader(title: '最近播放', actionLabel: '更多', onTap: onQueue),
+        _SectionHeader(
+          title: '最近播放',
+          actionLabel: '更多',
+          onTap: recentPlayedTap,
+        ),
         const SizedBox(height: 10),
-        if (currentTrack == null)
-          _RecentPlaceholder(onTap: onQueue)
-        else
-          _RecentTrackCard(
-            track: currentTrack!,
-            client: client,
-            onTap: onQueue,
-          ),
+        _RecentPlaybackSection(
+          client: client,
+          currentTrack: currentTrack,
+          onTap: onQueue,
+        ),
         const SizedBox(height: 24),
         _SectionHeader(title: '创建的歌单', onTap: playlistTap),
         const SizedBox(height: 12),
@@ -176,6 +183,33 @@ class _MyMusicContent extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _RecentPlaybackSection extends StatelessWidget {
+  const _RecentPlaybackSection({
+    required this.client,
+    this.currentTrack,
+    this.onTap,
+  });
+
+  final ApiClient client;
+  final Track? currentTrack;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<PlaybackHistoryItem>>(
+      future: client.getPlaybackHistory(limit: 1),
+      builder: (context, snapshot) {
+        final historyTrack = snapshot.data?.firstOrNull?.track;
+        final track = historyTrack ?? currentTrack;
+        if (track == null) {
+          return _RecentPlaceholder(onTap: onTap);
+        }
+        return _RecentTrackCard(track: track, client: client, onTap: onTap);
+      },
     );
   }
 }

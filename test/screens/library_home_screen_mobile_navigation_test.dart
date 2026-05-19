@@ -179,6 +179,48 @@ void main() {
     expect(find.text('收藏'), findsOneWidget);
     expect(find.text('歌单'), findsOneWidget);
   });
+
+  testWidgets(
+    'recent played entry opens history and plays one selected track',
+    (tester) async {
+      final service = _RecordingMobileAudioPlaybackService();
+      addTearDown(service.dispose);
+
+      await HttpOverrides.runZoned(() async {
+        await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byIcon(Icons.library_music_outlined));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(InkWell, '最近播放').first);
+        await tester.pumpAndSettle();
+
+        expect(find.text('最近播放'), findsWidgets);
+        expect(find.text('Recent One'), findsOneWidget);
+        expect(find.text('Recent Two'), findsOneWidget);
+
+        await tester.tap(find.text('Recent Two'));
+        await tester.pump(const Duration(milliseconds: 500));
+      }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+      expect(service.playedQueues.last.map((track) => track.id), [202]);
+    },
+  );
+
+  testWidgets('recent played more opens history list', (tester) async {
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.library_music_outlined));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, '更多'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Recent One'), findsOneWidget);
+      expect(find.text('Recent Two'), findsOneWidget);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+  });
 }
 
 class _LibraryFakeHttpClient implements HttpClient {
@@ -342,6 +384,42 @@ class _LibraryFakeHttpClientResponse extends Stream<List<int>>
             'duration_seconds': 240,
             'composer': 'DECO*27',
             'vocal': '初音ミク',
+          },
+        ],
+      }),
+      '/api/playback/history' => jsonEncode({
+        'items': [
+          {
+            'track': {
+              'id': 201,
+              'title': 'Recent One',
+              'audio_path': 'recent-one.flac',
+              'album_id': 1,
+              'duration_seconds': 180,
+              'composer': 'PinocchioP',
+              'vocal': '初音ミク',
+            },
+            'position_ms': 12000,
+            'duration_ms': 180000,
+            'playback_mode': 'audio',
+            'context_label': 'Album / Recent',
+            'played_at': 1779072000,
+          },
+          {
+            'track': {
+              'id': 202,
+              'title': 'Recent Two',
+              'audio_path': 'recent-two.flac',
+              'album_id': 1,
+              'duration_seconds': 200,
+              'composer': 'ryo',
+              'vocal': '初音ミク',
+            },
+            'position_ms': 30000,
+            'duration_ms': 200000,
+            'playback_mode': 'audio',
+            'context_label': 'Album / Recent',
+            'played_at': 1779071000,
           },
         ],
       }),

@@ -6,7 +6,16 @@ import 'mobile_bottom_nav.dart';
 import 'sidebar.dart';
 import 'now_playing_bar.dart';
 
-enum ShellRoute { albums, producers, vocalists, playlists, favorites, localMv, more }
+enum ShellRoute {
+  albums,
+  producers,
+  vocalists,
+  playlists,
+  favorites,
+  recentPlayed,
+  localMv,
+  more,
+}
 
 /// Breakpoint for responsive layout: below this width, sidebar starts collapsed
 /// (e.g. tablet/mobile). Can be overridden via [initialSidebarCollapsed].
@@ -28,6 +37,7 @@ class AppShell extends StatefulWidget {
   final Widget child;
   final ShellRoute currentRoute;
   final ValueChanged<ShellRoute>? onNavigate;
+
   /// If null, uses breakpoint: collapsed when width < [kShellSidebarBreakpoint].
   final bool? initialSidebarCollapsed;
   final bool forceSidebarCollapsed;
