@@ -194,7 +194,7 @@ class _ProducersScreenState extends State<ProducersScreen> {
   }
 }
 
-class _MobileProducersList extends StatelessWidget {
+class _MobileProducersList extends StatefulWidget {
   const _MobileProducersList({
     required this.producers,
     required this.baseUrl,
@@ -206,7 +206,32 @@ class _MobileProducersList extends StatelessWidget {
   final ValueChanged<Producer> onProducerTap;
 
   @override
+  State<_MobileProducersList> createState() => _MobileProducersListState();
+}
+
+class _MobileProducersListState extends State<_MobileProducersList> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+
+  List<Producer> get _visibleProducers {
+    final query = _query.trim().toLowerCase();
+    if (query.isEmpty) {
+      return widget.producers;
+    }
+    return widget.producers
+        .where((producer) => producer.name.toLowerCase().contains(query))
+        .toList();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final visibleProducers = _visibleProducers;
     return CustomScrollView(
       key: const ValueKey('producer-mobile-list'),
       slivers: [
@@ -226,7 +251,7 @@ class _MobileProducersList extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '共 ${producers.length} 位创作者',
+                  '共 ${widget.producers.length} 位创作者',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppTheme.textMuted,
                     fontSize: 12,
@@ -236,12 +261,75 @@ class _MobileProducersList extends StatelessWidget {
             ),
           ),
         ),
-        if (producers.isEmpty)
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          sliver: SliverToBoxAdapter(
+            child: SizedBox(
+              height: 38,
+              child: TextField(
+                key: const ValueKey('producer-mobile-search'),
+                controller: _searchController,
+                onChanged: (value) {
+                  setState(() {
+                    _query = value;
+                  });
+                },
+                decoration: InputDecoration(
+                  hintText: '搜索P主',
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    color: AppTheme.textMuted,
+                    size: 18,
+                  ),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {
+                              _query = '';
+                            });
+                          },
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: AppTheme.textMuted,
+                            size: 18,
+                          ),
+                          tooltip: '清空',
+                        ),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.06),
+                  contentPadding: EdgeInsets.zero,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(19),
+                    borderSide: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(19),
+                    borderSide: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(19),
+                    borderSide: BorderSide(
+                      color: AppTheme.mikuGreen.withValues(alpha: 0.55),
+                    ),
+                  ),
+                ),
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+          ),
+        ),
+        if (widget.producers.isEmpty || visibleProducers.isEmpty)
           SliverFillRemaining(
             hasScrollBody: false,
             child: Center(
               child: Text(
-                '还没有P主',
+                widget.producers.isEmpty ? '还没有P主' : '没有找到匹配的P主',
                 style: Theme.of(
                   context,
                 ).textTheme.bodyMedium?.copyWith(color: AppTheme.textMuted),
@@ -252,15 +340,15 @@ class _MobileProducersList extends StatelessWidget {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 88),
             sliver: SliverList.separated(
-              itemCount: producers.length,
+              itemCount: visibleProducers.length,
               separatorBuilder: (_, __) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
-                final producer = producers[index];
+                final producer = visibleProducers[index];
                 return _MobileProducerRow(
                   key: ValueKey('producer-mobile-row-${producer.id}'),
                   producer: producer,
-                  baseUrl: baseUrl,
-                  onTap: () => onProducerTap(producer),
+                  baseUrl: widget.baseUrl,
+                  onTap: () => widget.onProducerTap(producer),
                 );
               },
             ),

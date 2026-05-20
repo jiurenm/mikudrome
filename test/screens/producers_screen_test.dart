@@ -48,6 +48,44 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('producer-mobile-row-1')));
     expect(selectedProducer?.name, 'DECO*27');
   });
+
+  testWidgets('mobile producers search filters loaded producers by name', (
+    tester,
+  ) async {
+    await HttpOverrides.runZoned(() async {
+      await tester.pumpWidget(
+        _harness(size: const Size(390, 844), child: const ProducersScreen()),
+      );
+      await tester.pumpAndSettle();
+    }, createHttpClient: (_) => _ProducersFakeHttpClient());
+
+    await tester.enterText(
+      find.byKey(const ValueKey('producer-mobile-search')),
+      'ryo',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('producer-mobile-row-2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('producer-mobile-row-1')), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('producer-mobile-search')),
+      'wowaka',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('没有找到匹配的P主'), findsOneWidget);
+    expect(find.byKey(const ValueKey('producer-mobile-row-2')), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('producer-mobile-search')),
+      '',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('producer-mobile-row-2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('producer-mobile-row-1')), findsOneWidget);
+  });
 }
 
 class _ProducersFakeHttpClient implements HttpClient {
