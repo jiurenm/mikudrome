@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mikudrome/models/album.dart';
+import 'package:mikudrome/models/producer.dart';
+import 'package:mikudrome/models/video.dart';
+import 'package:mikudrome/models/vocalist.dart';
+import 'package:mikudrome/widgets/discover/discover_data_cache.dart';
 import 'package:mikudrome/widgets/discover_screen.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -15,6 +20,27 @@ Widget _harness(Widget child) {
 }
 
 void main() {
+  setUp(DiscoverDataCache.clear);
+
+  test('DiscoverDataCache stores and clears process-local data', () {
+    DiscoverDataCache.clear();
+
+    const data = DiscoverData(
+      albums: [],
+      producers: [],
+      vocalists: [],
+      videos: [],
+    );
+
+    DiscoverDataCache.write(data);
+
+    expect(DiscoverDataCache.current, same(data));
+
+    DiscoverDataCache.clear();
+
+    expect(DiscoverDataCache.current, isNull);
+  });
+
   testWidgets('DiscoverScreen shows section tabs by default', (tester) async {
     await tester.pumpWidget(_harness(const DiscoverScreen(child: Text('内容'))));
 
@@ -63,6 +89,122 @@ void main() {
     expect(find.text('初音ミク'), findsWidgets);
     expect(find.text('愛言葉V'), findsWidgets);
   });
+
+  testWidgets('mobile recommendation home renders cached data immediately', (
+    tester,
+  ) async {
+    DiscoverDataCache.write(
+      const DiscoverData(
+        albums: [
+          Album(
+            id: 'cached-album',
+            title: 'Cached Album',
+            coverUrl: '',
+            producerId: 1,
+            producerName: 'Cached Producer',
+            trackCount: 1,
+          ),
+        ],
+        producers: [
+          Producer(id: 9, name: 'Cached P', trackCount: 1, albumCount: 1),
+        ],
+        vocalists: [
+          Vocalist(name: 'Cached Vocal', trackCount: 1, albumCount: 1),
+        ],
+        videos: [
+          Video(
+            id: 9,
+            title: 'Cached MV',
+            durationSeconds: 60,
+            composer: 'Cached Producer',
+            vocal: 'Cached Vocal',
+          ),
+        ],
+      ),
+    );
+
+    await HttpOverrides.runZoned(() async {
+      await tester.pumpWidget(_harness(const DiscoverScreen()));
+      await tester.pump();
+    }, createHttpClient: (_) => _NeverCompletingDiscoverHttpClient());
+
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('Cached Album'), findsWidgets);
+    expect(find.text('Cached Producer'), findsWidgets);
+    expect(find.text('Cached P'), findsOneWidget);
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -260));
+    await tester.pump();
+
+    expect(find.text('Cached Vocal'), findsWidgets);
+    expect(find.text('Cached MV'), findsOneWidget);
+  });
+
+  testWidgets('mobile recommendation home refreshes and updates cached data', (
+    tester,
+  ) async {
+    final client = _SequencedDiscoverFakeHttpClient([
+      const _DiscoverResponseSet(
+        albumTitle: 'Initial Album',
+        producerName: 'Initial P',
+      ),
+      const _DiscoverResponseSet(
+        albumTitle: 'Refreshed Album',
+        producerName: 'Refreshed P',
+      ),
+    ]);
+
+    await HttpOverrides.runZoned(() async {
+      await tester.pumpWidget(_harness(const DiscoverScreen()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Initial Album'), findsWidgets);
+
+      await tester.fling(
+        find.byType(CustomScrollView),
+        const Offset(0, 500),
+        1000,
+      );
+      await tester.pump();
+      await tester.pumpAndSettle();
+    }, createHttpClient: (_) => client);
+
+    expect(find.text('Refreshed Album'), findsWidgets);
+    expect(find.text('Refreshed P'), findsWidgets);
+    expect(DiscoverDataCache.current?.albums.first.title, 'Refreshed Album');
+    expect(client.completedResponseSets, 2);
+  });
+
+  testWidgets(
+    'mobile recommendation home keeps visible data when refresh fails',
+    (tester) async {
+      final client = _FailingAfterFirstDiscoverHttpClient(
+        const _DiscoverResponseSet(
+          albumTitle: 'Stable Album',
+          producerName: 'Stable P',
+        ),
+      );
+
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(_harness(const DiscoverScreen()));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Stable Album'), findsWidgets);
+
+        await tester.fling(
+          find.byType(CustomScrollView),
+          const Offset(0, 500),
+          1000,
+        );
+        await tester.pump();
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => client);
+
+      expect(find.text('Stable Album'), findsWidgets);
+      expect(find.text('Failed to refresh discover data'), findsOneWidget);
+      expect(find.text('Retry'), findsNothing);
+    },
+  );
 }
 
 class _DiscoverFakeHttpClient implements HttpClient {
@@ -73,6 +215,22 @@ class _DiscoverFakeHttpClient implements HttpClient {
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) async =>
       _DiscoverFakeHttpClientRequest(url);
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _NeverCompletingDiscoverHttpClient implements HttpClient {
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) =>
+      Completer<HttpClientRequest>().future;
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) =>
+      Completer<HttpClientRequest>().future;
 
   @override
   void close({bool force = false}) {}
@@ -185,6 +343,247 @@ class _DiscoverFakeHttpClientResponse extends Stream<List<int>>
             'title': '愛言葉V - DECO*27 feat. 初音ミク',
             'duration_seconds': 240,
             'composer': 'DECO*27',
+            'vocal': '初音ミク',
+          },
+        ],
+      }),
+      _ => '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>',
+    };
+  }
+
+  @override
+  int get contentLength => _bytes.length;
+
+  @override
+  int get statusCode => HttpStatus.ok;
+
+  @override
+  HttpHeaders get headers => _DiscoverFakeHttpHeaders();
+
+  @override
+  bool get isRedirect => false;
+
+  @override
+  X509Certificate? get certificate => null;
+
+  @override
+  HttpConnectionInfo? get connectionInfo => null;
+
+  @override
+  List<Cookie> get cookies => const [];
+
+  @override
+  Future<Socket> detachSocket() {
+    throw UnimplementedError();
+  }
+
+  @override
+  HttpClientResponseCompressionState get compressionState =>
+      HttpClientResponseCompressionState.notCompressed;
+
+  @override
+  String get reasonPhrase => 'OK';
+
+  @override
+  bool get persistentConnection => false;
+
+  @override
+  Future<HttpClientResponse> redirect([
+    String? method,
+    Uri? url,
+    bool? followLoops,
+  ]) {
+    throw UnimplementedError();
+  }
+
+  @override
+  List<RedirectInfo> get redirects => const [];
+
+  @override
+  StreamSubscription<List<int>> listen(
+    void Function(List<int> data)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    return Stream<List<int>>.fromIterable([_bytes]).listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _DiscoverResponseSet {
+  const _DiscoverResponseSet({
+    required this.albumTitle,
+    required this.producerName,
+  });
+
+  final String albumTitle;
+  final String producerName;
+}
+
+class _SequencedDiscoverFakeHttpClient implements HttpClient {
+  _SequencedDiscoverFakeHttpClient(this._responses);
+
+  final List<_DiscoverResponseSet> _responses;
+  int _requestCount = 0;
+
+  int get completedResponseSets => _requestCount ~/ 4;
+
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async =>
+      _SequencedDiscoverFakeHttpClientRequest(url, _responseForNextRequest());
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) async =>
+      _SequencedDiscoverFakeHttpClientRequest(url, _responseForNextRequest());
+
+  _DiscoverResponseSet _responseForNextRequest() {
+    final index = (_requestCount ~/ 4).clamp(0, _responses.length - 1);
+    _requestCount++;
+    return _responses[index];
+  }
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FailingAfterFirstDiscoverHttpClient
+    extends _SequencedDiscoverFakeHttpClient {
+  _FailingAfterFirstDiscoverHttpClient(_DiscoverResponseSet first)
+    : super([first]);
+
+  int _failingClientRequestCount = 0;
+
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async {
+    _failingClientRequestCount++;
+    if (_failingClientRequestCount > 4) {
+      throw const SocketException('refresh failed');
+    }
+    return _SequencedDiscoverFakeHttpClientRequest(
+      url,
+      _responseForNextRequest(),
+    );
+  }
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) => getUrl(url);
+}
+
+class _SequencedDiscoverFakeHttpClientRequest implements HttpClientRequest {
+  _SequencedDiscoverFakeHttpClientRequest(this.url, this.response);
+
+  final Uri url;
+  final _DiscoverResponseSet response;
+  bool _followRedirects = true;
+  int _maxRedirects = 5;
+  int _contentLength = 0;
+  bool _persistentConnection = true;
+
+  @override
+  Future<HttpClientResponse> close() async =>
+      _SequencedDiscoverFakeHttpClientResponse(url, response);
+
+  @override
+  Encoding get encoding => utf8;
+
+  @override
+  set encoding(Encoding _) {}
+
+  @override
+  bool get followRedirects => _followRedirects;
+
+  @override
+  set followRedirects(bool value) {
+    _followRedirects = value;
+  }
+
+  @override
+  int get maxRedirects => _maxRedirects;
+
+  @override
+  set maxRedirects(int value) {
+    _maxRedirects = value;
+  }
+
+  @override
+  int get contentLength => _contentLength;
+
+  @override
+  set contentLength(int value) {
+    _contentLength = value;
+  }
+
+  @override
+  bool get persistentConnection => _persistentConnection;
+
+  @override
+  set persistentConnection(bool value) {
+    _persistentConnection = value;
+  }
+
+  @override
+  Future<void> addStream(Stream<List<int>> stream) async {
+    await stream.drain<void>();
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _SequencedDiscoverFakeHttpClientResponse extends Stream<List<int>>
+    implements HttpClientResponse {
+  _SequencedDiscoverFakeHttpClientResponse(
+    Uri url,
+    _DiscoverResponseSet response,
+  ) : _bytes = utf8.encode(_bodyFor(url, response));
+
+  final List<int> _bytes;
+
+  static String _bodyFor(Uri url, _DiscoverResponseSet response) {
+    return switch (url.path) {
+      '/api/albums' => jsonEncode({
+        'albums': [
+          {
+            'id': 1,
+            'title': response.albumTitle,
+            'producer_name': response.producerName,
+            'track_count': 12,
+          },
+        ],
+      }),
+      '/api/producers' => jsonEncode({
+        'producers': [
+          {
+            'id': 1,
+            'name': response.producerName,
+            'track_count': 27,
+            'album_count': 3,
+          },
+        ],
+      }),
+      '/api/vocalists' => jsonEncode({
+        'vocalists': [
+          {'name': '初音ミク', 'track_count': 30, 'album_count': 4},
+        ],
+      }),
+      '/api/videos' => jsonEncode({
+        'videos': [
+          {
+            'id': 1,
+            'title': '${response.albumTitle} MV',
+            'duration_seconds': 240,
+            'composer': response.producerName,
             'vocal': '初音ミク',
           },
         ],

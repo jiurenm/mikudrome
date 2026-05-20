@@ -12,6 +12,7 @@ import '../screens/vocalists_screen.dart';
 import '../theme/app_theme.dart';
 import '../theme/vocal_theme.dart';
 import '../utils/responsive.dart';
+import 'discover/discover_data_cache.dart';
 
 enum DiscoverSection { albums, producers, vocalists, mv }
 
@@ -57,7 +58,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   Widget _defaultContent() {
     return switch (_currentSection) {
       DiscoverSection.albums => AlbumsScreen(),
-      DiscoverSection.producers => ProducersScreen(),
+      DiscoverSection.producers => const ProducersScreen(),
       DiscoverSection.vocalists => const VocalistsScreen(),
       DiscoverSection.mv => const MvGalleryScreen(),
     };
@@ -157,18 +158,45 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
   List<Video> _videos = const [];
   bool _loading = true;
   String? _error;
+  String? _refreshError;
 
   @override
   void initState() {
     super.initState();
-    _loadDiscoverData();
+    final cached = DiscoverDataCache.current;
+    if (cached != null) {
+      _applyDiscoverData(cached, loading: false);
+      _loadDiscoverData(showLoading: false);
+    } else {
+      _loadDiscoverData();
+    }
   }
 
-  Future<void> _loadDiscoverData() async {
+  bool get _hasDiscoverData =>
+      _albums.isNotEmpty ||
+      _producers.isNotEmpty ||
+      _vocalists.isNotEmpty ||
+      _videos.isNotEmpty;
+
+  void _applyDiscoverData(DiscoverData data, {required bool loading}) {
     setState(() {
-      _loading = true;
+      _albums = data.albums;
+      _producers = data.producers;
+      _vocalists = data.vocalists;
+      _videos = data.videos;
+      _loading = loading;
       _error = null;
+      _refreshError = null;
     });
+  }
+
+  Future<void> _loadDiscoverData({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
 
     try {
       final api = ApiClient();
@@ -176,21 +204,33 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
       final producers = await api.getProducers();
       final vocalists = await api.getVocalists();
       final videos = await api.getVideos();
+      final data = DiscoverData(
+        albums: albums,
+        producers: producers,
+        vocalists: vocalists,
+        videos: videos,
+      );
+      DiscoverDataCache.write(data);
       if (!mounted) return;
-      setState(() {
-        _albums = albums;
-        _producers = producers;
-        _vocalists = vocalists;
-        _videos = videos;
-        _loading = false;
-      });
+      _applyDiscoverData(data, loading: false);
     } catch (e) {
       if (!mounted) return;
+      if (_hasDiscoverData) {
+        setState(() {
+          _refreshError = 'Failed to refresh discover data';
+          _loading = false;
+        });
+        return;
+      }
       setState(() {
         _error = e.toString();
         _loading = false;
       });
     }
+  }
+
+  Future<void> _refreshDiscoverData() {
+    return _loadDiscoverData(showLoading: false);
   }
 
   @override
@@ -231,59 +271,94 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
     }
 
     final featuredAlbum = _albums.isNotEmpty ? _albums.first : null;
-    return CustomScrollView(
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
-          sliver: SliverList.list(
-            children: [
-              const _MobileDiscoverTopBar(),
-              const SizedBox(height: 12),
-              _MobileSearchField(controller: _searchController),
-              const SizedBox(height: 16),
-              _FeaturedAlbumBanner(
-                album: featuredAlbum,
-                onAlbumSelected: widget.onAlbumSelected,
-              ),
-              const SizedBox(height: 20),
-              _MobileSectionHeader(
-                title: '专辑推荐',
-                section: DiscoverSection.albums,
-                onMoreSelected: widget.onMoreSelected,
-              ),
-              const SizedBox(height: 10),
-              _AlbumStrip(
-                albums: _albums.take(5).toList(),
-                onAlbumSelected: widget.onAlbumSelected,
-              ),
-              const SizedBox(height: 20),
-              _MobileSectionHeader(
-                title: '热门P主',
-                section: DiscoverSection.producers,
-                onMoreSelected: widget.onMoreSelected,
-              ),
-              const SizedBox(height: 10),
-              _ProducerStrip(producers: _producers.take(5).toList()),
-              const SizedBox(height: 20),
-              _MobileSectionHeader(
-                title: '虚拟歌手',
-                section: DiscoverSection.vocalists,
-                onMoreSelected: widget.onMoreSelected,
-              ),
-              const SizedBox(height: 10),
-              _VocalistStrip(vocalists: _vocalists.take(5).toList()),
-              const SizedBox(height: 20),
-              _MobileSectionHeader(
-                title: '推荐MV',
-                section: DiscoverSection.mv,
-                onMoreSelected: widget.onMoreSelected,
-              ),
-              const SizedBox(height: 10),
-              _VideoStrip(videos: _videos.take(3).toList()),
-            ],
+    return RefreshIndicator(
+      onRefresh: _refreshDiscoverData,
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
+            sliver: SliverList.list(
+              children: [
+                const _MobileDiscoverTopBar(),
+                const SizedBox(height: 12),
+                _MobileSearchField(controller: _searchController),
+                const SizedBox(height: 16),
+                if (_refreshError != null) ...[
+                  _RefreshErrorBanner(message: _refreshError!),
+                  const SizedBox(height: 12),
+                ],
+                _FeaturedAlbumBanner(
+                  album: featuredAlbum,
+                  onAlbumSelected: widget.onAlbumSelected,
+                ),
+                const SizedBox(height: 20),
+                _MobileSectionHeader(
+                  title: '专辑推荐',
+                  section: DiscoverSection.albums,
+                  onMoreSelected: widget.onMoreSelected,
+                ),
+                const SizedBox(height: 10),
+                _AlbumStrip(
+                  albums: _albums.take(5).toList(),
+                  onAlbumSelected: widget.onAlbumSelected,
+                ),
+                const SizedBox(height: 20),
+                _MobileSectionHeader(
+                  title: '热门P主',
+                  section: DiscoverSection.producers,
+                  onMoreSelected: widget.onMoreSelected,
+                ),
+                const SizedBox(height: 10),
+                _ProducerStrip(producers: _producers.take(5).toList()),
+                const SizedBox(height: 20),
+                _MobileSectionHeader(
+                  title: '虚拟歌手',
+                  section: DiscoverSection.vocalists,
+                  onMoreSelected: widget.onMoreSelected,
+                ),
+                const SizedBox(height: 10),
+                _VocalistStrip(vocalists: _vocalists.take(5).toList()),
+                const SizedBox(height: 20),
+                _MobileSectionHeader(
+                  title: '推荐MV',
+                  section: DiscoverSection.mv,
+                  onMoreSelected: widget.onMoreSelected,
+                ),
+                const SizedBox(height: 10),
+                _VideoStrip(videos: _videos.take(3).toList()),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RefreshErrorBanner extends StatelessWidget {
+  const _RefreshErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.redAccent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.redAccent.withValues(alpha: 0.28)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Text(
+          message,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Colors.redAccent.shade100,
+            fontSize: 12,
           ),
         ),
-      ],
+      ),
     );
   }
 }
