@@ -166,7 +166,6 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
     final cached = DiscoverDataCache.current;
     if (cached != null) {
       _applyDiscoverData(cached, loading: false);
-      _loadDiscoverData(showLoading: false);
     } else {
       _loadDiscoverData();
     }

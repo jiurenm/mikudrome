@@ -140,6 +140,62 @@ void main() {
     expect(find.text('Cached MV'), findsOneWidget);
   });
 
+  testWidgets(
+    'mobile recommendation home does not reload cached data on open',
+    (tester) async {
+      DiscoverDataCache.write(
+        const DiscoverData(
+          albums: [
+            Album(
+              id: 'cached-album',
+              title: 'Cached Album',
+              coverUrl: '',
+              producerName: 'Cached Producer',
+              trackCount: 1,
+            ),
+          ],
+          producers: [],
+          vocalists: [],
+          videos: [],
+        ),
+      );
+      final client = _NeverCompletingCountingDiscoverHttpClient();
+
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(_harness(const DiscoverScreen()));
+        await tester.pump();
+      }, createHttpClient: (_) => client);
+
+      expect(find.text('Cached Album'), findsWidgets);
+      expect(client.requestCount, 0);
+    },
+  );
+
+  testWidgets('mobile recommendation home reopens from cache without loading', (
+    tester,
+  ) async {
+    await HttpOverrides.runZoned(() async {
+      await tester.pumpWidget(_harness(const DiscoverScreen()));
+      await tester.pumpAndSettle();
+    }, createHttpClient: (_) => _DiscoverFakeHttpClient());
+
+    expect(find.text('GHOST'), findsWidgets);
+    expect(DiscoverDataCache.current?.albums.first.title, 'GHOST');
+
+    final client = _NeverCompletingCountingDiscoverHttpClient();
+
+    await HttpOverrides.runZoned(() async {
+      await tester.pumpWidget(_harness(const SizedBox.shrink()));
+      await tester.pump();
+      await tester.pumpWidget(_harness(const DiscoverScreen()));
+      await tester.pump();
+    }, createHttpClient: (_) => client);
+
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('GHOST'), findsWidgets);
+    expect(client.requestCount, 0);
+  });
+
   testWidgets('mobile recommendation home refreshes and updates cached data', (
     tester,
   ) async {
@@ -231,6 +287,25 @@ class _NeverCompletingDiscoverHttpClient implements HttpClient {
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) =>
       Completer<HttpClientRequest>().future;
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _NeverCompletingCountingDiscoverHttpClient implements HttpClient {
+  int requestCount = 0;
+
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) {
+    requestCount++;
+    return Completer<HttpClientRequest>().future;
+  }
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) => getUrl(url);
 
   @override
   void close({bool force = false}) {}
