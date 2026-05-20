@@ -8,7 +8,7 @@ import 'producer_detail_screen.dart';
 
 /// Producers index: grid of circular avatars + stats, alphabet scroller (miku_produce.html).
 class ProducersScreen extends StatefulWidget {
-  ProducersScreen({super.key, this.baseUrl = '', this.onProducerTap});
+  const ProducersScreen({super.key, this.baseUrl = '', this.onProducerTap});
 
   final String baseUrl;
   String get _effectiveBaseUrl =>
@@ -82,6 +82,13 @@ class _ProducersScreenState extends State<ProducersScreen> {
     }
     final list = _producers;
     final mobile = isMobile(context);
+    if (mobile) {
+      return _MobileProducersList(
+        producers: list,
+        baseUrl: widget._effectiveBaseUrl,
+        onProducerTap: _openProducer,
+      );
+    }
     final edgePad = mobile ? 12.0 : 40.0;
     return CustomScrollView(
       slivers: [
@@ -125,7 +132,7 @@ class _ProducersScreenState extends State<ProducersScreen> {
                     ),
                   ],
                 ),
-                Row(
+                const Row(
                   children: [
                     _IndexChar(label: 'ALL', active: true),
                     _IndexChar(label: 'A'),
@@ -162,25 +169,202 @@ class _ProducersScreenState extends State<ProducersScreen> {
               return _ProducerCard(
                 producer: p,
                 baseUrl: widget._effectiveBaseUrl,
-                onTap: () {
-                  if (widget.onProducerTap != null) {
-                    widget.onProducerTap!(p);
-                  } else {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (context) => ProducerDetailScreen(
-                          producer: p,
-                          baseUrl: widget._effectiveBaseUrl,
-                        ),
-                      ),
-                    );
-                  }
-                },
+                onTap: () => _openProducer(p),
               );
             }, childCount: list.length),
           ),
         ),
       ],
+    );
+  }
+
+  void _openProducer(Producer producer) {
+    if (widget.onProducerTap != null) {
+      widget.onProducerTap!(producer);
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (context) => ProducerDetailScreen(
+            producer: producer,
+            baseUrl: widget._effectiveBaseUrl,
+          ),
+        ),
+      );
+    }
+  }
+}
+
+class _MobileProducersList extends StatelessWidget {
+  const _MobileProducersList({
+    required this.producers,
+    required this.baseUrl,
+    required this.onProducerTap,
+  });
+
+  final List<Producer> producers;
+  final String baseUrl;
+  final ValueChanged<Producer> onProducerTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomScrollView(
+      key: const ValueKey('producer-mobile-list'),
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'P主',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: AppTheme.textPrimary,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '共 ${producers.length} 位创作者',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppTheme.textMuted,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (producers.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(
+              child: Text(
+                '还没有P主',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppTheme.textMuted),
+              ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 88),
+            sliver: SliverList.separated(
+              itemCount: producers.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final producer = producers[index];
+                return _MobileProducerRow(
+                  key: ValueKey('producer-mobile-row-${producer.id}'),
+                  producer: producer,
+                  baseUrl: baseUrl,
+                  onTap: () => onProducerTap(producer),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _MobileProducerRow extends StatelessWidget {
+  const _MobileProducerRow({
+    super.key,
+    required this.producer,
+    required this.baseUrl,
+    required this.onTap,
+  });
+
+  final Producer producer;
+  final String baseUrl;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.04),
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              _MobileProducerAvatar(producer: producer, baseUrl: baseUrl),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      producer.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: AppTheme.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${producer.trackCount} 首歌曲 · ${producer.albumCount} 张专辑',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: AppTheme.textMuted,
+                        fontSize: 11,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppTheme.textMuted,
+                size: 22,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MobileProducerAvatar extends StatelessWidget {
+  const _MobileProducerAvatar({required this.producer, required this.baseUrl});
+
+  final Producer producer;
+  final String baseUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipOval(
+      child: Image.network(
+        ApiClient(baseUrl: baseUrl).producerAvatarUrl(producer.id),
+        headers: ApiConfig.defaultHeaders,
+        width: 48,
+        height: 48,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          width: 48,
+          height: 48,
+          color: AppTheme.cardBg,
+          child: const Icon(
+            Icons.person_rounded,
+            color: AppTheme.textMuted,
+            size: 24,
+          ),
+        ),
+      ),
     );
   }
 }
