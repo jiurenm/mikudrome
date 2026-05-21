@@ -78,7 +78,13 @@ class _VocalistsScreenState extends State<VocalistsScreen> {
     }
     final list = _vocalists;
     final mobile = isMobile(context);
-    final edgePad = mobile ? 12.0 : 40.0;
+    if (mobile) {
+      return _MobileVocalistsList(
+        vocalists: list,
+        onVocalistTap: (vocalist) => widget.onVocalistTap?.call(vocalist),
+      );
+    }
+    final edgePad = 40.0;
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
@@ -138,6 +144,244 @@ class _VocalistsScreenState extends State<VocalistsScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _MobileVocalistsList extends StatefulWidget {
+  const _MobileVocalistsList({
+    required this.vocalists,
+    required this.onVocalistTap,
+  });
+
+  final List<Vocalist> vocalists;
+  final ValueChanged<Vocalist> onVocalistTap;
+
+  @override
+  State<_MobileVocalistsList> createState() => _MobileVocalistsListState();
+}
+
+class _MobileVocalistsListState extends State<_MobileVocalistsList> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+
+  List<Vocalist> get _visibleVocalists {
+    final query = _query.trim().toLowerCase();
+    if (query.isEmpty) {
+      return widget.vocalists;
+    }
+    return widget.vocalists
+        .where((vocalist) => vocalist.name.toLowerCase().contains(query))
+        .toList();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleVocalists = _visibleVocalists;
+    return CustomScrollView(
+      key: const ValueKey('vocalist-mobile-list'),
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '歌手',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: AppTheme.textPrimary,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '共 ${widget.vocalists.length} 位歌手',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppTheme.textMuted,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          sliver: SliverToBoxAdapter(
+            child: SizedBox(
+              height: 38,
+              child: TextField(
+                key: const ValueKey('vocalist-mobile-search'),
+                controller: _searchController,
+                onChanged: (value) {
+                  setState(() {
+                    _query = value;
+                  });
+                },
+                decoration: InputDecoration(
+                  hintText: '搜索歌手',
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    color: AppTheme.textMuted,
+                    size: 18,
+                  ),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {
+                              _query = '';
+                            });
+                          },
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: AppTheme.textMuted,
+                            size: 18,
+                          ),
+                          tooltip: '清空',
+                        ),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.06),
+                  contentPadding: EdgeInsets.zero,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(19),
+                    borderSide: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(19),
+                    borderSide: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(19),
+                    borderSide: BorderSide(
+                      color: AppTheme.mikuGreen.withValues(alpha: 0.55),
+                    ),
+                  ),
+                ),
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+          ),
+        ),
+        if (widget.vocalists.isEmpty || visibleVocalists.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(
+              child: Text(
+                widget.vocalists.isEmpty ? '还没有歌手' : '没有找到匹配的歌手',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppTheme.textMuted),
+              ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 88),
+            sliver: SliverList.separated(
+              itemCount: visibleVocalists.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final vocalist = visibleVocalists[index];
+                return _MobileVocalistRow(
+                  key: ValueKey('vocalist-mobile-row-${vocalist.name}'),
+                  vocalist: vocalist,
+                  onTap: () => widget.onVocalistTap(vocalist),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _MobileVocalistRow extends StatelessWidget {
+  const _MobileVocalistRow({
+    super.key,
+    required this.vocalist,
+    required this.onTap,
+  });
+
+  final Vocalist vocalist;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = VocalColors.colorForName(vocalist.name);
+    return Material(
+      color: Colors.white.withValues(alpha: 0.04),
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: color.withValues(alpha: 0.18),
+                foregroundImage: NetworkImage(
+                  ApiClient().vocalistAvatarUrl(vocalist.name),
+                  headers: ApiConfig.defaultHeaders,
+                ),
+                onForegroundImageError: (_, __) {},
+                child: Icon(Icons.mic_rounded, color: color, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      vocalist.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: AppTheme.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${vocalist.trackCount} 首歌曲',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: AppTheme.textMuted,
+                        fontSize: 11,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppTheme.textMuted,
+                size: 22,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
