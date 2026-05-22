@@ -140,6 +140,8 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                   child: ProducerTabBar(
                     index: _tabIndex,
                     onTap: (i) => setState(() => _tabIndex = i),
+                    albumCount: _albums.length,
+                    trackCount: _tracks.length,
                     mvCount: _tracksWithMv.length,
                   ),
                 ),
