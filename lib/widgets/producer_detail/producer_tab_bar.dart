@@ -133,28 +133,29 @@ class _MobileProducerTabBar extends StatelessWidget {
             children: List.generate(labels.length, (i) {
               final isActive = index == i;
               return Expanded(
-                child: InkWell(
+                child: Material(
+                  color: isActive ? AppTheme.mikuGreen : Colors.transparent,
                   borderRadius: BorderRadius.circular(6),
-                  onTap: () => onTap(i),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    curve: Curves.easeOut,
-                    constraints: const BoxConstraints(minHeight: 44),
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(vertical: 9),
-                    decoration: BoxDecoration(
-                      color: isActive ? AppTheme.mikuGreen : Colors.transparent,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      labels[i],
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: isActive ? Colors.black : AppTheme.textMuted,
-                        fontWeight: isActive
-                            ? FontWeight.w800
-                            : FontWeight.w700,
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => onTap(i),
+                    child: Container(
+                      constraints: const BoxConstraints(minHeight: 44),
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      child: Text(
+                        labels[i],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: isActive
+                                  ? Colors.black
+                                  : AppTheme.textMuted,
+                              fontWeight: isActive
+                                  ? FontWeight.w800
+                                  : FontWeight.w700,
+                            ),
                       ),
                     ),
                   ),
