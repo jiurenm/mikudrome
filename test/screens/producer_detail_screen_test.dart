@@ -409,6 +409,122 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets(
+    'producer detail pull-to-refresh updates visible data and cache',
+    (tester) async {
+      final client = _SequencedProducerDetailHttpClient([
+        const _ProducerDetailResponseSet(
+          producerName: 'Initial P',
+          albumTitle: 'Initial Album',
+          trackTitle: 'Initial Track',
+        ),
+        const _ProducerDetailResponseSet(
+          producerName: 'Refreshed P',
+          albumTitle: 'Refreshed Album',
+          trackTitle: 'Refreshed Track',
+          trackId: 2,
+          trackCount: 2,
+        ),
+      ]);
+
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(
+          _harness(
+            size: const Size(390, 844),
+            child: ProducerDetailScreen(
+              producer: _producer,
+              baseUrl: 'http://example.test',
+              onBack: () {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Initial Album'), findsOneWidget);
+
+        await tester.fling(
+          find.byType(CustomScrollView),
+          const Offset(0, 500),
+          1000,
+        );
+        await tester.pump();
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => client);
+
+      expect(find.text('Refreshed P'), findsWidgets);
+      expect(find.text('Refreshed Album'), findsOneWidget);
+      expect(
+        ProducerDetailDataCache.read(
+          baseUrl: 'http://example.test',
+          producerId: 27,
+        )?.tracks.single.title,
+        'Refreshed Track',
+      );
+      expect(client.completedResponses, 2);
+    },
+  );
+
+  testWidgets('producer detail refresh failure keeps visible data', (
+    tester,
+  ) async {
+    final client = _FailingAfterFirstProducerHttpClient(
+      const _ProducerDetailResponseSet(
+        producerName: 'Stable P',
+        albumTitle: 'Stable Album',
+        trackTitle: 'Stable Track',
+      ),
+    );
+
+    await HttpOverrides.runZoned(() async {
+      await tester.pumpWidget(
+        _harness(
+          size: const Size(390, 844),
+          child: ProducerDetailScreen(
+            producer: _producer,
+            baseUrl: 'http://example.test',
+            onBack: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Stable Album'), findsOneWidget);
+
+      await tester.fling(
+        find.byType(CustomScrollView),
+        const Offset(0, 500),
+        1000,
+      );
+      await tester.pump();
+      await tester.pumpAndSettle();
+    }, createHttpClient: (_) => client);
+
+    expect(find.text('Stable Album'), findsOneWidget);
+    expect(find.text('刷新失败，请稍后再试'), findsOneWidget);
+    expect(find.text('Retry'), findsNothing);
+  });
+
+  testWidgets('producer detail initial failure without cache shows retry', (
+    tester,
+  ) async {
+    await HttpOverrides.runZoned(() async {
+      await tester.pumpWidget(
+        _harness(
+          size: const Size(390, 844),
+          child: ProducerDetailScreen(
+            producer: _producer,
+            baseUrl: 'http://example.test',
+            onBack: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }, createHttpClient: (_) => _AlwaysFailingProducerHttpClient());
+
+    expect(find.text('Retry'), findsOneWidget);
+    expect(find.text('刷新失败，请稍后再试'), findsNothing);
+  });
 }
 
 class _ProducerDetailResponseSet {
@@ -534,6 +650,256 @@ class _SingleProducerDetailRequest implements HttpClientRequest {
   @override
   Future<HttpClientResponse> close() async =>
       _ProducerDetailResponse(url, responseSet);
+
+  @override
+  Encoding get encoding => utf8;
+
+  @override
+  set encoding(Encoding _) {}
+
+  @override
+  bool get followRedirects => _followRedirects;
+
+  @override
+  set followRedirects(bool value) {
+    _followRedirects = value;
+  }
+
+  @override
+  int get maxRedirects => _maxRedirects;
+
+  @override
+  set maxRedirects(int value) {
+    _maxRedirects = value;
+  }
+
+  @override
+  int get contentLength => _contentLength;
+
+  @override
+  set contentLength(int value) {
+    _contentLength = value;
+  }
+
+  @override
+  bool get persistentConnection => _persistentConnection;
+
+  @override
+  set persistentConnection(bool value) {
+    _persistentConnection = value;
+  }
+
+  @override
+  Future<void> addStream(Stream<List<int>> stream) async {
+    await stream.drain<void>();
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _SequencedProducerDetailHttpClient implements HttpClient {
+  _SequencedProducerDetailHttpClient(this.responseSets);
+
+  final List<_ProducerDetailResponseSet> responseSets;
+  int completedResponses = 0;
+
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async =>
+      _SequencedProducerDetailRequest(url, this);
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) async =>
+      _SequencedProducerDetailRequest(url, this);
+
+  _ProducerDetailResponseSet nextResponse() {
+    final index = completedResponses.clamp(0, responseSets.length - 1);
+    completedResponses++;
+    return responseSets[index];
+  }
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _SequencedProducerDetailRequest implements HttpClientRequest {
+  _SequencedProducerDetailRequest(this.url, this.client);
+
+  final Uri url;
+  final _SequencedProducerDetailHttpClient client;
+  bool _followRedirects = true;
+  int _maxRedirects = 5;
+  int _contentLength = 0;
+  bool _persistentConnection = true;
+
+  @override
+  Future<HttpClientResponse> close() async {
+    return _ProducerDetailResponse(url, client.nextResponse());
+  }
+
+  @override
+  Encoding get encoding => utf8;
+
+  @override
+  set encoding(Encoding _) {}
+
+  @override
+  bool get followRedirects => _followRedirects;
+
+  @override
+  set followRedirects(bool value) {
+    _followRedirects = value;
+  }
+
+  @override
+  int get maxRedirects => _maxRedirects;
+
+  @override
+  set maxRedirects(int value) {
+    _maxRedirects = value;
+  }
+
+  @override
+  int get contentLength => _contentLength;
+
+  @override
+  set contentLength(int value) {
+    _contentLength = value;
+  }
+
+  @override
+  bool get persistentConnection => _persistentConnection;
+
+  @override
+  set persistentConnection(bool value) {
+    _persistentConnection = value;
+  }
+
+  @override
+  Future<void> addStream(Stream<List<int>> stream) async {
+    await stream.drain<void>();
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FailingAfterFirstProducerHttpClient implements HttpClient {
+  _FailingAfterFirstProducerHttpClient(this.firstResponse);
+
+  final _ProducerDetailResponseSet firstResponse;
+  int requestCount = 0;
+
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async =>
+      _FailingAfterFirstProducerRequest(url, this);
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) async =>
+      _FailingAfterFirstProducerRequest(url, this);
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FailingAfterFirstProducerRequest implements HttpClientRequest {
+  _FailingAfterFirstProducerRequest(this.url, this.client);
+
+  final Uri url;
+  final _FailingAfterFirstProducerHttpClient client;
+  bool _followRedirects = true;
+  int _maxRedirects = 5;
+  int _contentLength = 0;
+  bool _persistentConnection = true;
+
+  @override
+  Future<HttpClientResponse> close() async {
+    client.requestCount++;
+    if (client.requestCount == 1) {
+      return _ProducerDetailResponse(url, client.firstResponse);
+    }
+    throw const SocketException('refresh failed');
+  }
+
+  @override
+  Encoding get encoding => utf8;
+
+  @override
+  set encoding(Encoding _) {}
+
+  @override
+  bool get followRedirects => _followRedirects;
+
+  @override
+  set followRedirects(bool value) {
+    _followRedirects = value;
+  }
+
+  @override
+  int get maxRedirects => _maxRedirects;
+
+  @override
+  set maxRedirects(int value) {
+    _maxRedirects = value;
+  }
+
+  @override
+  int get contentLength => _contentLength;
+
+  @override
+  set contentLength(int value) {
+    _contentLength = value;
+  }
+
+  @override
+  bool get persistentConnection => _persistentConnection;
+
+  @override
+  set persistentConnection(bool value) {
+    _persistentConnection = value;
+  }
+
+  @override
+  Future<void> addStream(Stream<List<int>> stream) async {
+    await stream.drain<void>();
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _AlwaysFailingProducerHttpClient implements HttpClient {
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async =>
+      _AlwaysFailingProducerRequest();
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) async =>
+      _AlwaysFailingProducerRequest();
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _AlwaysFailingProducerRequest implements HttpClientRequest {
+  bool _followRedirects = true;
+  int _maxRedirects = 5;
+  int _contentLength = 0;
+  bool _persistentConnection = true;
+
+  @override
+  Future<HttpClientResponse> close() async {
+    throw const SocketException('initial failed');
+  }
 
   @override
   Encoding get encoding => utf8;

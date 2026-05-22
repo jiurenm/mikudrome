@@ -45,6 +45,7 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
   List<Track> _tracks = [];
   bool _loading = true;
   String? _error;
+  String? _refreshError;
 
   Producer get _displayProducer => _loadedProducer ?? widget.producer;
 
@@ -71,14 +72,17 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
       _tracks = data.tracks;
       _loading = false;
       _error = null;
+      _refreshError = null;
     });
   }
 
-  Future<void> _loadProducer() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  Future<void> _loadProducer({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final result = await ApiClient(
         baseUrl: widget._effectiveBaseUrl,
@@ -98,11 +102,22 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
       _applyProducerDetailData(data);
     } catch (e) {
       if (!mounted) return;
+      if (_hasDetailData) {
+        setState(() {
+          _refreshError = '刷新失败，请稍后再试';
+          _loading = false;
+        });
+        return;
+      }
       setState(() {
         _error = e.toString();
         _loading = false;
       });
     }
+  }
+
+  Future<void> _refreshProducer() {
+    return _loadProducer(showLoading: false);
   }
 
   List<Track> get _tracksWithMv =>
@@ -130,6 +145,14 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
     _playTrack(shuffled.first, 0, queue: shuffled);
   }
 
+  List<Widget> _mobileRefreshErrorWidgets(BuildContext context) {
+    if (!isMobile(context) || _refreshError == null) return const [];
+    return [
+      _RefreshErrorBanner(message: _refreshError!),
+      const SizedBox(height: 12),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -137,137 +160,181 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
       body: Column(
         children: [
           Expanded(
-            child: CustomScrollView(
-              slivers: [
-                if (isMobile(context) && widget.onBack != null)
-                  SliverAppBar(
-                    key: const ValueKey('producer-detail-mobile-app-bar'),
-                    backgroundColor: AppTheme.cardBg,
-                    pinned: true,
-                    floating: false,
-                    elevation: 0,
-                    leading: IconButton(
-                      icon: const Icon(Icons.chevron_left),
-                      onPressed: widget.onBack,
-                    ),
-                    title: Text(
-                      _displayProducer.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                  ),
-                SliverToBoxAdapter(
-                  child: ProducerHeroSection(
-                    producer: _displayProducer,
-                    baseUrl: widget._effectiveBaseUrl,
-                    onPlayAll: _playAll,
-                    onShuffle: _shufflePlay,
-                    hasTracks: _tracks.isNotEmpty,
-                    albumCount: _displayAlbumCount,
-                    trackCount: _displayTrackCount,
-                    mvCount: _tracksWithMv.length,
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: ProducerTabBar(
-                    index: _tabIndex,
-                    onTap: (i) => setState(() => _tabIndex = i),
-                    albumCount: _displayAlbumCount,
-                    trackCount: _displayTrackCount,
-                    mvCount: _tracksWithMv.length,
-                  ),
-                ),
-                if (_loading)
-                  const SliverFillRemaining(
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else if (_error != null)
-                  SliverFillRemaining(
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(_error!, textAlign: TextAlign.center),
-                            const SizedBox(height: 16),
-                            FilledButton(
-                              onPressed: _loadProducer,
-                              child: const Text('Retry'),
-                            ),
-                          ],
-                        ),
+            child: RefreshIndicator(
+              onRefresh: _refreshProducer,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  if (isMobile(context) && widget.onBack != null)
+                    SliverAppBar(
+                      key: const ValueKey('producer-detail-mobile-app-bar'),
+                      backgroundColor: AppTheme.cardBg,
+                      pinned: true,
+                      floating: false,
+                      elevation: 0,
+                      leading: IconButton(
+                        icon: const Icon(Icons.chevron_left),
+                        onPressed: widget.onBack,
+                      ),
+                      title: Text(
+                        _displayProducer.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 16),
                       ),
                     ),
-                  )
-                else
-                  SliverPadding(
-                    padding: EdgeInsets.fromLTRB(
-                      isMobile(context) ? 16 : 48,
-                      isMobile(context) ? 4 : 48,
-                      isMobile(context) ? 16 : 48,
-                      88,
+                  SliverToBoxAdapter(
+                    child: ProducerHeroSection(
+                      producer: _displayProducer,
+                      baseUrl: widget._effectiveBaseUrl,
+                      onPlayAll: _playAll,
+                      onShuffle: _shufflePlay,
+                      hasTracks: _tracks.isNotEmpty,
+                      albumCount: _displayAlbumCount,
+                      trackCount: _displayTrackCount,
+                      mvCount: _tracksWithMv.length,
                     ),
-                    sliver: _tabIndex == 0
-                        ? SliverList(
-                            delegate: SliverChildListDelegate([
-                              if (!isMobile(context))
-                                const _SectionTitle('Discography'),
-                              if (!isMobile(context))
-                                const SizedBox(height: 32),
-                              DiscographyGrid(
-                                albums: _albums,
-                                onAlbumTap: (album) {
-                                  if (widget.onAlbumTap != null) {
-                                    widget.onAlbumTap!(album);
-                                  } else {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute<void>(
-                                        builder: (context) => AlbumDetailScreen(
-                                          album: album,
-                                          baseUrl: widget._effectiveBaseUrl,
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                },
-                              ),
-                            ]),
-                          )
-                        : _tabIndex == 1
-                        ? SliverList(
-                            delegate: SliverChildListDelegate([
-                              if (!isMobile(context))
-                                const _SectionTitle('All Tracks'),
-                              if (!isMobile(context)) const SizedBox(height: 8),
-                              ProducerTrackList(
-                                tracks: _tracks,
-                                baseUrl: widget._effectiveBaseUrl,
-                                useMobileLayout: true,
-                                onPlay: (track, index) =>
-                                    _playTrack(track, index),
-                              ),
-                            ]),
-                          )
-                        : SliverList(
-                            delegate: SliverChildListDelegate([
-                              if (!isMobile(context))
-                                const _SectionTitle('Featured MVs'),
-                              if (!isMobile(context)) const SizedBox(height: 8),
-                              FeaturedMvsGrid(
-                                tracks: _tracksWithMv,
-                                baseUrl: widget._effectiveBaseUrl,
-                                onPlay: (track, index) => _playTrack(
-                                  track,
-                                  index,
-                                  queue: _tracksWithMv,
-                                ),
-                              ),
-                            ]),
-                          ),
                   ),
-              ],
+                  SliverToBoxAdapter(
+                    child: ProducerTabBar(
+                      index: _tabIndex,
+                      onTap: (i) => setState(() => _tabIndex = i),
+                      albumCount: _displayAlbumCount,
+                      trackCount: _displayTrackCount,
+                      mvCount: _tracksWithMv.length,
+                    ),
+                  ),
+                  if (_loading)
+                    const SliverFillRemaining(
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_error != null)
+                    SliverFillRemaining(
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(_error!, textAlign: TextAlign.center),
+                              const SizedBox(height: 16),
+                              FilledButton(
+                                onPressed: _loadProducer,
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(
+                        isMobile(context) ? 16 : 48,
+                        isMobile(context) ? 4 : 48,
+                        isMobile(context) ? 16 : 48,
+                        88,
+                      ),
+                      sliver: _tabIndex == 0
+                          ? SliverList(
+                              delegate: SliverChildListDelegate([
+                                ..._mobileRefreshErrorWidgets(context),
+                                if (!isMobile(context))
+                                  const _SectionTitle('Discography'),
+                                if (!isMobile(context))
+                                  const SizedBox(height: 32),
+                                DiscographyGrid(
+                                  albums: _albums,
+                                  onAlbumTap: (album) {
+                                    if (widget.onAlbumTap != null) {
+                                      widget.onAlbumTap!(album);
+                                    } else {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                          builder: (context) =>
+                                              AlbumDetailScreen(
+                                                album: album,
+                                                baseUrl:
+                                                    widget._effectiveBaseUrl,
+                                              ),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                ),
+                              ]),
+                            )
+                          : _tabIndex == 1
+                          ? SliverList(
+                              delegate: SliverChildListDelegate([
+                                ..._mobileRefreshErrorWidgets(context),
+                                if (!isMobile(context))
+                                  const _SectionTitle('All Tracks'),
+                                if (!isMobile(context))
+                                  const SizedBox(height: 8),
+                                ProducerTrackList(
+                                  tracks: _tracks,
+                                  baseUrl: widget._effectiveBaseUrl,
+                                  useMobileLayout: true,
+                                  onPlay: (track, index) =>
+                                      _playTrack(track, index),
+                                ),
+                              ]),
+                            )
+                          : SliverList(
+                              delegate: SliverChildListDelegate([
+                                ..._mobileRefreshErrorWidgets(context),
+                                if (!isMobile(context))
+                                  const _SectionTitle('Featured MVs'),
+                                if (!isMobile(context))
+                                  const SizedBox(height: 8),
+                                FeaturedMvsGrid(
+                                  tracks: _tracksWithMv,
+                                  baseUrl: widget._effectiveBaseUrl,
+                                  onPlay: (track, index) => _playTrack(
+                                    track,
+                                    index,
+                                    queue: _tracksWithMv,
+                                  ),
+                                ),
+                              ]),
+                            ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RefreshErrorBanner extends StatelessWidget {
+  const _RefreshErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.red.shade900.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.redAccent.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: Colors.redAccent, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppTheme.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
