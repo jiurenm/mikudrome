@@ -59,8 +59,9 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
       _error = null;
     });
     try {
-      final result = await ApiClient(baseUrl: widget._effectiveBaseUrl)
-          .getProducer(widget.producer.id);
+      final result = await ApiClient(
+        baseUrl: widget._effectiveBaseUrl,
+      ).getProducer(widget.producer.id);
       if (result == null || !mounted) return;
       setState(() {
         _loadedProducer = result.producer;
@@ -80,8 +81,19 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
   List<Track> get _tracksWithMv =>
       _tracks.where((t) => t.videoPath.isNotEmpty).toList();
 
+  int get _displayAlbumCount =>
+      _albums.isNotEmpty ? _albums.length : _displayProducer.albumCount;
+
+  int get _displayTrackCount =>
+      _tracks.isNotEmpty ? _tracks.length : _displayProducer.trackCount;
+
   void _playTrack(Track track, int index, {List<Track>? queue}) {
     widget.onPlayTrack?.call(track, queue ?? _tracks, index);
+  }
+
+  void _playAll() {
+    if (_tracks.isEmpty) return;
+    _playTrack(_tracks.first, 0);
   }
 
   void _shufflePlay() {
@@ -102,28 +114,40 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
               slivers: [
                 if (isMobile(context) && widget.onBack != null)
                   SliverAppBar(
-                    backgroundColor: Colors.transparent,
-                    pinned: false,
-                    floating: true,
+                    key: const ValueKey('producer-detail-mobile-app-bar'),
+                    backgroundColor: AppTheme.cardBg,
+                    pinned: true,
+                    floating: false,
+                    elevation: 0,
                     leading: IconButton(
-                      icon: const Icon(Icons.arrow_back),
+                      icon: const Icon(Icons.chevron_left),
                       onPressed: widget.onBack,
                     ),
-                    title: Text(_displayProducer.name,
-                        style: const TextStyle(fontSize: 16)),
+                    title: Text(
+                      _displayProducer.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 16),
+                    ),
                   ),
                 SliverToBoxAdapter(
                   child: ProducerHeroSection(
                     producer: _displayProducer,
                     baseUrl: widget._effectiveBaseUrl,
+                    onPlayAll: _playAll,
                     onShuffle: _shufflePlay,
                     hasTracks: _tracks.isNotEmpty,
+                    albumCount: _displayAlbumCount,
+                    trackCount: _displayTrackCount,
+                    mvCount: _tracksWithMv.length,
                   ),
                 ),
                 SliverToBoxAdapter(
                   child: ProducerTabBar(
                     index: _tabIndex,
                     onTap: (i) => setState(() => _tabIndex = i),
+                    albumCount: _displayAlbumCount,
+                    trackCount: _displayTrackCount,
                     mvCount: _tracksWithMv.length,
                   ),
                 ),
@@ -142,8 +166,9 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                             Text(_error!, textAlign: TextAlign.center),
                             const SizedBox(height: 16),
                             FilledButton(
-                                onPressed: _loadProducer,
-                                child: const Text('Retry')),
+                              onPressed: _loadProducer,
+                              child: const Text('Retry'),
+                            ),
                           ],
                         ),
                       ),
@@ -151,12 +176,19 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                   )
                 else
                   SliverPadding(
-                    padding: EdgeInsets.all(isMobile(context) ? 16 : 48),
+                    padding: EdgeInsets.fromLTRB(
+                      isMobile(context) ? 16 : 48,
+                      isMobile(context) ? 4 : 48,
+                      isMobile(context) ? 16 : 48,
+                      88,
+                    ),
                     sliver: _tabIndex == 0
                         ? SliverList(
                             delegate: SliverChildListDelegate([
-                              const _SectionTitle('Discography'),
-                              const SizedBox(height: 32),
+                              if (!isMobile(context))
+                                const _SectionTitle('Discography'),
+                              if (!isMobile(context))
+                                const SizedBox(height: 32),
                               DiscographyGrid(
                                 albums: _albums,
                                 onAlbumTap: (album) {
@@ -177,31 +209,36 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                             ]),
                           )
                         : _tabIndex == 1
-                            ? SliverList(
-                                delegate: SliverChildListDelegate([
-                                  const _SectionTitle('All Tracks'),
-                                  const SizedBox(height: 8),
-                                  ProducerTrackList(
-                                    tracks: _tracks,
-                                    baseUrl: widget._effectiveBaseUrl,
-                                    onPlay: (track, index) =>
-                                        _playTrack(track, index),
-                                  ),
-                                ]),
-                              )
-                            : SliverList(
-                                delegate: SliverChildListDelegate([
-                                  const _SectionTitle('Featured MVs'),
-                                  const SizedBox(height: 8),
-                                  FeaturedMvsGrid(
-                                    tracks: _tracksWithMv,
-                                    baseUrl: widget._effectiveBaseUrl,
-                                    onPlay: (track, index) => _playTrack(
-                                        track, index,
-                                        queue: _tracksWithMv),
-                                  ),
-                                ]),
+                        ? SliverList(
+                            delegate: SliverChildListDelegate([
+                              if (!isMobile(context))
+                                const _SectionTitle('All Tracks'),
+                              if (!isMobile(context)) const SizedBox(height: 8),
+                              ProducerTrackList(
+                                tracks: _tracks,
+                                baseUrl: widget._effectiveBaseUrl,
+                                useMobileLayout: true,
+                                onPlay: (track, index) =>
+                                    _playTrack(track, index),
                               ),
+                            ]),
+                          )
+                        : SliverList(
+                            delegate: SliverChildListDelegate([
+                              if (!isMobile(context))
+                                const _SectionTitle('Featured MVs'),
+                              if (!isMobile(context)) const SizedBox(height: 8),
+                              FeaturedMvsGrid(
+                                tracks: _tracksWithMv,
+                                baseUrl: widget._effectiveBaseUrl,
+                                onPlay: (track, index) => _playTrack(
+                                  track,
+                                  index,
+                                  queue: _tracksWithMv,
+                                ),
+                              ),
+                            ]),
+                          ),
                   ),
               ],
             ),
@@ -221,18 +258,14 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(
-          width: 32,
-          height: 2,
-          color: AppTheme.mikuGreen,
-        ),
+        Container(width: 32, height: 2, color: AppTheme.mikuGreen),
         const SizedBox(width: 16),
         Text(
           title,
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: AppTheme.textPrimary,
-                fontWeight: FontWeight.w700,
-              ),
+            color: AppTheme.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ],
     );
