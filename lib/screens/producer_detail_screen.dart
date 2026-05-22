@@ -83,7 +83,7 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
       final result = await ApiClient(
         baseUrl: widget._effectiveBaseUrl,
       ).getProducer(widget.producer.id);
-      if (result == null || !mounted) return;
+      if (result == null) return;
       final data = ProducerDetailData(
         producer: result.producer,
         albums: result.albums,
