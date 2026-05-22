@@ -133,6 +133,94 @@ void main() {
     );
   });
 
+  testWidgets(
+    'producer detail renders cached data without requesting network',
+    (tester) async {
+      ProducerDetailDataCache.write(
+        baseUrl: 'http://example.test',
+        producerId: 27,
+        data: const ProducerDetailData(
+          producer: Producer(
+            id: 27,
+            name: 'Cached P',
+            trackCount: 1,
+            albumCount: 1,
+          ),
+          albums: [
+            Album(id: '9', title: 'Cached Album', trackCount: 1, coverUrl: ''),
+          ],
+          tracks: [
+            Track(
+              id: 91,
+              title: 'Cached Track',
+              audioPath: '/audio/cached.flac',
+              videoPath: '',
+              durationSeconds: 91,
+              composer: 'Cached P',
+            ),
+          ],
+        ),
+      );
+      final client = _NeverCompletingCountingProducerHttpClient();
+
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(
+          _harness(
+            size: const Size(390, 844),
+            child: ProducerDetailScreen(
+              producer: _producer,
+              baseUrl: 'http://example.test',
+              onBack: () {},
+            ),
+          ),
+        );
+        await tester.pump();
+      }, createHttpClient: (_) => client);
+
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text('Cached P'), findsWidgets);
+      expect(find.text('Cached Album'), findsOneWidget);
+      expect(find.text('1 首歌曲 · 1 张专辑 · 0 个MV'), findsOneWidget);
+      expect(client.requestCount, 0);
+    },
+  );
+
+  testWidgets('producer detail writes successful loads to cache', (
+    tester,
+  ) async {
+    await HttpOverrides.runZoned(
+      () async {
+        await tester.pumpWidget(
+          _harness(
+            size: const Size(390, 844),
+            child: ProducerDetailScreen(
+              producer: _producer,
+              baseUrl: 'http://example.test',
+              onBack: () {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      },
+      createHttpClient: (_) => _SingleProducerDetailHttpClient(
+        const _ProducerDetailResponseSet(
+          producerName: 'Loaded P',
+          albumTitle: 'Loaded Album',
+          trackTitle: 'Loaded Track',
+        ),
+      ),
+    );
+
+    final cached = ProducerDetailDataCache.read(
+      baseUrl: 'http://example.test',
+      producerId: 27,
+    );
+
+    expect(cached?.producer.name, 'Loaded P');
+    expect(cached?.albums.single.title, 'Loaded Album');
+    expect(cached?.tracks.single.title, 'Loaded Track');
+  });
+
   testWidgets('mobile producer detail uses initial counts while loading', (
     tester,
   ) async {
@@ -321,6 +409,258 @@ void main() {
       findsNothing,
     );
   });
+}
+
+class _ProducerDetailResponseSet {
+  const _ProducerDetailResponseSet({
+    required this.producerName,
+    required this.albumTitle,
+    required this.trackTitle,
+    this.trackCount = 1,
+    this.albumCount = 1,
+    this.trackId = 1,
+    this.hasVideo = false,
+  });
+
+  final String producerName;
+  final String albumTitle;
+  final String trackTitle;
+  final int trackCount;
+  final int albumCount;
+  final int trackId;
+  final bool hasVideo;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'producer': {
+        'id': 27,
+        'name': producerName,
+        'track_count': trackCount,
+        'album_count': albumCount,
+      },
+      'albums': [
+        {
+          'id': 39,
+          'title': albumTitle,
+          'producer_id': 27,
+          'producer_name': producerName,
+          'year': 2021,
+          'track_count': trackCount,
+        },
+      ],
+      'tracks': [
+        {
+          'id': trackId,
+          'title': trackTitle,
+          'audio_path': '/audio/$trackId.flac',
+          'video_path': hasVideo ? '/video/$trackId.mp4' : '',
+          'video_thumb_path': hasVideo ? '/thumb/$trackId.jpg' : '',
+          'duration_seconds': 225,
+          'format': 'FLAC',
+          'composer': producerName,
+          'vocal': '初音ミク',
+        },
+      ],
+    };
+  }
+}
+
+class _NeverCompletingCountingProducerHttpClient implements HttpClient {
+  int requestCount = 0;
+
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async {
+    requestCount++;
+    return _NeverCompletingProducerRequest();
+  }
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) async {
+    requestCount++;
+    return _NeverCompletingProducerRequest();
+  }
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _NeverCompletingProducerRequest implements HttpClientRequest {
+  @override
+  Future<HttpClientResponse> close() => Completer<HttpClientResponse>().future;
+
+  @override
+  Encoding get encoding => utf8;
+
+  @override
+  set encoding(Encoding _) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _SingleProducerDetailHttpClient implements HttpClient {
+  _SingleProducerDetailHttpClient(this.responseSet);
+
+  final _ProducerDetailResponseSet responseSet;
+
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async =>
+      _SingleProducerDetailRequest(url, responseSet);
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) async =>
+      _SingleProducerDetailRequest(url, responseSet);
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _SingleProducerDetailRequest implements HttpClientRequest {
+  _SingleProducerDetailRequest(this.url, this.responseSet);
+
+  final Uri url;
+  final _ProducerDetailResponseSet responseSet;
+  bool _followRedirects = true;
+  int _maxRedirects = 5;
+  int _contentLength = 0;
+  bool _persistentConnection = true;
+
+  @override
+  Future<HttpClientResponse> close() async =>
+      _ProducerDetailResponse(url, responseSet);
+
+  @override
+  Encoding get encoding => utf8;
+
+  @override
+  set encoding(Encoding _) {}
+
+  @override
+  bool get followRedirects => _followRedirects;
+
+  @override
+  set followRedirects(bool value) {
+    _followRedirects = value;
+  }
+
+  @override
+  int get maxRedirects => _maxRedirects;
+
+  @override
+  set maxRedirects(int value) {
+    _maxRedirects = value;
+  }
+
+  @override
+  int get contentLength => _contentLength;
+
+  @override
+  set contentLength(int value) {
+    _contentLength = value;
+  }
+
+  @override
+  bool get persistentConnection => _persistentConnection;
+
+  @override
+  set persistentConnection(bool value) {
+    _persistentConnection = value;
+  }
+
+  @override
+  Future<void> addStream(Stream<List<int>> stream) async {
+    await stream.drain<void>();
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _ProducerDetailResponse extends Stream<List<int>>
+    implements HttpClientResponse {
+  _ProducerDetailResponse(Uri url, _ProducerDetailResponseSet responseSet)
+    : _bytes = utf8.encode(_bodyFor(url, responseSet));
+
+  final List<int> _bytes;
+
+  static String _bodyFor(Uri url, _ProducerDetailResponseSet responseSet) {
+    if (url.path == '/api/producers/27') {
+      return jsonEncode(responseSet.toJson());
+    }
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>';
+  }
+
+  @override
+  int get contentLength => _bytes.length;
+
+  @override
+  int get statusCode => HttpStatus.ok;
+
+  @override
+  HttpHeaders get headers => _ProducerDetailFakeHttpHeaders();
+
+  @override
+  bool get isRedirect => false;
+
+  @override
+  X509Certificate? get certificate => null;
+
+  @override
+  HttpConnectionInfo? get connectionInfo => null;
+
+  @override
+  List<Cookie> get cookies => const [];
+
+  @override
+  Future<Socket> detachSocket() {
+    throw UnimplementedError();
+  }
+
+  @override
+  HttpClientResponseCompressionState get compressionState =>
+      HttpClientResponseCompressionState.notCompressed;
+
+  @override
+  String get reasonPhrase => 'OK';
+
+  @override
+  bool get persistentConnection => false;
+
+  @override
+  Future<HttpClientResponse> redirect([
+    String? method,
+    Uri? url,
+    bool? followLoops,
+  ]) {
+    throw UnimplementedError();
+  }
+
+  @override
+  List<RedirectInfo> get redirects => const [];
+
+  @override
+  StreamSubscription<List<int>> listen(
+    void Function(List<int> data)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    return Stream<List<int>>.fromIterable([_bytes]).listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _ProducerDetailFakeHttpClient implements HttpClient {

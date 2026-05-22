@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../utils/responsive.dart';
 import '../widgets/producer_detail/discography_grid.dart';
 import '../widgets/producer_detail/featured_mvs_grid.dart';
+import '../widgets/producer_detail/producer_detail_data_cache.dart';
 import '../widgets/producer_detail/producer_hero_section.dart';
 import '../widgets/producer_detail/producer_tab_bar.dart';
 import '../widgets/producer_detail/producer_track_list.dart';
@@ -47,10 +48,30 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
 
   Producer get _displayProducer => _loadedProducer ?? widget.producer;
 
+  bool get _hasDetailData => _albums.isNotEmpty || _tracks.isNotEmpty;
+
   @override
   void initState() {
     super.initState();
-    _loadProducer();
+    final cached = ProducerDetailDataCache.read(
+      baseUrl: widget._effectiveBaseUrl,
+      producerId: widget.producer.id,
+    );
+    if (cached != null) {
+      _applyProducerDetailData(cached);
+    } else {
+      _loadProducer();
+    }
+  }
+
+  void _applyProducerDetailData(ProducerDetailData data) {
+    setState(() {
+      _loadedProducer = data.producer;
+      _albums = data.albums;
+      _tracks = data.tracks;
+      _loading = false;
+      _error = null;
+    });
   }
 
   Future<void> _loadProducer() async {
@@ -63,12 +84,18 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
         baseUrl: widget._effectiveBaseUrl,
       ).getProducer(widget.producer.id);
       if (result == null || !mounted) return;
-      setState(() {
-        _loadedProducer = result.producer;
-        _albums = result.albums;
-        _tracks = result.tracks;
-        _loading = false;
-      });
+      final data = ProducerDetailData(
+        producer: result.producer,
+        albums: result.albums,
+        tracks: result.tracks,
+      );
+      ProducerDetailDataCache.write(
+        baseUrl: widget._effectiveBaseUrl,
+        producerId: widget.producer.id,
+        data: data,
+      );
+      if (!mounted) return;
+      _applyProducerDetailData(data);
     } catch (e) {
       if (!mounted) return;
       setState(() {
