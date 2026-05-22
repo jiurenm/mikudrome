@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/track.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 
 class ProducerTrackList extends StatelessWidget {
   const ProducerTrackList({
@@ -17,6 +18,42 @@ class ProducerTrackList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mobile = isMobile(context);
+
+    if (mobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${tracks.length} tracks',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppTheme.textMuted,
+                ),
+          ),
+          const SizedBox(height: 24),
+          if (tracks.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 48),
+              child: Text(
+                '还没有歌曲',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppTheme.textMuted,
+                    ),
+              ),
+            )
+          else
+            ...tracks.asMap().entries.map(
+                  (e) => _MobileProducerTrackRow(
+                    key: ValueKey('producer-track-mobile-row-${e.value.id}'),
+                    index: e.key + 1,
+                    track: e.value,
+                    onPlay: () => onPlay(e.value, e.key),
+                  ),
+                ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -49,6 +86,185 @@ class ProducerTrackList extends StatelessWidget {
               ),
         ],
       ],
+    );
+  }
+}
+
+class _MobileProducerTrackRow extends StatelessWidget {
+  const _MobileProducerTrackRow({
+    super.key,
+    required this.index,
+    required this.track,
+    required this.onPlay,
+  });
+
+  final int index;
+  final Track track;
+  final VoidCallback onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPlay,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppTheme.textPrimary.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: AppTheme.textPrimary.withValues(alpha: 0.08),
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.play_arrow,
+                      size: 16,
+                      color: AppTheme.textPrimary,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      track.displayNumber(index),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: AppTheme.textMuted,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            track.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(
+                                  color: AppTheme.textPrimary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          track.durationFormatted,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: AppTheme.textMuted,
+                                    fontFeatures: [FontFeature.tabularFigures()],
+                                  ),
+                        ),
+                      ],
+                    ),
+                    if (track.vocalLine.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        track.vocalLine,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppTheme.textMuted,
+                              fontSize: 12,
+                            ),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (track.hasVideo)
+                          _TrackBadge(
+                            icon: Icons.movie,
+                            label: 'MV',
+                            foregroundColor: AppTheme.mikuGreen,
+                            backgroundColor:
+                                AppTheme.mikuGreen.withValues(alpha: 0.1),
+                            borderColor:
+                                AppTheme.mikuGreen.withValues(alpha: 0.2),
+                          ),
+                        if (track.format.isNotEmpty)
+                          _TrackBadge(
+                            label: track.format,
+                            foregroundColor: const Color(0xFF9CA3AF),
+                            backgroundColor: const Color(0xFF1F2937),
+                            borderColor: Colors.white.withValues(alpha: 0.05),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrackBadge extends StatelessWidget {
+  const _TrackBadge({
+    this.icon,
+    required this.label,
+    required this.foregroundColor,
+    required this.backgroundColor,
+    required this.borderColor,
+  });
+
+  final IconData? icon;
+  final String label;
+  final Color foregroundColor;
+  final Color backgroundColor;
+  final Color borderColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 10, color: foregroundColor),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: foregroundColor,
+                  fontSize: 8,
+                  fontWeight: FontWeight.w400,
+                ),
+          ),
+        ],
+      ),
     );
   }
 }
