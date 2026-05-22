@@ -10,14 +10,22 @@ class ProducerHeroSection extends StatelessWidget {
     super.key,
     required this.producer,
     required this.baseUrl,
+    required this.onPlayAll,
     required this.onShuffle,
     required this.hasTracks,
+    this.albumCount,
+    this.trackCount,
+    this.mvCount = 0,
   });
 
   final Producer producer;
   final String baseUrl;
+  final VoidCallback onPlayAll;
   final VoidCallback onShuffle;
   final bool hasTracks;
+  final int? albumCount;
+  final int? trackCount;
+  final int mvCount;
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +33,7 @@ class ProducerHeroSection extends StatelessWidget {
       baseUrl: baseUrl,
     ).producerAvatarUrl(producer.id);
     final mobile = isMobile(context);
-    final avatarSize = mobile ? 120.0 : 192.0;
+    final avatarSize = mobile ? 80.0 : 192.0;
 
     Widget avatarWidget = Container(
       width: avatarSize,
@@ -96,47 +104,94 @@ class ProducerHeroSection extends StatelessWidget {
     );
 
     if (mobile) {
-      return Stack(
-        children: [
-          SizedBox(
-            width: double.infinity,
-            child: Image.network(
-              avatarUrl,
-              headers: ApiConfig.defaultHeaders,
-              fit: BoxFit.cover,
-              height: 200,
-              errorBuilder: (_, __, ___) =>
-                  Container(height: 200, color: AppTheme.cardBg),
-            ),
+      final loadedTrackCount = trackCount ?? producer.trackCount;
+      final loadedAlbumCount = albumCount ?? producer.albumCount;
+
+      return Container(
+        key: const ValueKey('producer-detail-mobile-hero'),
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+        decoration: BoxDecoration(
+          color: AppTheme.cardBg,
+          border: Border(
+            bottom: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
           ),
-          Container(
-            height: 200,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppTheme.mikuDark.withValues(alpha: 0.5),
-                  AppTheme.mikuDark,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            avatarWidget,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    producer.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '$loadedTrackCount 首歌曲 · $loadedAlbumCount 张专辑 · $mvCount 个MV',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: AppTheme.textMuted),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      FilledButton.icon(
+                        onPressed: hasTracks ? onPlayAll : null,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppTheme.mikuGreen,
+                          foregroundColor: Colors.black,
+                          disabledBackgroundColor: Colors.white.withValues(
+                            alpha: 0.08,
+                          ),
+                          disabledForegroundColor: AppTheme.textMuted,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(22),
+                          ),
+                        ),
+                        icon: const Icon(Icons.play_arrow, size: 20),
+                        label: const Text('播放全部'),
+                      ),
+                      const SizedBox(width: 10),
+                      IconButton.filled(
+                        key: const ValueKey('producer-detail-mobile-shuffle'),
+                        onPressed: hasTracks ? onShuffle : null,
+                        style: IconButton.styleFrom(
+                          backgroundColor: AppTheme.mikuGreen.withValues(
+                            alpha: 0.16,
+                          ),
+                          foregroundColor: AppTheme.mikuGreen,
+                          disabledBackgroundColor: Colors.white.withValues(
+                            alpha: 0.04,
+                          ),
+                          disabledForegroundColor: AppTheme.textMuted,
+                        ),
+                        tooltip: '随机播放',
+                        icon: const Icon(Icons.shuffle),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-            child: Column(
-              children: [
-                avatarWidget,
-                const SizedBox(height: 16),
-                nameWidget,
-                const SizedBox(height: 8),
-                statsWidget,
-                const SizedBox(height: 16),
-                shuffleButton,
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       );
     }
 
