@@ -10,17 +10,19 @@ class ProducerTrackList extends StatelessWidget {
     required this.tracks,
     required this.baseUrl,
     required this.onPlay,
+    this.useMobileLayout = false,
   });
 
   final List<Track> tracks;
   final String baseUrl;
   final void Function(Track track, int index) onPlay;
+  final bool useMobileLayout;
 
   @override
   Widget build(BuildContext context) {
     final mobile = isMobile(context);
 
-    if (mobile) {
+    if (mobile && useMobileLayout) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -81,6 +81,12 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
   List<Track> get _tracksWithMv =>
       _tracks.where((t) => t.videoPath.isNotEmpty).toList();
 
+  int get _displayAlbumCount =>
+      _albums.isNotEmpty ? _albums.length : _displayProducer.albumCount;
+
+  int get _displayTrackCount =>
+      _tracks.isNotEmpty ? _tracks.length : _displayProducer.trackCount;
+
   void _playTrack(Track track, int index, {List<Track>? queue}) {
     widget.onPlayTrack?.call(track, queue ?? _tracks, index);
   }
@@ -131,8 +137,8 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                     onPlayAll: _playAll,
                     onShuffle: _shufflePlay,
                     hasTracks: _tracks.isNotEmpty,
-                    albumCount: _albums.length,
-                    trackCount: _tracks.length,
+                    albumCount: _displayAlbumCount,
+                    trackCount: _displayTrackCount,
                     mvCount: _tracksWithMv.length,
                   ),
                 ),
@@ -140,8 +146,8 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                   child: ProducerTabBar(
                     index: _tabIndex,
                     onTap: (i) => setState(() => _tabIndex = i),
-                    albumCount: _albums.length,
-                    trackCount: _tracks.length,
+                    albumCount: _displayAlbumCount,
+                    trackCount: _displayTrackCount,
                     mvCount: _tracksWithMv.length,
                   ),
                 ),
@@ -211,6 +217,7 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                               ProducerTrackList(
                                 tracks: _tracks,
                                 baseUrl: widget._effectiveBaseUrl,
+                                useMobileLayout: true,
                                 onPlay: (track, index) =>
                                     _playTrack(track, index),
                               ),

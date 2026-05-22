@@ -5,7 +5,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/models/producer.dart';
+import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/screens/producer_detail_screen.dart';
+import 'package:mikudrome/widgets/producer_detail/producer_track_list.dart';
 
 const _producer = Producer(
   id: 27,
@@ -24,6 +26,28 @@ Widget _harness({required Size size, required Widget child}) {
 }
 
 void main() {
+  testWidgets('mobile producer detail uses initial counts while loading', (
+    tester,
+  ) async {
+    await HttpOverrides.runZoned(() async {
+      await tester.pumpWidget(
+        _harness(
+          size: const Size(390, 844),
+          child: ProducerDetailScreen(
+            producer: _producer,
+            baseUrl: 'http://example.test',
+            onBack: () {},
+          ),
+        ),
+      );
+      await tester.pump();
+    }, createHttpClient: (_) => _DelayedProducerDetailFakeHttpClient());
+
+    expect(find.text('27 首歌曲 · 3 张专辑 · 0 个MV'), findsOneWidget);
+    expect(find.text('专辑 3'), findsOneWidget);
+    expect(find.text('歌曲 27'), findsOneWidget);
+  });
+
   testWidgets('mobile producer detail renders creator dashboard and sections', (
     tester,
   ) async {
@@ -162,6 +186,34 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets('producer track list mobile layout is opt-in', (tester) async {
+    await tester.pumpWidget(
+      _harness(
+        size: const Size(390, 844),
+        child: Scaffold(
+          body: ProducerTrackList(
+            tracks: const [
+              Track(
+                id: 1,
+                title: 'Track A',
+                audioPath: '/audio/a.flac',
+                videoPath: '',
+              ),
+            ],
+            baseUrl: 'http://example.test',
+            onPlay: (_, __) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Title / Vocalists'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('producer-track-mobile-row-1')),
+      findsNothing,
+    );
+  });
 }
 
 class _ProducerDetailFakeHttpClient implements HttpClient {
@@ -175,6 +227,43 @@ class _ProducerDetailFakeHttpClient implements HttpClient {
 
   @override
   void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _DelayedProducerDetailFakeHttpClient implements HttpClient {
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async =>
+      _DelayedProducerDetailFakeHttpClientRequest(url);
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) async =>
+      _DelayedProducerDetailFakeHttpClientRequest(url);
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _DelayedProducerDetailFakeHttpClientRequest implements HttpClientRequest {
+  _DelayedProducerDetailFakeHttpClientRequest(this.url);
+
+  final Uri url;
+
+  @override
+  Future<HttpClientResponse> close() async {
+    await Completer<void>().future;
+    return _ProducerDetailFakeHttpClientResponse(url);
+  }
+
+  @override
+  Encoding get encoding => utf8;
+
+  @override
+  set encoding(Encoding _) {}
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
