@@ -4,9 +4,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mikudrome/models/album.dart';
 import 'package:mikudrome/models/producer.dart';
 import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/screens/producer_detail_screen.dart';
+import 'package:mikudrome/widgets/producer_detail/producer_detail_data_cache.dart';
 import 'package:mikudrome/widgets/producer_detail/producer_track_list.dart';
 
 const _producer = Producer(
@@ -26,6 +28,111 @@ Widget _harness({required Size size, required Widget child}) {
 }
 
 void main() {
+  setUp(ProducerDetailDataCache.clearAll);
+
+  test('ProducerDetailDataCache stores, overwrites, and clears by key', () {
+    const first = ProducerDetailData(
+      producer: Producer(id: 27, name: 'DECO*27', trackCount: 1, albumCount: 1),
+      albums: [
+        Album(id: '1', title: 'First Album', trackCount: 1, coverUrl: ''),
+      ],
+      tracks: [
+        Track(
+          id: 1,
+          title: 'First Track',
+          audioPath: '/audio/first.flac',
+          videoPath: '',
+        ),
+      ],
+    );
+    const second = ProducerDetailData(
+      producer: Producer(id: 27, name: 'DECO*27', trackCount: 2, albumCount: 1),
+      albums: [
+        Album(id: '2', title: 'Second Album', trackCount: 2, coverUrl: ''),
+      ],
+      tracks: [
+        Track(
+          id: 2,
+          title: 'Second Track',
+          audioPath: '/audio/second.flac',
+          videoPath: '',
+        ),
+      ],
+    );
+    const third = ProducerDetailData(
+      producer: Producer(id: 27, name: 'DECO*27', trackCount: 3, albumCount: 1),
+      albums: [
+        Album(id: '3', title: 'Third Album', trackCount: 3, coverUrl: ''),
+      ],
+      tracks: [
+        Track(
+          id: 3,
+          title: 'Third Track',
+          audioPath: '/audio/third.flac',
+          videoPath: '',
+        ),
+      ],
+    );
+
+    expect(
+      ProducerDetailDataCache.read(baseUrl: 'http://a.test', producerId: 27),
+      isNull,
+    );
+
+    ProducerDetailDataCache.write(
+      baseUrl: 'http://a.test',
+      producerId: 27,
+      data: first,
+    );
+    ProducerDetailDataCache.write(
+      baseUrl: 'http://b.test',
+      producerId: 27,
+      data: second,
+    );
+
+    expect(
+      ProducerDetailDataCache.read(baseUrl: 'http://a.test', producerId: 27),
+      same(first),
+    );
+    expect(
+      ProducerDetailDataCache.read(baseUrl: 'http://b.test', producerId: 27),
+      same(second),
+    );
+
+    ProducerDetailDataCache.write(
+      baseUrl: 'http://a.test',
+      producerId: 27,
+      data: third,
+    );
+
+    expect(
+      ProducerDetailDataCache.read(baseUrl: 'http://a.test', producerId: 27),
+      same(third),
+    );
+    expect(
+      ProducerDetailDataCache.read(baseUrl: 'http://b.test', producerId: 27),
+      same(second),
+    );
+
+    ProducerDetailDataCache.clear(baseUrl: 'http://a.test', producerId: 27);
+
+    expect(
+      ProducerDetailDataCache.read(baseUrl: 'http://a.test', producerId: 27),
+      isNull,
+    );
+    expect(
+      ProducerDetailDataCache.read(baseUrl: 'http://b.test', producerId: 27),
+      same(second),
+    );
+
+    ProducerDetailDataCache.clearAll();
+
+    expect(
+      ProducerDetailDataCache.read(baseUrl: 'http://b.test', producerId: 27),
+      isNull,
+    );
+  });
+
   testWidgets('mobile producer detail uses initial counts while loading', (
     tester,
   ) async {
