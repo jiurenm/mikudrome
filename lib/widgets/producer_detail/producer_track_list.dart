@@ -26,9 +26,9 @@ class ProducerTrackList extends StatelessWidget {
         children: [
           Text(
             '${tracks.length} 首歌曲',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppTheme.textMuted,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: AppTheme.textMuted),
           ),
           const SizedBox(height: 24),
           if (tracks.isEmpty)
@@ -36,20 +36,20 @@ class ProducerTrackList extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 48),
               child: Text(
                 '还没有歌曲',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppTheme.textMuted),
               ),
             )
           else
             ...tracks.asMap().entries.map(
-                  (e) => _MobileProducerTrackRow(
-                    key: ValueKey('producer-track-mobile-row-${e.value.id}'),
-                    index: e.key + 1,
-                    track: e.value,
-                    onPlay: () => onPlay(e.value, e.key),
-                  ),
-                ),
+              (e) => _MobileProducerTrackRow(
+                key: ValueKey('producer-track-mobile-row-${e.value.id}'),
+                index: e.key + 1,
+                track: e.value,
+                onPlay: () => onPlay(e.value, e.key),
+              ),
+            ),
         ],
       );
     }
@@ -59,9 +59,9 @@ class ProducerTrackList extends StatelessWidget {
       children: [
         Text(
           '${tracks.length} tracks',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: AppTheme.textMuted,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(color: AppTheme.textMuted),
         ),
         const SizedBox(height: 24),
         if (tracks.isEmpty)
@@ -69,21 +69,21 @@ class ProducerTrackList extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 48),
             child: Text(
               'No tracks for this producer.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.textMuted,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppTheme.textMuted),
             ),
           )
         else ...[
           const _ProducerTrackListHeader(),
           ...tracks.asMap().entries.map(
-                (e) => ProducerTrackRow(
-                  index: e.key + 1,
-                  track: e.value,
-                  baseUrl: baseUrl,
-                  onPlay: () => onPlay(e.value, e.key),
-                ),
-              ),
+            (e) => ProducerTrackRow(
+              index: e.key + 1,
+              track: e.value,
+              baseUrl: baseUrl,
+              onPlay: () => onPlay(e.value, e.key),
+            ),
+          ),
         ],
       ],
     );
@@ -136,9 +136,9 @@ class _MobileProducerTrackRow extends StatelessWidget {
                     Text(
                       track.displayNumber(index),
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: AppTheme.textMuted,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        color: AppTheme.textMuted,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
@@ -157,9 +157,7 @@ class _MobileProducerTrackRow extends StatelessWidget {
                             track.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
+                            style: Theme.of(context).textTheme.titleSmall
                                 ?.copyWith(
                                   color: AppTheme.textPrimary,
                                   fontWeight: FontWeight.w700,
@@ -169,13 +167,13 @@ class _MobileProducerTrackRow extends StatelessWidget {
                         const SizedBox(width: 12),
                         Text(
                           track.durationFormatted,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: AppTheme.textMuted,
-                                    fontFeatures: const [
-                                      FontFeature.tabularFigures(),
-                                    ],
-                                  ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: AppTheme.textMuted,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
                         ),
                       ],
                     ),
@@ -186,9 +184,9 @@ class _MobileProducerTrackRow extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppTheme.textMuted,
-                              fontSize: 12,
-                            ),
+                          color: AppTheme.textMuted,
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                     const SizedBox(height: 8),
@@ -201,10 +199,12 @@ class _MobileProducerTrackRow extends StatelessWidget {
                             icon: Icons.movie,
                             label: 'MV',
                             foregroundColor: AppTheme.mikuGreen,
-                            backgroundColor:
-                                AppTheme.mikuGreen.withValues(alpha: 0.1),
-                            borderColor:
-                                AppTheme.mikuGreen.withValues(alpha: 0.2),
+                            backgroundColor: AppTheme.mikuGreen.withValues(
+                              alpha: 0.1,
+                            ),
+                            borderColor: AppTheme.mikuGreen.withValues(
+                              alpha: 0.2,
+                            ),
                           ),
                         if (track.format.isNotEmpty)
                           _TrackBadge(
@@ -265,10 +265,10 @@ class _TrackBadge extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               softWrap: false,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: foregroundColor,
-                    fontSize: 8,
-                    fontWeight: FontWeight.w400,
-                  ),
+                color: foregroundColor,
+                fontSize: 8,
+                fontWeight: FontWeight.w400,
+              ),
             ),
           ),
         ],
@@ -287,7 +287,9 @@ class _ProducerTrackListHeader extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-              width: 32, child: Text('#', style: _trackHeaderStyle(context))),
+            width: 32,
+            child: Text('#', style: _trackHeaderStyle(context)),
+          ),
           const SizedBox(width: 16),
           Expanded(
             flex: 6,
@@ -296,15 +298,19 @@ class _ProducerTrackListHeader extends StatelessWidget {
           Expanded(
             flex: 3,
             child: Center(
-                child: Text('Tags / MV', style: _trackHeaderStyle(context))),
+              child: Text('Tags / MV', style: _trackHeaderStyle(context)),
+            ),
           ),
           const SizedBox(width: 16),
           SizedBox(
             width: 48,
             child: Align(
               alignment: Alignment.centerRight,
-              child:
-                  Icon(Icons.access_time, size: 12, color: AppTheme.textMuted),
+              child: Icon(
+                Icons.access_time,
+                size: 12,
+                color: AppTheme.textMuted,
+              ),
             ),
           ),
         ],
@@ -313,9 +319,9 @@ class _ProducerTrackListHeader extends StatelessWidget {
   }
 
   TextStyle? _trackHeaderStyle(BuildContext context) {
-    return Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: AppTheme.textMuted,
-        );
+    return Theme.of(
+      context,
+    ).textTheme.labelSmall?.copyWith(color: AppTheme.textMuted);
   }
 }
 
@@ -369,18 +375,18 @@ class _ProducerTrackRowState extends State<ProducerTrackRow> {
                       Text(
                         track.title,
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: titleColor,
-                              fontWeight: FontWeight.w700,
-                            ),
+                          color: titleColor,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       if (_vocalLine.isNotEmpty)
                         Text(
                           _vocalLine,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: AppTheme.textMuted,
-                                    fontSize: 12,
-                                  ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: AppTheme.textMuted,
+                                fontSize: 12,
+                              ),
                         ),
                     ],
                   ),
@@ -393,7 +399,9 @@ class _ProducerTrackRowState extends State<ProducerTrackRow> {
                       if (track.hasVideo)
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: AppTheme.mikuGreen.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(4),
@@ -404,14 +412,15 @@ class _ProducerTrackRowState extends State<ProducerTrackRow> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.movie,
-                                  size: 10, color: AppTheme.mikuGreen),
+                              const Icon(
+                                Icons.movie,
+                                size: 10,
+                                color: AppTheme.mikuGreen,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 'LOCAL MV',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
+                                style: Theme.of(context).textTheme.labelSmall
                                     ?.copyWith(
                                       color: AppTheme.mikuGreen,
                                       fontSize: 8,
@@ -426,18 +435,19 @@ class _ProducerTrackRowState extends State<ProducerTrackRow> {
                       if (track.format.isNotEmpty)
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFF1F2937),
                             borderRadius: BorderRadius.circular(4),
                             border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.05)),
+                              color: Colors.white.withValues(alpha: 0.05),
+                            ),
                           ),
                           child: Text(
                             track.format,
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelSmall
+                            style: Theme.of(context).textTheme.labelSmall
                                 ?.copyWith(
                                   color: const Color(0xFF9CA3AF),
                                   fontSize: 8,
@@ -448,30 +458,38 @@ class _ProducerTrackRowState extends State<ProducerTrackRow> {
                       if (!track.hasVideo && track.format.isEmpty && _hovering)
                         IconButton(
                           onPressed: () {},
-                          style: IconButton.styleFrom(
-                            foregroundColor: AppTheme.textMuted,
-                            minimumSize: Size.zero,
-                            padding: const EdgeInsets.all(8),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ).copyWith(
-                            overlayColor:
-                                MaterialStateProperty.resolveWith<Color?>(
-                                    (states) {
-                              if (states.contains(MaterialState.hovered)) {
-                                return AppTheme.textPrimary
-                                    .withValues(alpha: 0.08);
-                              }
-                              return null;
-                            }),
-                            foregroundColor:
-                                MaterialStateProperty.resolveWith<Color>(
-                                    (states) {
-                              if (states.contains(MaterialState.hovered)) {
-                                return AppTheme.textPrimary;
-                              }
-                              return AppTheme.textMuted;
-                            }),
-                          ),
+                          style:
+                              IconButton.styleFrom(
+                                foregroundColor: AppTheme.textMuted,
+                                minimumSize: Size.zero,
+                                padding: const EdgeInsets.all(8),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ).copyWith(
+                                overlayColor:
+                                    MaterialStateProperty.resolveWith<Color?>((
+                                      states,
+                                    ) {
+                                      if (states.contains(
+                                        MaterialState.hovered,
+                                      )) {
+                                        return AppTheme.textPrimary.withValues(
+                                          alpha: 0.08,
+                                        );
+                                      }
+                                      return null;
+                                    }),
+                                foregroundColor:
+                                    MaterialStateProperty.resolveWith<Color>((
+                                      states,
+                                    ) {
+                                      if (states.contains(
+                                        MaterialState.hovered,
+                                      )) {
+                                        return AppTheme.textPrimary;
+                                      }
+                                      return AppTheme.textMuted;
+                                    }),
+                              ),
                           icon: const Icon(Icons.download, size: 20),
                         ),
                     ],
