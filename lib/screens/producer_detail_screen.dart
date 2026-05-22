@@ -49,7 +49,8 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
 
   Producer get _displayProducer => _loadedProducer ?? widget.producer;
 
-  bool get _hasDetailData => _albums.isNotEmpty || _tracks.isNotEmpty;
+  bool get _hasDetailData =>
+      _loadedProducer != null || _albums.isNotEmpty || _tracks.isNotEmpty;
 
   @override
   void initState() {
@@ -87,7 +88,9 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
       final result = await ApiClient(
         baseUrl: widget._effectiveBaseUrl,
       ).getProducer(widget.producer.id);
-      if (result == null) return;
+      if (result == null) {
+        throw StateError('Producer not found');
+      }
       final data = ProducerDetailData(
         producer: result.producer,
         albums: result.albums,
