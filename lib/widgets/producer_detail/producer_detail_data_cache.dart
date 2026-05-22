@@ -13,7 +13,7 @@ class ProducerDetailData {
   final List<Album> albums;
   final List<Track> tracks;
 
-  bool get hasContent => albums.isNotEmpty || tracks.isNotEmpty;
+  bool get hasContent => true;
 }
 
 class ProducerDetailDataCache {

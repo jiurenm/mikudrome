@@ -73,6 +73,13 @@ void main() {
         ),
       ],
     );
+    const empty = ProducerDetailData(
+      producer: Producer(id: 27, name: 'DECO*27', trackCount: 0, albumCount: 0),
+      albums: [],
+      tracks: [],
+    );
+
+    expect(empty.hasContent, isTrue);
 
     expect(
       ProducerDetailDataCache.read(baseUrl: 'http://a.test', producerId: 27),
