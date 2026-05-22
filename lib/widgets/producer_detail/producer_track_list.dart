@@ -25,7 +25,7 @@ class ProducerTrackList extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '${tracks.length} tracks',
+            '${tracks.length} 首歌曲',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: AppTheme.textMuted,
                 ),
@@ -172,7 +172,9 @@ class _MobileProducerTrackRow extends StatelessWidget {
                           style:
                               Theme.of(context).textTheme.bodySmall?.copyWith(
                                     color: AppTheme.textMuted,
-                                    fontFeatures: [FontFeature.tabularFigures()],
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
                                   ),
                         ),
                       ],
@@ -255,13 +257,19 @@ class _TrackBadge extends StatelessWidget {
             Icon(icon, size: 10, color: foregroundColor),
             const SizedBox(width: 4),
           ],
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: foregroundColor,
-                  fontSize: 8,
-                  fontWeight: FontWeight.w400,
-                ),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 120),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: foregroundColor,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w400,
+                  ),
+            ),
           ),
         ],
       ),
