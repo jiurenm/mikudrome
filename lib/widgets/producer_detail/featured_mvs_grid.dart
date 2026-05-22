@@ -19,34 +19,37 @@ class FeaturedMvsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mobile = isMobile(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: Text(
-            '${tracks.length} tracks with local MV',
-            style: Theme.of(
-              context,
-            ).textTheme.labelSmall?.copyWith(color: AppTheme.textMuted),
+        if (!mobile)
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '${tracks.length} tracks with local MV',
+              style: Theme.of(
+                context,
+              ).textTheme.labelSmall?.copyWith(color: AppTheme.textMuted),
+            ),
           ),
-        ),
-        const SizedBox(height: 24),
+        if (!mobile) const SizedBox(height: 24),
         if (tracks.isEmpty)
           Text(
-            'No tracks with local MV',
+            mobile ? '还没有本地MV' : 'No tracks with local MV',
             style: Theme.of(
               context,
             ).textTheme.bodyMedium?.copyWith(color: AppTheme.textMuted),
           )
         else
           GridView.builder(
+            key: mobile ? const ValueKey('producer-mv-mobile-grid') : null,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 300,
-              mainAxisSpacing: isMobile(context) ? 12 : 24,
-              crossAxisSpacing: isMobile(context) ? 12 : 24,
+              maxCrossAxisExtent: mobile ? 220 : 300,
+              mainAxisSpacing: mobile ? 12 : 24,
+              crossAxisSpacing: mobile ? 12 : 24,
               childAspectRatio: 16 / 9,
             ),
             itemCount: tracks.length,
@@ -57,7 +60,7 @@ class FeaturedMvsGrid extends StatelessWidget {
                     ? ApiClient(baseUrl: baseUrl).streamThumbUrl(track.id)
                     : '',
                 title: track.title,
-                subtitle: 'Local MV',
+                subtitle: mobile ? '本地MV' : 'Local MV',
                 onTap: () => onPlay(track, index),
               );
             },
@@ -131,6 +134,8 @@ class _MvCardState extends State<_MvCard> {
                 children: [
                   Text(
                     widget.title,
+                    maxLines: isMobile(context) ? 2 : 1,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,

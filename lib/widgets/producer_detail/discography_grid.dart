@@ -17,9 +17,10 @@ class DiscographyGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mobile = isMobile(context);
     if (albums.isEmpty) {
       return Text(
-        'No albums',
+        mobile ? '还没有专辑' : 'No albums',
         style: Theme.of(
           context,
         ).textTheme.bodyMedium?.copyWith(color: AppTheme.textMuted),
@@ -29,10 +30,10 @@ class DiscographyGrid extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 160,
-        mainAxisSpacing: isMobile(context) ? 16 : 32,
-        crossAxisSpacing: isMobile(context) ? 16 : 32,
-        childAspectRatio: 0.85,
+        maxCrossAxisExtent: mobile ? 190 : 160,
+        mainAxisSpacing: mobile ? 18 : 32,
+        crossAxisSpacing: mobile ? 12 : 32,
+        childAspectRatio: mobile ? 0.78 : 0.85,
       ),
       itemCount: albums.length,
       itemBuilder: (context, index) {
@@ -40,7 +41,7 @@ class DiscographyGrid extends StatelessWidget {
         return _AlbumTile(
           coverUrl: a.coverUrl,
           title: a.title,
-          subtitle: '${a.trackCount} Tracks',
+          subtitle: mobile ? '${a.trackCount} 首歌曲' : '${a.trackCount} Tracks',
           onTap: () => onAlbumTap(a),
         );
       },

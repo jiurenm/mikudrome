@@ -170,12 +170,19 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                   )
                 else
                   SliverPadding(
-                    padding: EdgeInsets.all(isMobile(context) ? 16 : 48),
+                    padding: EdgeInsets.fromLTRB(
+                      isMobile(context) ? 16 : 48,
+                      isMobile(context) ? 4 : 48,
+                      isMobile(context) ? 16 : 48,
+                      88,
+                    ),
                     sliver: _tabIndex == 0
                         ? SliverList(
                             delegate: SliverChildListDelegate([
-                              const _SectionTitle('Discography'),
-                              const SizedBox(height: 32),
+                              if (!isMobile(context))
+                                const _SectionTitle('Discography'),
+                              if (!isMobile(context))
+                                const SizedBox(height: 32),
                               DiscographyGrid(
                                 albums: _albums,
                                 onAlbumTap: (album) {
@@ -198,8 +205,9 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                         : _tabIndex == 1
                         ? SliverList(
                             delegate: SliverChildListDelegate([
-                              const _SectionTitle('All Tracks'),
-                              const SizedBox(height: 8),
+                              if (!isMobile(context))
+                                const _SectionTitle('All Tracks'),
+                              if (!isMobile(context)) const SizedBox(height: 8),
                               ProducerTrackList(
                                 tracks: _tracks,
                                 baseUrl: widget._effectiveBaseUrl,
@@ -210,8 +218,9 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                           )
                         : SliverList(
                             delegate: SliverChildListDelegate([
-                              const _SectionTitle('Featured MVs'),
-                              const SizedBox(height: 8),
+                              if (!isMobile(context))
+                                const _SectionTitle('Featured MVs'),
+                              if (!isMobile(context)) const SizedBox(height: 8),
                               FeaturedMvsGrid(
                                 tracks: _tracksWithMv,
                                 baseUrl: widget._effectiveBaseUrl,
