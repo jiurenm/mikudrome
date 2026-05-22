@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../utils/responsive.dart';
 import '../widgets/producer_detail/discography_grid.dart';
 import '../widgets/producer_detail/featured_mvs_grid.dart';
+import '../widgets/producer_detail/producer_detail_data_cache.dart';
 import '../widgets/producer_detail/producer_hero_section.dart';
 import '../widgets/producer_detail/producer_tab_bar.dart';
 import '../widgets/producer_detail/producer_track_list.dart';
@@ -44,38 +45,82 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
   List<Track> _tracks = [];
   bool _loading = true;
   String? _error;
+  String? _refreshError;
 
   Producer get _displayProducer => _loadedProducer ?? widget.producer;
+
+  bool get _hasDetailData =>
+      _loadedProducer != null || _albums.isNotEmpty || _tracks.isNotEmpty;
 
   @override
   void initState() {
     super.initState();
-    _loadProducer();
+    final cached = ProducerDetailDataCache.read(
+      baseUrl: widget._effectiveBaseUrl,
+      producerId: widget.producer.id,
+    );
+    if (cached != null) {
+      _applyProducerDetailData(cached);
+    } else {
+      _loadProducer();
+    }
   }
 
-  Future<void> _loadProducer() async {
+  void _applyProducerDetailData(ProducerDetailData data) {
     setState(() {
-      _loading = true;
+      _loadedProducer = data.producer;
+      _albums = data.albums;
+      _tracks = data.tracks;
+      _loading = false;
       _error = null;
+      _refreshError = null;
     });
+  }
+
+  Future<void> _loadProducer({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final result = await ApiClient(
         baseUrl: widget._effectiveBaseUrl,
       ).getProducer(widget.producer.id);
-      if (result == null || !mounted) return;
-      setState(() {
-        _loadedProducer = result.producer;
-        _albums = result.albums;
-        _tracks = result.tracks;
-        _loading = false;
-      });
+      if (result == null) {
+        throw StateError('Producer not found');
+      }
+      final data = ProducerDetailData(
+        producer: result.producer,
+        albums: result.albums,
+        tracks: result.tracks,
+      );
+      ProducerDetailDataCache.write(
+        baseUrl: widget._effectiveBaseUrl,
+        producerId: widget.producer.id,
+        data: data,
+      );
+      if (!mounted) return;
+      _applyProducerDetailData(data);
     } catch (e) {
       if (!mounted) return;
+      if (_hasDetailData) {
+        setState(() {
+          _refreshError = '刷新失败，请稍后再试';
+          _loading = false;
+        });
+        return;
+      }
       setState(() {
         _error = e.toString();
         _loading = false;
       });
     }
+  }
+
+  Future<void> _refreshProducer() {
+    return _loadProducer(showLoading: false);
   }
 
   List<Track> get _tracksWithMv =>
@@ -103,6 +148,14 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
     _playTrack(shuffled.first, 0, queue: shuffled);
   }
 
+  List<Widget> _mobileRefreshErrorWidgets(BuildContext context) {
+    if (!isMobile(context) || _refreshError == null) return const [];
+    return [
+      _RefreshErrorBanner(message: _refreshError!),
+      const SizedBox(height: 12),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -110,137 +163,181 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
       body: Column(
         children: [
           Expanded(
-            child: CustomScrollView(
-              slivers: [
-                if (isMobile(context) && widget.onBack != null)
-                  SliverAppBar(
-                    key: const ValueKey('producer-detail-mobile-app-bar'),
-                    backgroundColor: AppTheme.cardBg,
-                    pinned: true,
-                    floating: false,
-                    elevation: 0,
-                    leading: IconButton(
-                      icon: const Icon(Icons.chevron_left),
-                      onPressed: widget.onBack,
-                    ),
-                    title: Text(
-                      _displayProducer.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                  ),
-                SliverToBoxAdapter(
-                  child: ProducerHeroSection(
-                    producer: _displayProducer,
-                    baseUrl: widget._effectiveBaseUrl,
-                    onPlayAll: _playAll,
-                    onShuffle: _shufflePlay,
-                    hasTracks: _tracks.isNotEmpty,
-                    albumCount: _displayAlbumCount,
-                    trackCount: _displayTrackCount,
-                    mvCount: _tracksWithMv.length,
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: ProducerTabBar(
-                    index: _tabIndex,
-                    onTap: (i) => setState(() => _tabIndex = i),
-                    albumCount: _displayAlbumCount,
-                    trackCount: _displayTrackCount,
-                    mvCount: _tracksWithMv.length,
-                  ),
-                ),
-                if (_loading)
-                  const SliverFillRemaining(
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else if (_error != null)
-                  SliverFillRemaining(
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(_error!, textAlign: TextAlign.center),
-                            const SizedBox(height: 16),
-                            FilledButton(
-                              onPressed: _loadProducer,
-                              child: const Text('Retry'),
-                            ),
-                          ],
-                        ),
+            child: RefreshIndicator(
+              onRefresh: _refreshProducer,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  if (isMobile(context) && widget.onBack != null)
+                    SliverAppBar(
+                      key: const ValueKey('producer-detail-mobile-app-bar'),
+                      backgroundColor: AppTheme.cardBg,
+                      pinned: true,
+                      floating: false,
+                      elevation: 0,
+                      leading: IconButton(
+                        icon: const Icon(Icons.chevron_left),
+                        onPressed: widget.onBack,
+                      ),
+                      title: Text(
+                        _displayProducer.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 16),
                       ),
                     ),
-                  )
-                else
-                  SliverPadding(
-                    padding: EdgeInsets.fromLTRB(
-                      isMobile(context) ? 16 : 48,
-                      isMobile(context) ? 4 : 48,
-                      isMobile(context) ? 16 : 48,
-                      88,
+                  SliverToBoxAdapter(
+                    child: ProducerHeroSection(
+                      producer: _displayProducer,
+                      baseUrl: widget._effectiveBaseUrl,
+                      onPlayAll: _playAll,
+                      onShuffle: _shufflePlay,
+                      hasTracks: _tracks.isNotEmpty,
+                      albumCount: _displayAlbumCount,
+                      trackCount: _displayTrackCount,
+                      mvCount: _tracksWithMv.length,
                     ),
-                    sliver: _tabIndex == 0
-                        ? SliverList(
-                            delegate: SliverChildListDelegate([
-                              if (!isMobile(context))
-                                const _SectionTitle('Discography'),
-                              if (!isMobile(context))
-                                const SizedBox(height: 32),
-                              DiscographyGrid(
-                                albums: _albums,
-                                onAlbumTap: (album) {
-                                  if (widget.onAlbumTap != null) {
-                                    widget.onAlbumTap!(album);
-                                  } else {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute<void>(
-                                        builder: (context) => AlbumDetailScreen(
-                                          album: album,
-                                          baseUrl: widget._effectiveBaseUrl,
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                },
-                              ),
-                            ]),
-                          )
-                        : _tabIndex == 1
-                        ? SliverList(
-                            delegate: SliverChildListDelegate([
-                              if (!isMobile(context))
-                                const _SectionTitle('All Tracks'),
-                              if (!isMobile(context)) const SizedBox(height: 8),
-                              ProducerTrackList(
-                                tracks: _tracks,
-                                baseUrl: widget._effectiveBaseUrl,
-                                useMobileLayout: true,
-                                onPlay: (track, index) =>
-                                    _playTrack(track, index),
-                              ),
-                            ]),
-                          )
-                        : SliverList(
-                            delegate: SliverChildListDelegate([
-                              if (!isMobile(context))
-                                const _SectionTitle('Featured MVs'),
-                              if (!isMobile(context)) const SizedBox(height: 8),
-                              FeaturedMvsGrid(
-                                tracks: _tracksWithMv,
-                                baseUrl: widget._effectiveBaseUrl,
-                                onPlay: (track, index) => _playTrack(
-                                  track,
-                                  index,
-                                  queue: _tracksWithMv,
-                                ),
-                              ),
-                            ]),
-                          ),
                   ),
-              ],
+                  SliverToBoxAdapter(
+                    child: ProducerTabBar(
+                      index: _tabIndex,
+                      onTap: (i) => setState(() => _tabIndex = i),
+                      albumCount: _displayAlbumCount,
+                      trackCount: _displayTrackCount,
+                      mvCount: _tracksWithMv.length,
+                    ),
+                  ),
+                  if (_loading)
+                    const SliverFillRemaining(
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_error != null)
+                    SliverFillRemaining(
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(_error!, textAlign: TextAlign.center),
+                              const SizedBox(height: 16),
+                              FilledButton(
+                                onPressed: _loadProducer,
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(
+                        isMobile(context) ? 16 : 48,
+                        isMobile(context) ? 4 : 48,
+                        isMobile(context) ? 16 : 48,
+                        88,
+                      ),
+                      sliver: _tabIndex == 0
+                          ? SliverList(
+                              delegate: SliverChildListDelegate([
+                                ..._mobileRefreshErrorWidgets(context),
+                                if (!isMobile(context))
+                                  const _SectionTitle('Discography'),
+                                if (!isMobile(context))
+                                  const SizedBox(height: 32),
+                                DiscographyGrid(
+                                  albums: _albums,
+                                  onAlbumTap: (album) {
+                                    if (widget.onAlbumTap != null) {
+                                      widget.onAlbumTap!(album);
+                                    } else {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                          builder: (context) =>
+                                              AlbumDetailScreen(
+                                                album: album,
+                                                baseUrl:
+                                                    widget._effectiveBaseUrl,
+                                              ),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                ),
+                              ]),
+                            )
+                          : _tabIndex == 1
+                          ? SliverList(
+                              delegate: SliverChildListDelegate([
+                                ..._mobileRefreshErrorWidgets(context),
+                                if (!isMobile(context))
+                                  const _SectionTitle('All Tracks'),
+                                if (!isMobile(context))
+                                  const SizedBox(height: 8),
+                                ProducerTrackList(
+                                  tracks: _tracks,
+                                  baseUrl: widget._effectiveBaseUrl,
+                                  useMobileLayout: true,
+                                  onPlay: (track, index) =>
+                                      _playTrack(track, index),
+                                ),
+                              ]),
+                            )
+                          : SliverList(
+                              delegate: SliverChildListDelegate([
+                                ..._mobileRefreshErrorWidgets(context),
+                                if (!isMobile(context))
+                                  const _SectionTitle('Featured MVs'),
+                                if (!isMobile(context))
+                                  const SizedBox(height: 8),
+                                FeaturedMvsGrid(
+                                  tracks: _tracksWithMv,
+                                  baseUrl: widget._effectiveBaseUrl,
+                                  onPlay: (track, index) => _playTrack(
+                                    track,
+                                    index,
+                                    queue: _tracksWithMv,
+                                  ),
+                                ),
+                              ]),
+                            ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RefreshErrorBanner extends StatelessWidget {
+  const _RefreshErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.red.shade900.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.redAccent.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: Colors.redAccent, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppTheme.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
