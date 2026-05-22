@@ -610,7 +610,6 @@ class _ProducerDetailResponseSet {
     this.trackCount = 1,
     this.albumCount = 1,
     this.trackId = 1,
-    this.hasVideo = false,
     this.includeAlbum = true,
     this.includeTrack = true,
   });
@@ -621,7 +620,6 @@ class _ProducerDetailResponseSet {
   final int trackCount;
   final int albumCount;
   final int trackId;
-  final bool hasVideo;
   final bool includeAlbum;
   final bool includeTrack;
 
@@ -651,8 +649,8 @@ class _ProducerDetailResponseSet {
                 'id': trackId,
                 'title': trackTitle,
                 'audio_path': '/audio/$trackId.flac',
-                'video_path': hasVideo ? '/video/$trackId.mp4' : '',
-                'video_thumb_path': hasVideo ? '/thumb/$trackId.jpg' : '',
+                'video_path': '',
+                'video_thumb_path': '',
                 'duration_seconds': 225,
                 'format': 'FLAC',
                 'composer': producerName,
