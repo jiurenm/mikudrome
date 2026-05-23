@@ -60,6 +60,16 @@ class _DailyRecommendationsScreenState
   Widget build(BuildContext context) {
     final mobile = isMobile(context);
     return Scaffold(
+      appBar: mobile && widget.onBack != null
+          ? AppBar(
+              backgroundColor: AppTheme.mikuDark,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: widget.onBack,
+              ),
+              title: const Text('每日推荐', style: TextStyle(fontSize: 16)),
+            )
+          : null,
       backgroundColor: AppTheme.mikuDark,
       body: FutureBuilder<DailyRecommendations>(
         future: _future,
@@ -77,16 +87,6 @@ class _DailyRecommendationsScreenState
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
-                if (mobile && widget.onBack != null)
-                  SliverAppBar(
-                    backgroundColor: AppTheme.mikuDark,
-                    floating: true,
-                    leading: IconButton(
-                      icon: const Icon(Icons.arrow_back),
-                      onPressed: widget.onBack,
-                    ),
-                    title: const Text('每日推荐', style: TextStyle(fontSize: 16)),
-                  ),
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(
@@ -180,10 +180,7 @@ class _DailyRecommendationsError extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
-            '每日推荐加载失败',
-            style: TextStyle(color: AppTheme.textMuted),
-          ),
+          const Text('每日推荐加载失败', style: TextStyle(color: AppTheme.textMuted)),
           const SizedBox(height: 12),
           FilledButton(onPressed: onRetry, child: const Text('重试')),
         ],

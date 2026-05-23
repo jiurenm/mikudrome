@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/api/api_client.dart';
@@ -67,6 +69,93 @@ void main() {
     expect(find.text('每日推荐加载失败'), findsOneWidget);
     expect(find.text('重试'), findsOneWidget);
   });
+
+  testWidgets('keeps mobile back navigation during loading and error states', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    var backCount = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DailyRecommendationsScreen(
+          client: _LoadingDailyRecommendationsClient(),
+          onBack: () => backCount += 1,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    expect(backCount, 1);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DailyRecommendationsScreen(
+          key: UniqueKey(),
+          client: _FailingDailyRecommendationsClient(),
+          onBack: () => backCount += 1,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    expect(backCount, 2);
+    expect(find.text('每日推荐加载失败'), findsOneWidget);
+  });
+
+  testWidgets('pull to refresh requests and renders updated recommendations', (
+    tester,
+  ) async {
+    final client = _SequencedDailyRecommendationsClient([
+      _daily,
+      _refreshedDaily,
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(home: DailyRecommendationsScreen(client: client)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(client.requestCount, 1);
+    expect(find.text('Daily One'), findsOneWidget);
+    expect(find.text('Daily Refreshed'), findsNothing);
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 300));
+    await tester.pumpAndSettle();
+
+    expect(client.requestCount, 2);
+    expect(find.text('Daily One'), findsNothing);
+    expect(find.text('Daily Refreshed'), findsOneWidget);
+    expect(find.text('2026-05-23'), findsOneWidget);
+  });
+
+  testWidgets('retry requests again and recovers into populated content', (
+    tester,
+  ) async {
+    final client = _RecoveringDailyRecommendationsClient();
+
+    await tester.pumpWidget(
+      MaterialApp(home: DailyRecommendationsScreen(client: client)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(client.requestCount, 1);
+    expect(find.text('每日推荐加载失败'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, '重试'));
+    await tester.pumpAndSettle();
+
+    expect(client.requestCount, 2);
+    expect(find.text('每日推荐加载失败'), findsNothing);
+    expect(find.text('Daily One'), findsOneWidget);
+  });
 }
 
 const _daily = DailyRecommendations(
@@ -93,6 +182,21 @@ const _daily = DailyRecommendations(
   ],
 );
 
+const _refreshedDaily = DailyRecommendations(
+  date: '2026-05-23',
+  tracks: [
+    Track(
+      id: 303,
+      title: 'Daily Refreshed',
+      audioPath: 'daily-refreshed.flac',
+      videoPath: '',
+      durationSeconds: 222,
+      composer: 'wowaka',
+      vocal: '初音ミク',
+    ),
+  ],
+);
+
 class _DailyRecommendationsClient extends ApiClient {
   _DailyRecommendationsClient(this.recommendations)
     : super(baseUrl: 'http://127.0.0.1:8080');
@@ -112,5 +216,48 @@ class _FailingDailyRecommendationsClient extends ApiClient {
   @override
   Future<DailyRecommendations> getDailyRecommendations() async {
     throw ApiException('failed', 500);
+  }
+}
+
+class _LoadingDailyRecommendationsClient extends ApiClient {
+  _LoadingDailyRecommendationsClient()
+    : super(baseUrl: 'http://127.0.0.1:8080');
+
+  final Completer<DailyRecommendations> _completer = Completer();
+
+  @override
+  Future<DailyRecommendations> getDailyRecommendations() {
+    return _completer.future;
+  }
+}
+
+class _SequencedDailyRecommendationsClient extends ApiClient {
+  _SequencedDailyRecommendationsClient(this._recommendations)
+    : super(baseUrl: 'http://127.0.0.1:8080');
+
+  final List<DailyRecommendations> _recommendations;
+  int requestCount = 0;
+
+  @override
+  Future<DailyRecommendations> getDailyRecommendations() async {
+    final index = requestCount;
+    requestCount += 1;
+    return _recommendations[index.clamp(0, _recommendations.length - 1)];
+  }
+}
+
+class _RecoveringDailyRecommendationsClient extends ApiClient {
+  _RecoveringDailyRecommendationsClient()
+    : super(baseUrl: 'http://127.0.0.1:8080');
+
+  int requestCount = 0;
+
+  @override
+  Future<DailyRecommendations> getDailyRecommendations() async {
+    requestCount += 1;
+    if (requestCount == 1) {
+      throw ApiException('failed', 500);
+    }
+    return _daily;
   }
 }
