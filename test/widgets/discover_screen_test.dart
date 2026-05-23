@@ -1,3 +1,8 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/models/album.dart';
@@ -8,9 +13,6 @@ import 'package:mikudrome/models/video.dart';
 import 'package:mikudrome/models/vocalist.dart';
 import 'package:mikudrome/widgets/discover/discover_data_cache.dart';
 import 'package:mikudrome/widgets/discover_screen.dart';
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
 Widget _harness(Widget child) {
   return MaterialApp(
@@ -23,6 +25,26 @@ Widget _harness(Widget child) {
 
 void main() {
   setUp(DiscoverDataCache.clear);
+
+  test(
+    'pickMobileDiscoverAlbums samples five albums with injected randomness',
+    () {
+      final albums = List.generate(
+        7,
+        (index) => Album(
+          id: '${index + 1}',
+          title: 'Album ${index + 1}',
+          coverUrl: '',
+          producerName: 'Producer ${index + 1}',
+          trackCount: 1,
+        ),
+      );
+
+      final selected = pickMobileDiscoverAlbums(albums, random: _ZeroRandom());
+
+      expect(selected.map((album) => album.id), ['2', '3', '4', '5', '6']);
+    },
+  );
 
   test('DiscoverDataCache stores and clears process-local data', () {
     DiscoverDataCache.clear();
@@ -418,6 +440,17 @@ void main() {
       expect(find.text('Retry'), findsNothing);
     },
   );
+}
+
+class _ZeroRandom implements Random {
+  @override
+  bool nextBool() => false;
+
+  @override
+  double nextDouble() => 0;
+
+  @override
+  int nextInt(int max) => 0;
 }
 
 class _DiscoverFakeHttpClient implements HttpClient {

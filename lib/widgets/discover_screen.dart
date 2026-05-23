@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 
@@ -19,6 +20,21 @@ import 'discover/discover_data_cache.dart';
 
 enum DiscoverSection { albums, producers, vocalists, mv }
 
+const int _mobileDiscoverAlbumLimit = 5;
+
+@visibleForTesting
+List<Album> pickMobileDiscoverAlbums(
+  List<Album> albums, {
+  Random? random,
+  int limit = _mobileDiscoverAlbumLimit,
+}) {
+  if (albums.length <= limit) {
+    return List<Album>.unmodifiable(albums);
+  }
+  final shuffled = List<Album>.from(albums)..shuffle(random ?? Random());
+  return List<Album>.unmodifiable(shuffled.take(limit));
+}
+
 class DiscoverScreen extends StatefulWidget {
   const DiscoverScreen({
     super.key,
@@ -29,6 +45,8 @@ class DiscoverScreen extends StatefulWidget {
     this.preferMobileHome = false,
     this.onMobileMoreSelected,
     this.onMobileAlbumSelected,
+    this.onMobileProducerSelected,
+    this.onMobileVocalistSelected,
     this.onDailyRecommendationsSelected,
   });
 
@@ -39,6 +57,8 @@ class DiscoverScreen extends StatefulWidget {
   final bool preferMobileHome;
   final ValueChanged<DiscoverSection>? onMobileMoreSelected;
   final ValueChanged<Album>? onMobileAlbumSelected;
+  final ValueChanged<Producer>? onMobileProducerSelected;
+  final ValueChanged<Vocalist>? onMobileVocalistSelected;
   final VoidCallback? onDailyRecommendationsSelected;
 
   @override
@@ -77,6 +97,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       return _MobileDiscoverHome(
         onMoreSelected: widget.onMobileMoreSelected,
         onAlbumSelected: widget.onMobileAlbumSelected,
+        onProducerSelected: widget.onMobileProducerSelected,
+        onVocalistSelected: widget.onMobileVocalistSelected,
         onDailyRecommendationsSelected: widget.onDailyRecommendationsSelected,
       );
     }
@@ -150,11 +172,15 @@ class _MobileDiscoverHome extends StatefulWidget {
   const _MobileDiscoverHome({
     this.onMoreSelected,
     this.onAlbumSelected,
+    this.onProducerSelected,
+    this.onVocalistSelected,
     this.onDailyRecommendationsSelected,
   });
 
   final ValueChanged<DiscoverSection>? onMoreSelected;
   final ValueChanged<Album>? onAlbumSelected;
+  final ValueChanged<Producer>? onProducerSelected;
+  final ValueChanged<Vocalist>? onVocalistSelected;
   final VoidCallback? onDailyRecommendationsSelected;
 
   @override
@@ -164,6 +190,7 @@ class _MobileDiscoverHome extends StatefulWidget {
 class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
   final TextEditingController _searchController = TextEditingController();
   List<Album> _albums = const [];
+  List<Album> _recommendedAlbums = const [];
   List<Producer> _producers = const [];
   List<Vocalist> _vocalists = const [];
   List<Video> _videos = const [];
@@ -196,6 +223,8 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
   void _applyDiscoverData(DiscoverData data, {required bool loading}) {
     setState(() {
       _albums = data.albums;
+      _recommendedAlbums =
+          data.recommendedAlbums ?? pickMobileDiscoverAlbums(data.albums);
       _producers = data.producers;
       _vocalists = data.vocalists;
       _videos = data.videos;
@@ -239,8 +268,10 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
       final preservedDailyRecommendations =
           _dailyRecommendations ??
           DiscoverDataCache.current?.dailyRecommendations;
+      final recommendedAlbums = pickMobileDiscoverAlbums(albums);
       final data = DiscoverData(
         albums: albums,
+        recommendedAlbums: recommendedAlbums,
         producers: producers,
         vocalists: vocalists,
         videos: videos,
@@ -284,6 +315,7 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
       DiscoverDataCache.write(
         DiscoverData(
           albums: _albums,
+          recommendedAlbums: _recommendedAlbums,
           producers: _producers,
           vocalists: _vocalists,
           videos: _videos,
@@ -300,6 +332,7 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
         DiscoverDataCache.write(
           DiscoverData(
             albums: _albums,
+            recommendedAlbums: _recommendedAlbums,
             producers: _producers,
             vocalists: _vocalists,
             videos: _videos,
@@ -388,7 +421,7 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
                 ),
                 const SizedBox(height: 10),
                 _AlbumStrip(
-                  albums: _albums.take(5).toList(),
+                  albums: _recommendedAlbums,
                   onAlbumSelected: widget.onAlbumSelected,
                 ),
                 const SizedBox(height: 20),
@@ -398,7 +431,10 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
                   onMoreSelected: widget.onMoreSelected,
                 ),
                 const SizedBox(height: 10),
-                _ProducerStrip(producers: _producers.take(5).toList()),
+                _ProducerStrip(
+                  producers: _producers.take(5).toList(),
+                  onProducerSelected: widget.onProducerSelected,
+                ),
                 const SizedBox(height: 20),
                 _MobileSectionHeader(
                   title: '虚拟歌手',
@@ -406,7 +442,10 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
                   onMoreSelected: widget.onMoreSelected,
                 ),
                 const SizedBox(height: 10),
-                _VocalistStrip(vocalists: _vocalists.take(5).toList()),
+                _VocalistStrip(
+                  vocalists: _vocalists.take(5).toList(),
+                  onVocalistSelected: widget.onVocalistSelected,
+                ),
                 const SizedBox(height: 20),
                 _MobileSectionHeader(
                   title: '推荐MV',
@@ -867,9 +906,10 @@ class _AlbumStrip extends StatelessWidget {
 }
 
 class _ProducerStrip extends StatelessWidget {
-  const _ProducerStrip({required this.producers});
+  const _ProducerStrip({required this.producers, this.onProducerSelected});
 
   final List<Producer> producers;
+  final ValueChanged<Producer>? onProducerSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -885,27 +925,32 @@ class _ProducerStrip extends StatelessWidget {
         separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (context, index) {
           final producer = producers[index];
-          return SizedBox(
-            width: 56,
-            child: Column(
-              children: [
-                _CircleImage(
-                  url: ApiClient().producerAvatarUrl(producer.id),
-                  icon: Icons.person_rounded,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  producer.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppTheme.textPrimary,
-                    fontSize: 10,
-                    letterSpacing: 0,
+          return InkWell(
+            key: ValueKey('discover-producer-${producer.id}'),
+            onTap: () => onProducerSelected?.call(producer),
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              width: 56,
+              child: Column(
+                children: [
+                  _CircleImage(
+                    url: ApiClient().producerAvatarUrl(producer.id),
+                    icon: Icons.person_rounded,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 6),
+                  Text(
+                    producer.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppTheme.textPrimary,
+                      fontSize: 10,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         },
@@ -915,9 +960,10 @@ class _ProducerStrip extends StatelessWidget {
 }
 
 class _VocalistStrip extends StatelessWidget {
-  const _VocalistStrip({required this.vocalists});
+  const _VocalistStrip({required this.vocalists, this.onVocalistSelected});
 
   final List<Vocalist> vocalists;
+  final ValueChanged<Vocalist>? onVocalistSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -934,51 +980,56 @@ class _VocalistStrip extends StatelessWidget {
         itemBuilder: (context, index) {
           final vocalist = vocalists[index];
           final color = VocalColors.colorForName(vocalist.name);
-          return SizedBox(
-            width: 56,
-            child: Column(
-              children: [
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: color.withValues(alpha: 0.16),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.64),
+          return InkWell(
+            key: ValueKey('discover-vocalist-${vocalist.name}'),
+            onTap: () => onVocalistSelected?.call(vocalist),
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              width: 56,
+              child: Column(
+                children: [
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: color.withValues(alpha: 0.16),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.64),
+                      ),
                     ),
-                  ),
-                  child: ClipOval(
-                    child: Image.network(
-                      ApiClient().vocalistAvatarUrl(vocalist.name),
-                      headers: ApiConfig.defaultHeaders,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Center(
-                        child: Text(
-                          vocalist.name.characters.first,
-                          style: TextStyle(
-                            color: color,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 18,
+                    child: ClipOval(
+                      child: Image.network(
+                        ApiClient().vocalistAvatarUrl(vocalist.name),
+                        headers: ApiConfig.defaultHeaders,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Center(
+                          child: Text(
+                            vocalist.name.characters.first,
+                            style: TextStyle(
+                              color: color,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 18,
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  vocalist.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppTheme.textPrimary,
-                    fontSize: 10,
-                    letterSpacing: 0,
+                  const SizedBox(height: 6),
+                  Text(
+                    vocalist.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppTheme.textPrimary,
+                      fontSize: 10,
+                      letterSpacing: 0,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },

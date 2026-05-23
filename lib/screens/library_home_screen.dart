@@ -527,6 +527,30 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     });
   }
 
+  void _openMobileDiscoverProducer(Producer producer) {
+    _recordMobileHistory();
+    setState(() {
+      _mobileTab = MobileAppTab.discover;
+      _route = ShellRoute.producers;
+      _showMobileDiscoverHome = false;
+      _clearSelection();
+      _selectedProducer = producer;
+      _showPlayer = false;
+    });
+  }
+
+  void _openMobileDiscoverVocalist(Vocalist vocalist) {
+    _recordMobileHistory();
+    setState(() {
+      _mobileTab = MobileAppTab.discover;
+      _route = ShellRoute.vocalists;
+      _showMobileDiscoverHome = false;
+      _clearSelection();
+      _selectedVocalist = vocalist;
+      _showPlayer = false;
+    });
+  }
+
   void _openMobileDailyRecommendations() {
     if (_mobileTab == MobileAppTab.discover &&
         _route == ShellRoute.dailyRecommendations &&
@@ -1322,6 +1346,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
           onSectionChanged: _navigateMobileDiscover,
           onMobileMoreSelected: _navigateMobileDiscover,
           onMobileAlbumSelected: _openMobileDiscoverAlbum,
+          onMobileProducerSelected: _openMobileDiscoverProducer,
+          onMobileVocalistSelected: _openMobileDiscoverVocalist,
           onDailyRecommendationsSelected: _openMobileDailyRecommendations,
           showSectionTabs:
               _showMobileDiscoverHome &&

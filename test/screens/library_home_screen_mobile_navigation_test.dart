@@ -119,6 +119,41 @@ void main() {
     expect(find.text('专辑推荐'), findsNothing);
   });
 
+  testWidgets('tapping a discover home producer opens its detail page', (
+    tester,
+  ) async {
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('discover-producer-1')));
+      await tester.pumpAndSettle();
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(
+      find.byKey(const ValueKey('producer-detail-mobile-app-bar')),
+      findsOneWidget,
+    );
+    expect(find.text('热门P主'), findsNothing);
+  });
+
+  testWidgets('tapping a discover home vocalist opens its detail page', (
+    tester,
+  ) async {
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester);
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -360));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('discover-vocalist-初音ミク')));
+      await tester.pumpAndSettle();
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(find.text('Vocal Track'), findsOneWidget);
+    expect(find.text('虚拟歌手'), findsNothing);
+  });
+
   testWidgets('mobile shuffle resubmits the visible queue to audio playback', (
     tester,
   ) async {
@@ -330,6 +365,33 @@ class _LibraryFakeHttpClientResponse extends Stream<List<int>>
   final List<int> _bytes;
 
   static String _bodyFor(Uri url) {
+    if (url.path.startsWith('/api/vocalists/') &&
+        url.path.endsWith('/tracks')) {
+      return jsonEncode({
+        'name': '初音ミク',
+        'albums': [
+          {
+            'id': 1,
+            'title': 'GHOST',
+            'producer_name': 'DECO*27',
+            'track_count': 1,
+          },
+        ],
+        'tracks': [
+          {
+            'id': 211,
+            'title': 'Vocal Track',
+            'audio_path': 'vocal.flac',
+            'album_id': 1,
+            'track_number': 1,
+            'duration_seconds': 188,
+            'artists': 'DECO*27 feat. 初音ミク',
+            'composer': 'DECO*27',
+            'vocal': '初音ミク',
+          },
+        ],
+      });
+    }
     return switch (url.path) {
       '/api/albums' => jsonEncode({
         'albums': [
@@ -393,6 +455,35 @@ class _LibraryFakeHttpClientResponse extends Stream<List<int>>
       '/api/producers' => jsonEncode({
         'producers': [
           {'id': 1, 'name': 'DECO*27', 'track_count': 27, 'album_count': 3},
+        ],
+      }),
+      '/api/producers/1' => jsonEncode({
+        'producer': {
+          'id': 1,
+          'name': 'DECO*27',
+          'track_count': 1,
+          'album_count': 1,
+        },
+        'albums': [
+          {
+            'id': 1,
+            'title': 'GHOST',
+            'producer_name': 'DECO*27',
+            'track_count': 1,
+          },
+        ],
+        'tracks': [
+          {
+            'id': 201,
+            'title': 'Producer Track',
+            'audio_path': 'producer.flac',
+            'album_id': 1,
+            'track_number': 1,
+            'duration_seconds': 199,
+            'artists': 'DECO*27 feat. 初音ミク',
+            'composer': 'DECO*27',
+            'vocal': '初音ミク',
+          },
         ],
       }),
       '/api/vocalists' => jsonEncode({

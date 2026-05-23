@@ -10,10 +10,12 @@ class DiscoverData {
     required this.producers,
     required this.vocalists,
     required this.videos,
+    this.recommendedAlbums,
     this.dailyRecommendations,
   });
 
   final List<Album> albums;
+  final List<Album>? recommendedAlbums;
   final List<Producer> producers;
   final List<Vocalist> vocalists;
   final List<Video> videos;
