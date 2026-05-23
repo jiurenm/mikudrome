@@ -20,6 +20,7 @@ import '../widgets/discover_screen.dart';
 import '../widgets/mobile_app_shell.dart';
 import 'album_detail_screen.dart';
 import 'albums_screen.dart';
+import 'daily_recommendations_screen.dart';
 import 'player_screen.dart';
 import 'producer_detail_screen.dart';
 import 'mv_gallery_screen.dart';
@@ -440,6 +441,18 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
           currentPlayingTrackId: _currentTrack?.id,
           isPlaying: _isPlaying,
         );
+      case ShellRoute.dailyRecommendations:
+        return DailyRecommendationsScreen(
+          onBack: _mobileHistory.isNotEmpty ? _handleMobileBack : null,
+          onPlayTrack: (track, queue, index) => _openPlayerForQueue(
+            track: track,
+            queue: queue,
+            index: index,
+            contextLabel: '每日推荐',
+          ),
+          currentPlayingTrackId: _currentTrack?.id,
+          isPlaying: _isPlaying,
+        );
       case ShellRoute.localMv:
         return MvGalleryScreen(onVideoTap: _playVideo);
       case ShellRoute.more:
@@ -510,6 +523,22 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       _showMobileDiscoverHome = false;
       _clearSelection();
       _selectedAlbum = album;
+      _showPlayer = false;
+    });
+  }
+
+  void _openMobileDailyRecommendations() {
+    if (_mobileTab == MobileAppTab.discover &&
+        _route == ShellRoute.dailyRecommendations &&
+        !_showPlayer) {
+      return;
+    }
+    _recordMobileHistory();
+    setState(() {
+      _mobileTab = MobileAppTab.discover;
+      _route = ShellRoute.dailyRecommendations;
+      _showMobileDiscoverHome = false;
+      _clearSelection();
       _showPlayer = false;
     });
   }
@@ -1293,6 +1322,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
           onSectionChanged: _navigateMobileDiscover,
           onMobileMoreSelected: _navigateMobileDiscover,
           onMobileAlbumSelected: _openMobileDiscoverAlbum,
+          onDailyRecommendationsSelected: _openMobileDailyRecommendations,
           showSectionTabs:
               _showMobileDiscoverHome &&
               _selectedAlbum == null &&

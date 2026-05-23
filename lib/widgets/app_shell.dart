@@ -13,6 +13,7 @@ enum ShellRoute {
   playlists,
   favorites,
   recentPlayed,
+  dailyRecommendations,
   localMv,
   more,
 }

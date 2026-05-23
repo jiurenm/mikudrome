@@ -22,6 +22,30 @@ void main() {
     expect(find.text('GHOST'), findsWidgets);
   });
 
+  testWidgets(
+    'daily recommendations opens list and plays recommendation queue',
+    (tester) async {
+      final service = _RecordingMobileAudioPlaybackService();
+      addTearDown(service.dispose);
+
+      await HttpOverrides.runZoned(() async {
+        await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('每日推荐'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Daily One'), findsOneWidget);
+        expect(find.text('Daily Two'), findsOneWidget);
+
+        await tester.tap(find.text('Daily Two'));
+        await tester.pump(const Duration(milliseconds: 500));
+      }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+      expect(service.playedQueues.last.map((track) => track.id), [301, 302]);
+    },
+  );
+
   testWidgets('system back returns to the previous mobile tab', (tester) async {
     late bool handled;
     await HttpOverrides.runZoned(() async {
@@ -383,6 +407,27 @@ class _LibraryFakeHttpClientResponse extends Stream<List<int>>
             'title': '愛言葉V - DECO*27 feat. 初音ミク',
             'duration_seconds': 240,
             'composer': 'DECO*27',
+            'vocal': '初音ミク',
+          },
+        ],
+      }),
+      '/api/recommendations/daily' => jsonEncode({
+        'date': '2026-05-22',
+        'tracks': [
+          {
+            'id': 301,
+            'title': 'Daily One',
+            'audio_path': 'daily-one.flac',
+            'duration_seconds': 180,
+            'composer': 'kz',
+            'vocal': '初音ミク',
+          },
+          {
+            'id': 302,
+            'title': 'Daily Two',
+            'audio_path': 'daily-two.flac',
+            'duration_seconds': 201,
+            'composer': 'ryo',
             'vocal': '初音ミク',
           },
         ],
