@@ -10,6 +10,7 @@ import (
 func TestDailyRecommendationsReturnsStableLimitedPlayableTracks(t *testing.T) {
 	s := newTestStore(t)
 	seedRecommendationTracks(t, s, 25)
+	seedNonPlayableRecommendationTracks(t, s)
 
 	date := time.Date(2026, 5, 22, 10, 30, 0, 0, time.Local)
 	first, err := s.DailyRecommendations(date, 20)
@@ -31,6 +32,58 @@ func TestDailyRecommendationsReturnsStableLimitedPlayableTracks(t *testing.T) {
 		if track.AudioPath == "" {
 			t.Fatalf("recommended non-playable track: %+v", track)
 		}
+		if track.Title == "Recommendation Empty Audio" || track.Title == "Recommendation Whitespace Audio" {
+			t.Fatalf("recommended non-playable track: %+v", track)
+		}
+	}
+}
+
+func TestDailyRecommendationsUsesServerLocalDate(t *testing.T) {
+	originalLocal := time.Local
+	time.Local = time.FixedZone("RecommendationTestLocal", 8*60*60)
+	t.Cleanup(func() { time.Local = originalLocal })
+
+	s := newTestStore(t)
+	seedRecommendationTracks(t, s, 30)
+
+	utcNow := time.Date(2026, 5, 21, 16, 30, 0, 0, time.UTC)
+	localNow := utcNow.Local()
+	if utcNow.Format("2006-01-02") == localNow.Format("2006-01-02") {
+		t.Fatalf("test setup expected UTC and local dates to differ: utc=%s local=%s", utcNow, localNow)
+	}
+
+	fromUTC, err := s.DailyRecommendations(utcNow, 20)
+	if err != nil {
+		t.Fatalf("DailyRecommendations UTC now: %v", err)
+	}
+	fromLocal, err := s.DailyRecommendations(localNow, 20)
+	if err != nil {
+		t.Fatalf("DailyRecommendations local now: %v", err)
+	}
+	if !reflect.DeepEqual(trackIDs(fromUTC), trackIDs(fromLocal)) {
+		t.Fatalf("same instant produced different server-local recommendations: utc=%v local=%v", trackIDs(fromUTC), trackIDs(fromLocal))
+	}
+}
+
+func TestDailyRecommendationsDefaultLimitForNonPositiveLimit(t *testing.T) {
+	s := newTestStore(t)
+	seedRecommendationTracks(t, s, 25)
+
+	date := time.Date(2026, 5, 22, 10, 30, 0, 0, time.Local)
+	zero, err := s.DailyRecommendations(date, 0)
+	if err != nil {
+		t.Fatalf("DailyRecommendations zero limit: %v", err)
+	}
+	negative, err := s.DailyRecommendations(date, -5)
+	if err != nil {
+		t.Fatalf("DailyRecommendations negative limit: %v", err)
+	}
+
+	if len(zero) != 20 {
+		t.Fatalf("zero limit len = %d, want 20", len(zero))
+	}
+	if len(negative) != 20 {
+		t.Fatalf("negative limit len = %d, want 20", len(negative))
 	}
 }
 
@@ -107,6 +160,32 @@ func TestDailyRecommendationsFavoritesAndHistoryBoostTracks(t *testing.T) {
 	}
 }
 
+func TestDailyRecommendationsScoreAnchorsRecencyToNow(t *testing.T) {
+	now := time.Date(2026, 5, 22, 10, 0, 0, 0, time.UTC)
+	date := now.Format("2006-01-02")
+	track := Track{ID: 7}
+
+	recent := recommendationScore(recommendationCandidate{
+		Track:    track,
+		PlayedAt: now.Unix(),
+	}, date, now)
+	future := recommendationScore(recommendationCandidate{
+		Track:    track,
+		PlayedAt: now.Add(2 * time.Hour).Unix(),
+	}, date, now)
+	stale := recommendationScore(recommendationCandidate{
+		Track:    track,
+		PlayedAt: now.Add(-31 * 24 * time.Hour).Unix(),
+	}, date, now)
+
+	if future != recent {
+		t.Fatalf("future playback score = %v, want same as most recent score %v", future, recent)
+	}
+	if stale >= recent {
+		t.Fatalf("stale playback score = %v, want less than recent score %v", stale, recent)
+	}
+}
+
 func seedRecommendationTracks(t *testing.T, s *Store, count int) []int64 {
 	t.Helper()
 	albumID, err := s.UpsertAlbum("Recommendation Album", "", 0, "")
@@ -133,6 +212,20 @@ func seedRecommendationTracks(t *testing.T, s *Store, count int) []int64 {
 		ids = append(ids, track.ID)
 	}
 	return ids
+}
+
+func seedNonPlayableRecommendationTracks(t *testing.T, s *Store) {
+	t.Helper()
+	albumID, err := s.UpsertAlbum("Recommendation Non-Playable Album", "", 0, "")
+	if err != nil {
+		t.Fatalf("UpsertAlbum non-playable: %v", err)
+	}
+	if err := s.UpsertTrack("Recommendation Empty Audio", "", "", "", albumID, 1, 1, "Artist", 2026, 180, ""); err != nil {
+		t.Fatalf("UpsertTrack empty audio: %v", err)
+	}
+	if err := s.UpsertTrack("Recommendation Whitespace Audio", "   ", "", "", albumID, 1, 2, "Artist", 2026, 180, ""); err != nil {
+		t.Fatalf("UpsertTrack whitespace audio: %v", err)
+	}
 }
 
 func trackIDs(tracks []Track) []int64 {

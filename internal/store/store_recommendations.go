@@ -22,19 +22,13 @@ func (s *Store) DailyRecommendations(now time.Time, limit int) ([]Track, error) 
 	if limit <= 0 {
 		limit = defaultDailyRecommendationLimit
 	}
-	date := now.Format("2006-01-02")
+	date := now.Local().Format("2006-01-02")
 	candidates, err := s.listRecommendationCandidates()
 	if err != nil {
 		return nil, err
 	}
-	maxPlayedAt := int64(0)
-	for _, candidate := range candidates {
-		if candidate.PlayedAt > maxPlayedAt {
-			maxPlayedAt = candidate.PlayedAt
-		}
-	}
 	for i := range candidates {
-		candidates[i].Score = recommendationScore(candidates[i], date, maxPlayedAt)
+		candidates[i].Score = recommendationScore(candidates[i], date, now)
 	}
 	sort.SliceStable(candidates, func(i, j int) bool {
 		if candidates[i].Score == candidates[j].Score {
@@ -82,25 +76,23 @@ func (s *Store) listRecommendationCandidates() ([]recommendationCandidate, error
 	return out, rows.Err()
 }
 
-func recommendationScore(candidate recommendationCandidate, date string, maxPlayedAt int64) float64 {
+func recommendationScore(candidate recommendationCandidate, date string, now time.Time) float64 {
 	score := stableDailyScore(date, candidate.Track.ID)
 	if candidate.Favorite {
 		score += 3.0
 	}
 	if candidate.PlayedAt > 0 {
 		score += 1.5
-		if maxPlayedAt > 0 {
-			const recencyWindowSeconds = 30 * 24 * 60 * 60
-			age := maxPlayedAt - candidate.PlayedAt
-			if age < 0 {
-				age = 0
-			}
-			recency := 1.0 - float64(age)/float64(recencyWindowSeconds)
-			if recency < 0 {
-				recency = 0
-			}
-			score += recency
+		const recencyWindowSeconds = 30 * 24 * 60 * 60
+		age := now.Unix() - candidate.PlayedAt
+		if age < 0 {
+			age = 0
 		}
+		recency := 1.0 - float64(age)/float64(recencyWindowSeconds)
+		if recency < 0 {
+			recency = 0
+		}
+		score += recency
 	}
 	if candidate.Track.VideoPath != "" {
 		score += 0.15
