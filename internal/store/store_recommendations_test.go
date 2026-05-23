@@ -126,6 +126,43 @@ func TestDailyRecommendationsDateChangesOrdering(t *testing.T) {
 	}
 }
 
+func TestDailyRecommendationsStableWithinServerLocalDateWithHistory(t *testing.T) {
+	s := newTestStore(t)
+	ids := seedRecommendationTracks(t, s, 120)
+	early := time.Date(2026, 5, 22, 0, 5, 0, 0, time.Local)
+	late := time.Date(2026, 5, 22, 23, 55, 0, 0, time.Local)
+
+	for i, id := range ids {
+		playedAt := early.Unix()
+		if i%2 != 0 {
+			playedAt = late.Unix()
+		}
+		if err := s.UpsertPlaybackHistory(PlaybackHistoryUpdate{
+			TrackID:      id,
+			PositionMS:   1000,
+			DurationMS:   10000,
+			PlaybackMode: "audio",
+			ContextLabel: "Test",
+			PlayedAt:     playedAt,
+		}); err != nil {
+			t.Fatalf("UpsertPlaybackHistory %d: %v", id, err)
+		}
+	}
+
+	first, err := s.DailyRecommendations(early, 50)
+	if err != nil {
+		t.Fatalf("DailyRecommendations early: %v", err)
+	}
+	second, err := s.DailyRecommendations(late, 50)
+	if err != nil {
+		t.Fatalf("DailyRecommendations late: %v", err)
+	}
+
+	if !reflect.DeepEqual(trackIDs(first), trackIDs(second)) {
+		t.Fatalf("same server-local date order changed with history: early=%v late=%v", trackIDs(first), trackIDs(second))
+	}
+}
+
 func TestDailyRecommendationsFavoritesAndHistoryBoostTracks(t *testing.T) {
 	s := newTestStore(t)
 	ids := seedRecommendationTracks(t, s, 12)
@@ -160,23 +197,25 @@ func TestDailyRecommendationsFavoritesAndHistoryBoostTracks(t *testing.T) {
 	}
 }
 
-func TestDailyRecommendationsScoreAnchorsRecencyToNow(t *testing.T) {
-	now := time.Date(2026, 5, 22, 10, 0, 0, 0, time.UTC)
-	date := now.Format("2006-01-02")
+func TestDailyRecommendationsScoreAnchorsRecencyToLocalDate(t *testing.T) {
+	now := time.Date(2026, 5, 22, 10, 0, 0, 0, time.Local)
+	localNow := now.Local()
+	date := localNow.Format("2006-01-02")
+	scoreAnchor := recommendationDateAnchor(localNow)
 	track := Track{ID: 7}
 
 	recent := recommendationScore(recommendationCandidate{
 		Track:    track,
-		PlayedAt: now.Unix(),
-	}, date, now)
+		PlayedAt: scoreAnchor.Unix(),
+	}, date, scoreAnchor)
 	future := recommendationScore(recommendationCandidate{
 		Track:    track,
-		PlayedAt: now.Add(2 * time.Hour).Unix(),
-	}, date, now)
+		PlayedAt: scoreAnchor.Add(2 * time.Hour).Unix(),
+	}, date, scoreAnchor)
 	stale := recommendationScore(recommendationCandidate{
 		Track:    track,
-		PlayedAt: now.Add(-31 * 24 * time.Hour).Unix(),
-	}, date, now)
+		PlayedAt: scoreAnchor.Add(-31 * 24 * time.Hour).Unix(),
+	}, date, scoreAnchor)
 
 	if future != recent {
 		t.Fatalf("future playback score = %v, want same as most recent score %v", future, recent)
