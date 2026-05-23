@@ -361,6 +361,33 @@ void main() {
     },
   );
 
+  testWidgets('mobile recommendation home ignores stale core refresh results', (
+    tester,
+  ) async {
+    final client = _OutOfOrderDiscoverHttpClient();
+
+    await HttpOverrides.runZoned(() async {
+      await tester.pumpWidget(_harness(const DiscoverScreen()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Initial Album'), findsWidgets);
+      expect(find.text('加载失败，重试'), findsOneWidget);
+
+      await tester.tap(find.text('加载失败，重试'));
+      await tester.pump();
+      await tester.tap(find.text('加载失败，重试'));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(DiscoverDataCache.current?.albums.first.title, 'Newer Album');
+
+      client.completeOlderCoreResponses();
+      await tester.pumpAndSettle();
+    }, createHttpClient: (_) => client);
+
+    expect(DiscoverDataCache.current?.albums.first.title, 'Newer Album');
+  });
+
   testWidgets(
     'mobile recommendation home keeps visible data when refresh fails',
     (tester) async {
@@ -767,6 +794,127 @@ class _FailingDailyRefreshDiscoverHttpClient
 
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) => getUrl(url);
+}
+
+class _OutOfOrderDiscoverHttpClient implements HttpClient {
+  int _generation = 0;
+  final Completer<void> _olderCoreCompleter = Completer<void>();
+
+  void completeOlderCoreResponses() {
+    if (!_olderCoreCompleter.isCompleted) {
+      _olderCoreCompleter.complete();
+    }
+  }
+
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async {
+    if (url.path == '/api/recommendations/daily') {
+      _generation++;
+      if (_generation == 1) {
+        throw const SocketException('daily failed');
+      }
+    }
+    return _OutOfOrderDiscoverHttpClientRequest(url, _generation, this);
+  }
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) => getUrl(url);
+
+  Future<void> waitForCoreIfNeeded(Uri url, int generation) async {
+    if (generation == 2 && url.path != '/api/recommendations/daily') {
+      await _olderCoreCompleter.future;
+    }
+  }
+
+  _DiscoverResponseSet responseForGeneration(int generation) {
+    return switch (generation) {
+      1 => const _DiscoverResponseSet(
+        albumTitle: 'Initial Album',
+        producerName: 'Initial P',
+      ),
+      2 => const _DiscoverResponseSet(
+        albumTitle: 'Older Album',
+        producerName: 'Older P',
+      ),
+      _ => const _DiscoverResponseSet(
+        albumTitle: 'Newer Album',
+        producerName: 'Newer P',
+      ),
+    };
+  }
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _OutOfOrderDiscoverHttpClientRequest implements HttpClientRequest {
+  _OutOfOrderDiscoverHttpClientRequest(this.url, this.generation, this.client);
+
+  final Uri url;
+  final int generation;
+  final _OutOfOrderDiscoverHttpClient client;
+  bool _followRedirects = true;
+  int _maxRedirects = 5;
+  int _contentLength = 0;
+  bool _persistentConnection = true;
+
+  @override
+  Future<HttpClientResponse> close() async {
+    await client.waitForCoreIfNeeded(url, generation);
+    return _SequencedDiscoverFakeHttpClientResponse(
+      url,
+      client.responseForGeneration(generation),
+    );
+  }
+
+  @override
+  Encoding get encoding => utf8;
+
+  @override
+  set encoding(Encoding _) {}
+
+  @override
+  bool get followRedirects => _followRedirects;
+
+  @override
+  set followRedirects(bool value) {
+    _followRedirects = value;
+  }
+
+  @override
+  int get maxRedirects => _maxRedirects;
+
+  @override
+  set maxRedirects(int value) {
+    _maxRedirects = value;
+  }
+
+  @override
+  int get contentLength => _contentLength;
+
+  @override
+  set contentLength(int value) {
+    _contentLength = value;
+  }
+
+  @override
+  bool get persistentConnection => _persistentConnection;
+
+  @override
+  set persistentConnection(bool value) {
+    _persistentConnection = value;
+  }
+
+  @override
+  Future<void> addStream(Stream<List<int>> stream) async {
+    await stream.drain<void>();
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _SequencedDiscoverFakeHttpClientRequest implements HttpClientRequest {

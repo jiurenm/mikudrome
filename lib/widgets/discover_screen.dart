@@ -172,6 +172,7 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
   bool _loading = true;
   String? _error;
   String? _refreshError;
+  int _discoverRequestId = 0;
   int _dailyRecommendationsRequestId = 0;
 
   @override
@@ -214,6 +215,7 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
       });
     }
 
+    final discoverRequestId = ++_discoverRequestId;
     try {
       final api = ApiClient();
       final dailyRecommendationsRequestId = ++_dailyRecommendationsRequestId;
@@ -233,6 +235,7 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
       final producers = coreResults[1] as List<Producer>;
       final vocalists = coreResults[2] as List<Vocalist>;
       final videos = coreResults[3] as List<Video>;
+      if (!mounted || discoverRequestId != _discoverRequestId) return;
       final preservedDailyRecommendations =
           _dailyRecommendations ??
           DiscoverDataCache.current?.dailyRecommendations;
@@ -244,7 +247,6 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
         dailyRecommendations: preservedDailyRecommendations,
       );
       DiscoverDataCache.write(data);
-      if (!mounted) return;
       _applyDiscoverData(data, loading: false);
       unawaited(
         _applyDailyRecommendationsResult(
@@ -253,7 +255,7 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
         ),
       );
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || discoverRequestId != _discoverRequestId) return;
       if (_hasDiscoverData) {
         setState(() {
           _refreshError = 'Failed to refresh discover data';
