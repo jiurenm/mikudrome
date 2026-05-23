@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api/api.dart';
 import '../models/album.dart';
+import '../models/daily_recommendations.dart';
 import '../models/producer.dart';
 import '../models/video.dart';
 import '../models/vocalist.dart';
@@ -26,6 +27,7 @@ class DiscoverScreen extends StatefulWidget {
     this.preferMobileHome = false,
     this.onMobileMoreSelected,
     this.onMobileAlbumSelected,
+    this.onDailyRecommendationsSelected,
   });
 
   final DiscoverSection? currentSection;
@@ -35,6 +37,7 @@ class DiscoverScreen extends StatefulWidget {
   final bool preferMobileHome;
   final ValueChanged<DiscoverSection>? onMobileMoreSelected;
   final ValueChanged<Album>? onMobileAlbumSelected;
+  final VoidCallback? onDailyRecommendationsSelected;
 
   @override
   State<DiscoverScreen> createState() => _DiscoverScreenState();
@@ -72,6 +75,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       return _MobileDiscoverHome(
         onMoreSelected: widget.onMobileMoreSelected,
         onAlbumSelected: widget.onMobileAlbumSelected,
+        onDailyRecommendationsSelected: widget.onDailyRecommendationsSelected,
       );
     }
 
@@ -141,10 +145,15 @@ ButtonStyle _segmentStyle() {
 }
 
 class _MobileDiscoverHome extends StatefulWidget {
-  const _MobileDiscoverHome({this.onMoreSelected, this.onAlbumSelected});
+  const _MobileDiscoverHome({
+    this.onMoreSelected,
+    this.onAlbumSelected,
+    this.onDailyRecommendationsSelected,
+  });
 
   final ValueChanged<DiscoverSection>? onMoreSelected;
   final ValueChanged<Album>? onAlbumSelected;
+  final VoidCallback? onDailyRecommendationsSelected;
 
   @override
   State<_MobileDiscoverHome> createState() => _MobileDiscoverHomeState();
@@ -156,6 +165,8 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
   List<Producer> _producers = const [];
   List<Vocalist> _vocalists = const [];
   List<Video> _videos = const [];
+  DailyRecommendations? _dailyRecommendations;
+  bool _dailyRecommendationsFailed = false;
   bool _loading = true;
   String? _error;
   String? _refreshError;
@@ -175,7 +186,8 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
       _albums.isNotEmpty ||
       _producers.isNotEmpty ||
       _vocalists.isNotEmpty ||
-      _videos.isNotEmpty;
+      _videos.isNotEmpty ||
+      _dailyRecommendations?.tracks.isNotEmpty == true;
 
   void _applyDiscoverData(DiscoverData data, {required bool loading}) {
     setState(() {
@@ -183,6 +195,8 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
       _producers = data.producers;
       _vocalists = data.vocalists;
       _videos = data.videos;
+      _dailyRecommendations = data.dailyRecommendations;
+      _dailyRecommendationsFailed = false;
       _loading = loading;
       _error = null;
       _refreshError = null;
@@ -199,19 +213,44 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
 
     try {
       final api = ApiClient();
-      final albums = await api.getAlbums();
-      final producers = await api.getProducers();
-      final vocalists = await api.getVocalists();
-      final videos = await api.getVideos();
+      var dailyRecommendationsFailed = false;
+      final dailyRecommendationsFuture = api
+          .getDailyRecommendations()
+          .then<DailyRecommendations?>((recommendations) => recommendations)
+          .catchError((_) {
+            dailyRecommendationsFailed = true;
+            return null;
+          });
+      final albumsFuture = api.getAlbums();
+      final producersFuture = api.getProducers();
+      final vocalistsFuture = api.getVocalists();
+      final videosFuture = api.getVideos();
+      final coreResults = await Future.wait<Object>([
+        albumsFuture,
+        producersFuture,
+        vocalistsFuture,
+        videosFuture,
+      ]);
+      final albums = coreResults[0] as List<Album>;
+      final producers = coreResults[1] as List<Producer>;
+      final vocalists = coreResults[2] as List<Vocalist>;
+      final videos = coreResults[3] as List<Video>;
+      final dailyRecommendations = await dailyRecommendationsFuture;
       final data = DiscoverData(
         albums: albums,
         producers: producers,
         vocalists: vocalists,
         videos: videos,
+        dailyRecommendations: dailyRecommendations,
       );
       DiscoverDataCache.write(data);
       if (!mounted) return;
       _applyDiscoverData(data, loading: false);
+      if (dailyRecommendationsFailed) {
+        setState(() {
+          _dailyRecommendationsFailed = true;
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       if (_hasDiscoverData) {
@@ -287,6 +326,13 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
                   _RefreshErrorBanner(message: _refreshError!),
                   const SizedBox(height: 12),
                 ],
+                _DailyRecommendationsModule(
+                  recommendations: _dailyRecommendations,
+                  failed: _dailyRecommendationsFailed,
+                  onTap: widget.onDailyRecommendationsSelected,
+                  onRetry: () => _loadDiscoverData(showLoading: false),
+                ),
+                const SizedBox(height: 16),
                 _FeaturedAlbumBanner(
                   album: featuredAlbum,
                   onAlbumSelected: widget.onAlbumSelected,
@@ -436,6 +482,131 @@ class _MobileSearchField extends StatelessWidget {
           ),
         ),
         style: const TextStyle(fontSize: 13),
+      ),
+    );
+  }
+}
+
+class _DailyRecommendationsModule extends StatelessWidget {
+  const _DailyRecommendationsModule({
+    required this.recommendations,
+    required this.failed,
+    required this.onRetry,
+    this.onTap,
+  });
+
+  final DailyRecommendations? recommendations;
+  final bool failed;
+  final VoidCallback onRetry;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tracks = recommendations?.tracks ?? const [];
+    final preview = tracks.take(3).map((track) => track.title).join(' · ');
+    final subtitle = failed
+        ? '加载失败，重试'
+        : preview.isNotEmpty
+        ? preview
+        : '暂无推荐歌曲';
+    final date = recommendations?.date ?? '';
+
+    return InkWell(
+      onTap: failed ? onRetry : onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: AppTheme.mikuGreen.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.today_rounded,
+                  color: AppTheme.mikuGreen,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '每日推荐',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(
+                                  color: AppTheme.textPrimary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                          ),
+                        ),
+                        if (date.isNotEmpty)
+                          Text(
+                            date,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: AppTheme.textMuted,
+                                  fontSize: 10,
+                                  letterSpacing: 0,
+                                ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: failed
+                            ? Colors.redAccent.shade100
+                            : AppTheme.textMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (failed) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: onRetry,
+                  tooltip: '重试',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(
+                    Icons.refresh_rounded,
+                    color: AppTheme.textMuted,
+                    size: 18,
+                  ),
+                ),
+              ] else ...[
+                const SizedBox(width: 8),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppTheme.textMuted,
+                  size: 18,
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

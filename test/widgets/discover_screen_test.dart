@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/models/album.dart';
+import 'package:mikudrome/models/daily_recommendations.dart';
 import 'package:mikudrome/models/producer.dart';
+import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/models/video.dart';
 import 'package:mikudrome/models/vocalist.dart';
 import 'package:mikudrome/widgets/discover/discover_data_cache.dart';
@@ -30,6 +32,7 @@ void main() {
       producers: [],
       vocalists: [],
       videos: [],
+      dailyRecommendations: null,
     );
 
     DiscoverDataCache.write(data);
@@ -81,7 +84,7 @@ void main() {
     expect(find.text('DECO*27'), findsWidgets);
     expect(find.text('专辑'), findsNothing);
 
-    await tester.drag(find.byType(CustomScrollView), const Offset(0, -260));
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -360));
     await tester.pumpAndSettle();
 
     expect(find.text('虚拟歌手'), findsOneWidget);
@@ -120,6 +123,7 @@ void main() {
             vocal: 'Cached Vocal',
           ),
         ],
+        dailyRecommendations: null,
       ),
     );
 
@@ -133,7 +137,7 @@ void main() {
     expect(find.text('Cached Producer'), findsWidgets);
     expect(find.text('Cached P'), findsOneWidget);
 
-    await tester.drag(find.byType(CustomScrollView), const Offset(0, -260));
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -360));
     await tester.pump();
 
     expect(find.text('Cached Vocal'), findsWidgets);
@@ -157,6 +161,7 @@ void main() {
           producers: [],
           vocalists: [],
           videos: [],
+          dailyRecommendations: null,
         ),
       );
       final client = _NeverCompletingCountingDiscoverHttpClient();
@@ -231,6 +236,72 @@ void main() {
     expect(client.completedResponseSets, 2);
   });
 
+  testWidgets('mobile recommendation home shows daily recommendations module', (
+    tester,
+  ) async {
+    await HttpOverrides.runZoned(() async {
+      await tester.pumpWidget(_harness(const DiscoverScreen()));
+      await tester.pumpAndSettle();
+    }, createHttpClient: (_) => _DiscoverFakeHttpClient());
+
+    expect(find.text('每日推荐'), findsOneWidget);
+    expect(find.text('2026-05-22'), findsOneWidget);
+    expect(find.textContaining('Daily One'), findsOneWidget);
+    expect(find.textContaining('Daily Two'), findsOneWidget);
+  });
+
+  testWidgets(
+    'mobile recommendation home renders cached daily recommendations',
+    (tester) async {
+      DiscoverDataCache.write(
+        const DiscoverData(
+          albums: [],
+          producers: [],
+          vocalists: [],
+          videos: [],
+          dailyRecommendations: DailyRecommendations(
+            date: '2026-05-22',
+            tracks: [
+              Track(
+                id: 301,
+                title: 'Cached Daily',
+                audioPath: 'cached-daily.flac',
+                videoPath: '',
+              ),
+            ],
+          ),
+        ),
+      );
+
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(_harness(const DiscoverScreen()));
+        await tester.pump();
+      }, createHttpClient: (_) => _NeverCompletingDiscoverHttpClient());
+
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text('每日推荐'), findsOneWidget);
+      expect(find.text('2026-05-22'), findsOneWidget);
+      expect(find.textContaining('Cached Daily'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'mobile recommendation home keeps discover content when daily recommendations fail',
+    (tester) async {
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(_harness(const DiscoverScreen()));
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => _FailingDailyDiscoverHttpClient());
+
+      expect(find.text('专辑推荐'), findsOneWidget);
+      expect(find.text('热门P主'), findsOneWidget);
+      expect(find.text('GHOST'), findsWidgets);
+      expect(find.text('DECO*27'), findsWidgets);
+      expect(find.text('每日推荐'), findsOneWidget);
+      expect(find.text('加载失败，重试'), findsOneWidget);
+    },
+  );
+
   testWidgets(
     'mobile recommendation home keeps visible data when refresh fails',
     (tester) async {
@@ -271,6 +342,25 @@ class _DiscoverFakeHttpClient implements HttpClient {
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) async =>
       _DiscoverFakeHttpClientRequest(url);
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FailingDailyDiscoverHttpClient implements HttpClient {
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async {
+    if (url.path == '/api/recommendations/daily') {
+      throw const SocketException('daily failed');
+    }
+    return _DiscoverFakeHttpClientRequest(url);
+  }
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) => getUrl(url);
 
   @override
   void close({bool force = false}) {}
@@ -422,6 +512,29 @@ class _DiscoverFakeHttpClientResponse extends Stream<List<int>>
           },
         ],
       }),
+      '/api/recommendations/daily' => jsonEncode({
+        'date': '2026-05-22',
+        'tracks': [
+          {
+            'id': 101,
+            'title': 'Daily One',
+            'audio_path': 'daily-one.flac',
+            'video_path': '',
+            'duration_seconds': 180,
+            'composer': 'Daily Composer',
+            'vocal': '初音ミク',
+          },
+          {
+            'id': 102,
+            'title': 'Daily Two',
+            'audio_path': 'daily-two.flac',
+            'video_path': '',
+            'duration_seconds': 200,
+            'composer': 'Daily Composer',
+            'vocal': '鏡音リン',
+          },
+        ],
+      }),
       _ => '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>',
     };
   }
@@ -497,10 +610,12 @@ class _DiscoverResponseSet {
   const _DiscoverResponseSet({
     required this.albumTitle,
     required this.producerName,
+    this.dailyTitle = 'Daily One',
   });
 
   final String albumTitle;
   final String producerName;
+  final String dailyTitle;
 }
 
 class _SequencedDiscoverFakeHttpClient implements HttpClient {
@@ -509,7 +624,7 @@ class _SequencedDiscoverFakeHttpClient implements HttpClient {
   final List<_DiscoverResponseSet> _responses;
   int _requestCount = 0;
 
-  int get completedResponseSets => _requestCount ~/ 4;
+  int get completedResponseSets => _requestCount ~/ 5;
 
   @override
   Future<HttpClientRequest> getUrl(Uri url) async =>
@@ -520,7 +635,7 @@ class _SequencedDiscoverFakeHttpClient implements HttpClient {
       _SequencedDiscoverFakeHttpClientRequest(url, _responseForNextRequest());
 
   _DiscoverResponseSet _responseForNextRequest() {
-    final index = (_requestCount ~/ 4).clamp(0, _responses.length - 1);
+    final index = (_requestCount ~/ 5).clamp(0, _responses.length - 1);
     _requestCount++;
     return _responses[index];
   }
@@ -542,7 +657,7 @@ class _FailingAfterFirstDiscoverHttpClient
   @override
   Future<HttpClientRequest> getUrl(Uri url) async {
     _failingClientRequestCount++;
-    if (_failingClientRequestCount > 4) {
+    if (_failingClientRequestCount > 5) {
       throw const SocketException('refresh failed');
     }
     return _SequencedDiscoverFakeHttpClientRequest(
@@ -658,6 +773,20 @@ class _SequencedDiscoverFakeHttpClientResponse extends Stream<List<int>>
             'id': 1,
             'title': '${response.albumTitle} MV',
             'duration_seconds': 240,
+            'composer': response.producerName,
+            'vocal': '初音ミク',
+          },
+        ],
+      }),
+      '/api/recommendations/daily' => jsonEncode({
+        'date': '2026-05-22',
+        'tracks': [
+          {
+            'id': 101,
+            'title': response.dailyTitle,
+            'audio_path': '${response.dailyTitle}.flac',
+            'video_path': '',
+            'duration_seconds': 180,
             'composer': response.producerName,
             'vocal': '初音ミク',
           },

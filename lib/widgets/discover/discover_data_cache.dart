@@ -1,4 +1,5 @@
 import '../../models/album.dart';
+import '../../models/daily_recommendations.dart';
 import '../../models/producer.dart';
 import '../../models/video.dart';
 import '../../models/vocalist.dart';
@@ -9,18 +10,21 @@ class DiscoverData {
     required this.producers,
     required this.vocalists,
     required this.videos,
+    required this.dailyRecommendations,
   });
 
   final List<Album> albums;
   final List<Producer> producers;
   final List<Vocalist> vocalists;
   final List<Video> videos;
+  final DailyRecommendations? dailyRecommendations;
 
   bool get isEmpty =>
       albums.isEmpty &&
       producers.isEmpty &&
       vocalists.isEmpty &&
-      videos.isEmpty;
+      videos.isEmpty &&
+      dailyRecommendations?.tracks.isNotEmpty != true;
 }
 
 class DiscoverDataCache {
