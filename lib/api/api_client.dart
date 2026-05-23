@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 import '../models/album.dart';
+import '../models/daily_recommendations.dart';
 import '../models/library_task_status.dart';
 import '../models/producer.dart';
 import '../models/playlist.dart';
@@ -76,6 +77,22 @@ class ApiClient {
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     final list = data['tracks'] as List<dynamic>? ?? [];
     return list.map((e) => Track.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<DailyRecommendations> getDailyRecommendations() async {
+    final res = await http.get(
+      Uri.parse(_url(ApiEndpoints.dailyRecommendations)),
+      headers: headersForRequest(),
+    );
+    if (res.statusCode != 200) {
+      throw ApiException(
+        'Failed to load daily recommendations',
+        res.statusCode,
+      );
+    }
+    return DailyRecommendations.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    );
   }
 
   Future<Track?> getTrack(int id) async {

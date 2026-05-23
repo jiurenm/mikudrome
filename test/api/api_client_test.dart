@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/api/api_client.dart';
 import 'package:mikudrome/api/config.dart';
+import 'package:mikudrome/models/daily_recommendations.dart';
 import 'package:mikudrome/screens/library_home_screen.dart';
 
 void main() {
@@ -101,6 +102,45 @@ void main() {
     expect(items.single.mode, PlaybackMode.audio);
     expect(items.single.contextLabel, 'Album / Test');
     expect(items.single.playedAt, 1779072000);
+  });
+
+  test('getDailyRecommendations decodes date and tracks', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(server.close);
+    unawaited(
+      server.listen((request) async {
+        expect(request.method, 'GET');
+        expect(request.uri.path, '/api/recommendations/daily');
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(
+          jsonEncode({
+            'date': '2026-05-22',
+            'tracks': [
+              {
+                'id': 7,
+                'title': 'Daily Track',
+                'audio_path': '/daily.flac',
+                'duration_seconds': 180,
+                'composer': 'kz',
+                'vocal': '初音ミク',
+                'is_favorite': true,
+              },
+            ],
+          }),
+        );
+        await request.response.close();
+      }).asFuture<void>(),
+    );
+    final client = ApiClient(baseUrl: 'http://127.0.0.1:${server.port}');
+
+    final recommendations = await client.getDailyRecommendations();
+
+    expect(recommendations, isA<DailyRecommendations>());
+    expect(recommendations.date, '2026-05-22');
+    expect(recommendations.tracks, hasLength(1));
+    expect(recommendations.tracks.single.id, 7);
+    expect(recommendations.tracks.single.title, 'Daily Track');
+    expect(recommendations.tracks.single.isFavorite, isTrue);
   });
 }
 
