@@ -303,6 +303,66 @@ void main() {
   );
 
   testWidgets(
+    'mobile recommendation home renders core content while daily recommendations are still loading',
+    (tester) async {
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(_harness(const DiscoverScreen()));
+        await tester.pump();
+        await tester.pump();
+      }, createHttpClient: (_) => _LoadingDailyDiscoverHttpClient());
+
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text('专辑推荐'), findsOneWidget);
+      expect(find.text('热门P主'), findsOneWidget);
+      expect(find.text('GHOST'), findsWidgets);
+      expect(find.text('暂无推荐歌曲'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'mobile recommendation home preserves cached daily recommendations when refresh daily fails',
+    (tester) async {
+      final client = _FailingDailyRefreshDiscoverHttpClient([
+        const _DiscoverResponseSet(
+          albumTitle: 'Initial Album',
+          producerName: 'Initial P',
+          dailyTitle: 'Daily One',
+        ),
+        const _DiscoverResponseSet(
+          albumTitle: 'Refreshed Album',
+          producerName: 'Refreshed P',
+          dailyTitle: 'Daily Two',
+        ),
+      ]);
+
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(_harness(const DiscoverScreen()));
+        await tester.pumpAndSettle();
+
+        expect(
+          DiscoverDataCache.current?.dailyRecommendations?.tracks.first.title,
+          'Daily One',
+        );
+
+        await tester.fling(
+          find.byType(CustomScrollView),
+          const Offset(0, 500),
+          1000,
+        );
+        await tester.pump();
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => client);
+
+      expect(find.text('Refreshed Album'), findsWidgets);
+      expect(find.text('加载失败，重试'), findsOneWidget);
+      expect(
+        DiscoverDataCache.current?.dailyRecommendations?.tracks.first.title,
+        'Daily One',
+      );
+    },
+  );
+
+  testWidgets(
     'mobile recommendation home keeps visible data when refresh fails',
     (tester) async {
       final client = _FailingAfterFirstDiscoverHttpClient(
@@ -357,6 +417,25 @@ class _FailingDailyDiscoverHttpClient implements HttpClient {
       throw const SocketException('daily failed');
     }
     return _DiscoverFakeHttpClientRequest(url);
+  }
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) => getUrl(url);
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _LoadingDailyDiscoverHttpClient implements HttpClient {
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) {
+    if (url.path == '/api/recommendations/daily') {
+      return Completer<HttpClientRequest>().future;
+    }
+    return Future.value(_DiscoverFakeHttpClientRequest(url));
   }
 
   @override
@@ -664,6 +743,27 @@ class _FailingAfterFirstDiscoverHttpClient
       url,
       _responseForNextRequest(),
     );
+  }
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) => getUrl(url);
+}
+
+class _FailingDailyRefreshDiscoverHttpClient
+    extends _SequencedDiscoverFakeHttpClient {
+  _FailingDailyRefreshDiscoverHttpClient(super.responses);
+
+  int _dailyRequestCount = 0;
+
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) {
+    if (url.path == '/api/recommendations/daily') {
+      _dailyRequestCount++;
+      if (_dailyRequestCount > 1) {
+        throw const SocketException('daily failed');
+      }
+    }
+    return super.getUrl(url);
   }
 
   @override

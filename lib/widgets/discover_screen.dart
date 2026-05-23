@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../api/api.dart';
@@ -170,6 +172,7 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
   bool _loading = true;
   String? _error;
   String? _refreshError;
+  int _dailyRecommendationsRequestId = 0;
 
   @override
   void initState() {
@@ -213,14 +216,9 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
 
     try {
       final api = ApiClient();
-      var dailyRecommendationsFailed = false;
-      final dailyRecommendationsFuture = api
-          .getDailyRecommendations()
-          .then<DailyRecommendations?>((recommendations) => recommendations)
-          .catchError((_) {
-            dailyRecommendationsFailed = true;
-            return null;
-          });
+      final dailyRecommendationsRequestId = ++_dailyRecommendationsRequestId;
+      final dailyRecommendationsFuture = api.getDailyRecommendations();
+      unawaited(dailyRecommendationsFuture.then<void>((_) {}, onError: (_) {}));
       final albumsFuture = api.getAlbums();
       final producersFuture = api.getProducers();
       final vocalistsFuture = api.getVocalists();
@@ -235,22 +233,25 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
       final producers = coreResults[1] as List<Producer>;
       final vocalists = coreResults[2] as List<Vocalist>;
       final videos = coreResults[3] as List<Video>;
-      final dailyRecommendations = await dailyRecommendationsFuture;
+      final preservedDailyRecommendations =
+          _dailyRecommendations ??
+          DiscoverDataCache.current?.dailyRecommendations;
       final data = DiscoverData(
         albums: albums,
         producers: producers,
         vocalists: vocalists,
         videos: videos,
-        dailyRecommendations: dailyRecommendations,
+        dailyRecommendations: preservedDailyRecommendations,
       );
       DiscoverDataCache.write(data);
       if (!mounted) return;
       _applyDiscoverData(data, loading: false);
-      if (dailyRecommendationsFailed) {
-        setState(() {
-          _dailyRecommendationsFailed = true;
-        });
-      }
+      unawaited(
+        _applyDailyRecommendationsResult(
+          dailyRecommendationsFuture,
+          requestId: dailyRecommendationsRequestId,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       if (_hasDiscoverData) {
@@ -264,6 +265,46 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
         _error = e.toString();
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _applyDailyRecommendationsResult(
+    Future<DailyRecommendations> future, {
+    required int requestId,
+  }) async {
+    try {
+      final dailyRecommendations = await future;
+      if (!mounted || requestId != _dailyRecommendationsRequestId) return;
+      setState(() {
+        _dailyRecommendations = dailyRecommendations;
+        _dailyRecommendationsFailed = false;
+      });
+      DiscoverDataCache.write(
+        DiscoverData(
+          albums: _albums,
+          producers: _producers,
+          vocalists: _vocalists,
+          videos: _videos,
+          dailyRecommendations: dailyRecommendations,
+        ),
+      );
+    } catch (_) {
+      if (!mounted || requestId != _dailyRecommendationsRequestId) return;
+      setState(() {
+        _dailyRecommendationsFailed = true;
+      });
+      final current = DiscoverDataCache.current;
+      if (current != null && current.dailyRecommendations != null) {
+        DiscoverDataCache.write(
+          DiscoverData(
+            albums: _albums,
+            producers: _producers,
+            vocalists: _vocalists,
+            videos: _videos,
+            dailyRecommendations: current.dailyRecommendations,
+          ),
+        );
+      }
     }
   }
 
