@@ -32,7 +32,6 @@ void main() {
       producers: [],
       vocalists: [],
       videos: [],
-      dailyRecommendations: null,
     );
 
     DiscoverDataCache.write(data);

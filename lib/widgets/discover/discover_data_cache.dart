@@ -10,7 +10,7 @@ class DiscoverData {
     required this.producers,
     required this.vocalists,
     required this.videos,
-    required this.dailyRecommendations,
+    this.dailyRecommendations,
   });
 
   final List<Album> albums;
