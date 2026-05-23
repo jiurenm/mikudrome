@@ -70,6 +70,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	if r.URL.Path == "/api/recommendations/daily" && r.Method == http.MethodGet {
+		h.getDailyRecommendations(w, r)
+		return
+	}
 	if r.URL.Path == "/api/tracks" && r.Method == http.MethodGet {
 		h.listTracks(w, r)
 		return
