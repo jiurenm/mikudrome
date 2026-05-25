@@ -3,11 +3,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/screens/library_home_screen.dart';
 import 'package:mikudrome/services/mobile_audio_playback.dart';
+import 'package:mikudrome/services/playback_storage.dart';
+import 'package:mikudrome/widgets/mobile_mini_player.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 void main() {
+  setUp(() async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    await PlaybackStorage.ensureInitialized();
+  });
+
   testWidgets('initial mobile discover tab uses recommendation home', (
     tester,
   ) async {
@@ -217,6 +225,69 @@ void main() {
       MobilePlaybackOrderMode.sequential,
     ]);
   });
+
+  testWidgets(
+    'restored mobile playback shows paused mini player and resumes from saved progress',
+    (tester) async {
+      final service = _RecordingMobileAudioPlaybackService();
+      addTearDown(service.dispose);
+      await _seedPlaybackState(progress: 0.5);
+
+      await HttpOverrides.runZoned(() async {
+        await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+        await tester.pumpAndSettle();
+
+        expect(find.byType(MobileMiniPlayer), findsOneWidget);
+        final miniPlayer = tester.widget<MobileMiniPlayer>(
+          find.byType(MobileMiniPlayer),
+        );
+        expect(miniPlayer.track.id, 402);
+        expect(miniPlayer.isPlaying, isFalse);
+        expect(miniPlayer.progress, 0.5);
+        expect(service.playedQueues, isEmpty);
+
+        await tester.tap(
+          find.descendant(
+            of: find.byType(MobileMiniPlayer),
+            matching: find.byIcon(Icons.play_arrow),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 500));
+      }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+      expect(service.playedQueues, hasLength(1));
+      expect(service.playedQueues.single.map((track) => track.id), [401, 402]);
+      expect(service.playedIndexes.single, 1);
+      expect(service.orderModes.last, MobilePlaybackOrderMode.listLoop);
+      expect(service.seekPositions.last, const Duration(seconds: 75));
+    },
+  );
+
+  testWidgets(
+    'restored mobile playback at zero progress starts without seeking',
+    (tester) async {
+      final service = _RecordingMobileAudioPlaybackService();
+      addTearDown(service.dispose);
+      await _seedPlaybackState(progress: 0);
+
+      await HttpOverrides.runZoned(() async {
+        await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+        await tester.pumpAndSettle();
+
+        await tester.tap(
+          find.descendant(
+            of: find.byType(MobileMiniPlayer),
+            matching: find.byIcon(Icons.play_arrow),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 500));
+      }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+      expect(service.playedQueues, hasLength(1));
+      expect(service.playedIndexes.single, 1);
+      expect(service.seekPositions, isEmpty);
+    },
+  );
 
   testWidgets('system back returns from a mobile destination to My Music', (
     tester,
@@ -652,7 +723,9 @@ class _LibraryFakeHttpHeaders implements HttpHeaders {
 class _RecordingMobileAudioPlaybackService
     extends FakeMobileAudioPlaybackService {
   final playedQueues = <List<Track>>[];
+  final playedIndexes = <int>[];
   final orderModes = <MobilePlaybackOrderMode>[];
+  final seekPositions = <Duration>[];
 
   @override
   Future<void> playQueue({
@@ -663,6 +736,7 @@ class _RecordingMobileAudioPlaybackService
     MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
   }) {
     playedQueues.add(List<Track>.from(queue));
+    playedIndexes.add(index);
     orderModes.add(orderMode);
     return super.playQueue(
       queue: queue,
@@ -674,10 +748,47 @@ class _RecordingMobileAudioPlaybackService
   }
 
   @override
+  Future<void> seek(Duration position) async {
+    seekPositions.add(position);
+    await super.seek(position);
+  }
+
+  @override
   Future<void> setPlaybackOrderMode(MobilePlaybackOrderMode orderMode) async {
     orderModes.add(orderMode);
     await super.setPlaybackOrderMode(orderMode);
   }
+}
+
+Future<void> _seedPlaybackState({required double progress}) async {
+  SharedPreferences.setMockInitialValues(<String, Object>{
+    'mikudrome_queue': jsonEncode([
+      {
+        'id': 401,
+        'title': 'Resume One',
+        'audio_path': 'resume-one.flac',
+        'video_path': '',
+        'album_id': 4,
+        'duration_seconds': 120,
+        'vocal': '初音ミク',
+      },
+      {
+        'id': 402,
+        'title': 'Resume Two',
+        'audio_path': 'resume-two.flac',
+        'video_path': '',
+        'album_id': 4,
+        'duration_seconds': 150,
+        'vocal': '鏡音リン',
+      },
+    ]),
+    'mikudrome_index': '1',
+    'mikudrome_progress': progress.toString(),
+    'mikudrome_mode': 'audio',
+    'mikudrome_order_mode': 'listLoop',
+    'mikudrome_context': 'Playlist / Resume',
+  });
+  await PlaybackStorage.ensureInitialized();
 }
 
 Future<void> _pumpMobileLibrary(
