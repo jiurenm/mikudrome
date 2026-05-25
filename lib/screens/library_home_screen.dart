@@ -754,6 +754,12 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     );
   }
 
+  Future<void> _playRestoredMobileAudioQueue(double resumeProgress) async {
+    await _playMobileAudioQueue(queue: _playerQueue, index: _playerIndex);
+    if (resumeProgress <= 0 || _currentTrack == null) return;
+    await _seekMobileAudioPlayback(resumeProgress);
+  }
+
   Future<void> _routeMobileAudioPlaybackForCurrentMode() {
     return routeMobileAudioPlaybackForMode(
       isMobile: _isMobilePlaybackSurface,
@@ -1053,11 +1059,13 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     if (_currentTrack == null) return;
     if (_canUseMobileAudioPlayback) {
       if (_restoredNotStarted) {
+        final resumeProgress = _resumeProgress ?? _playbackProgress;
         setState(() {
           _restoredNotStarted = false;
           _isPlaying = true;
+          _resumeProgress = null;
         });
-        await _playMobileAudioQueue(queue: _playerQueue, index: _playerIndex);
+        await _playRestoredMobileAudioQueue(resumeProgress);
         return;
       }
       if (_isPlaying) {
