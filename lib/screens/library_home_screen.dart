@@ -33,6 +33,7 @@ import '../models/album.dart';
 import '../models/producer.dart';
 import '../models/vocalist.dart';
 import '../utils/responsive.dart';
+import '../widgets/mobile_mini_player.dart';
 import '../widgets/mobile_player_sheet.dart';
 import '../widgets/mobile_more_screen.dart';
 import '../widgets/my_music_screen.dart';
@@ -1384,7 +1385,24 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
           child: Stack(
             children: [
               appShell,
-              if (currentTrack != null && !_restoredNotStarted)
+              if (currentTrack != null && _restoredNotStarted)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: bottomPadding,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: MobileMiniPlayer(
+                      track: currentTrack,
+                      coverUrl: _coverUrlForTrack(currentTrack),
+                      isPlaying: _isPlaying,
+                      progress: _playbackProgress,
+                      onTap: () {},
+                      onPlayPause: _togglePlayback,
+                    ),
+                  ),
+                )
+              else if (currentTrack != null)
                 MobilePlayerSheet(
                   track: currentTrack,
                   coverUrl: _coverUrlForTrack(currentTrack),
