@@ -299,7 +299,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
         (trackChanged ||
             oldWidget.track.lyrics != widget.track.lyrics ||
             oldWidget.externalProgress != widget.externalProgress ||
-            oldWidget.useExternalAudioPlayback != widget.useExternalAudioPlayback)) {
+            oldWidget.useExternalAudioPlayback !=
+                widget.useExternalAudioPlayback)) {
       _syncActiveLyricIndexForPosition(_position);
     }
 
@@ -1642,50 +1643,47 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _buildMobileBackdrop(Color accentColor) {
-    final gradient = DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            accentColor.withValues(alpha: 0.22),
-            const Color(0xFF061116),
-            Colors.black,
-          ],
-        ),
+    final backdropDecoration = BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        stops: const [0.0, 0.24, 0.52, 0.76, 1.0],
+        colors: [
+          accentColor.withValues(alpha: 0.2),
+          const Color(0xB3031016),
+          const Color(0xD9061116),
+          const Color(0xEF071015),
+          const Color(0xFF071015),
+        ],
       ),
+    );
+    final blendedGradient = DecoratedBox(
+      key: const ValueKey('mobile-player-backdrop-gradient'),
+      decoration: backdropDecoration,
     );
 
     if (_albumCoverUrl.isEmpty) {
-      return gradient;
+      return blendedGradient;
     }
 
     return Stack(
       fit: StackFit.expand,
       children: [
         ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+          imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
           child: Image.network(
             _albumCoverUrl,
             headers: ApiConfig.defaultHeaders,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => gradient,
+            errorBuilder: (_, __, ___) =>
+                DecoratedBox(decoration: backdropDecoration),
           ),
         ),
-        const ColoredBox(color: Color(0xCC031016)),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.black.withValues(alpha: 0.1),
-                Colors.black.withValues(alpha: 0.4),
-                Colors.black.withValues(alpha: 0.78),
-              ],
-            ),
-          ),
+        const ColoredBox(
+          key: ValueKey('mobile-player-cover-wash'),
+          color: Color(0xA8031016),
         ),
+        blendedGradient,
       ],
     );
   }
@@ -1739,16 +1737,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }) {
     final radius = BorderRadius.circular(24);
     return Container(
+      key: const ValueKey('mobile-player-artwork-frame'),
       width: size,
       height: size,
       decoration: BoxDecoration(
         borderRadius: radius,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.045)),
         boxShadow: [
           BoxShadow(
-            color: accentColor.withValues(alpha: 0.18),
-            blurRadius: 46,
-            offset: const Offset(0, 24),
+            color: Colors.black.withValues(alpha: 0.38),
+            blurRadius: 40,
+            offset: const Offset(0, 22),
+          ),
+          BoxShadow(
+            color: accentColor.withValues(alpha: 0.1),
+            blurRadius: 56,
+            spreadRadius: -10,
+            offset: const Offset(0, 18),
           ),
         ],
       ),

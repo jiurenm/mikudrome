@@ -366,6 +366,88 @@ void main() {
     expect(find.byIcon(Icons.favorite), findsOneWidget);
   });
 
+  testWidgets('mobile cover backdrop blends into the control area', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const track = Track(
+      id: 31,
+      title: 'Backdrop blend',
+      audioPath: '/tmp/31.flac',
+      videoPath: '',
+      vocal: 'Miku',
+    );
+
+    await _pumpPlayer(
+      tester,
+      surfaceSize: const Size(430, 900),
+      track: track,
+      currentCoverUrl: 'http://127.0.0.1:8080/api/covers/31',
+    );
+
+    final gradientFinder = find.byKey(
+      const ValueKey('mobile-player-backdrop-gradient'),
+    );
+    expect(gradientFinder, findsOneWidget);
+
+    final gradientBox = tester.widget<DecoratedBox>(gradientFinder);
+    final decoration = gradientBox.decoration as BoxDecoration;
+    final gradient = decoration.gradient as LinearGradient;
+
+    expect(gradient.begin, Alignment.topCenter);
+    expect(gradient.end, Alignment.bottomCenter);
+    expect(gradient.stops, const [0.0, 0.24, 0.52, 0.76, 1.0]);
+    expect(gradient.colors, hasLength(5));
+    expect(gradient.colors.last, const Color(0xFF071015));
+    expect(
+      find.byKey(const ValueKey('mobile-player-cover-wash')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'mobile artwork frame uses a softened border and layered shadow',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      const track = Track(
+        id: 32,
+        title: 'Soft artwork',
+        audioPath: '/tmp/32.flac',
+        videoPath: '',
+        vocal: 'Miku',
+      );
+
+      await _pumpPlayer(
+        tester,
+        surfaceSize: const Size(430, 900),
+        track: track,
+        currentCoverUrl: 'http://127.0.0.1:8080/api/covers/32',
+      );
+
+      final artworkFinder = find.byKey(
+        const ValueKey('mobile-player-artwork-frame'),
+      );
+      expect(artworkFinder, findsOneWidget);
+
+      final artworkFrame = tester.widget<Container>(artworkFinder);
+      final decoration = artworkFrame.decoration as BoxDecoration;
+      final border = decoration.border as Border;
+      final shadows = decoration.boxShadow!;
+
+      expect(border.top.color, Colors.white.withValues(alpha: 0.045));
+      expect(shadows, hasLength(2));
+      expect(shadows.first.color, Colors.black.withValues(alpha: 0.38));
+      expect(shadows.first.blurRadius, 40);
+      expect(shadows.first.offset, const Offset(0, 22));
+      expect(shadows.last.blurRadius, 56);
+      expect(shadows.last.spreadRadius, -10);
+    },
+  );
+
   testWidgets(
     'mobile cover area swipes left into lyrics while controls stay fixed',
     (tester) async {
