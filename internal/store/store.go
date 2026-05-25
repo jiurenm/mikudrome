@@ -1499,8 +1499,8 @@ func (b *BatchInserter) Flush() error {
 		_, err := b.tx.Exec(`INSERT INTO tracks
 			(title, audio_path, video_path, video_thumb_path, album_id, disc_number, track_number,
 			 artists, year, duration_seconds, format, composer_scanned, lyricist_scanned,
-			 remix, lyrics, comment, file_mtime, file_size)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 lyrics, comment, file_mtime, file_size)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(audio_path) DO UPDATE SET
 				title = excluded.title,
 				video_path = excluded.video_path,
@@ -1514,14 +1514,13 @@ func (b *BatchInserter) Flush() error {
 				format = excluded.format,
 				composer_scanned = excluded.composer_scanned,
 				lyricist_scanned = excluded.lyricist_scanned,
-				remix = excluded.remix,
 				lyrics = excluded.lyrics,
 				comment = excluded.comment,
 				file_mtime = excluded.file_mtime,
 				file_size = excluded.file_size`,
 			t.Title, t.AudioPath, t.VideoPath, t.VideoThumbPath, albumID, t.DiscNumber, t.TrackNumber,
 			t.Artists, t.Year, t.DurationSeconds, t.Format, t.ComposerScanned, t.LyricistScanned,
-			t.Remix, t.Lyrics, t.Comment, t.FileMtime, t.FileSize)
+			t.Lyrics, t.Comment, t.FileMtime, t.FileSize)
 		if err != nil {
 			return err
 		}

@@ -363,7 +363,6 @@ func processFileWithAlbumCoverCoordinator(job scanJob, mediaRoot string, albumCo
 	// Extended metadata fields
 	composer := ""
 	lyricist := ""
-	remix := ""
 	lyrics := ""
 	comment := ""
 
@@ -398,9 +397,6 @@ func processFileWithAlbumCoverCoordinator(job scanJob, mediaRoot string, albumCo
 		}
 		if l, ok := ffprobeTags["lyricist"]; ok && l != "" {
 			lyricist = normalizeCreditList(l)
-		}
-		if r := lookupTag(ffprobeTags, "remix", "remixer"); r != "" {
-			remix = normalizeCreditList(r)
 		}
 		if lyr := lookupTag(ffprobeTags, "lyrics", "LYRICS"); lyr != "" {
 			lyrics = lyr
@@ -463,7 +459,6 @@ func processFileWithAlbumCoverCoordinator(job scanJob, mediaRoot string, albumCo
 
 	composer = normalizeCreditList(composer)
 	lyricist = normalizeCreditList(lyricist)
-	remix = normalizeCreditList(remix)
 
 	mediaRootAbs := mediaRoot
 
@@ -506,7 +501,6 @@ func processFileWithAlbumCoverCoordinator(job scanJob, mediaRoot string, albumCo
 			Format:          format,
 			ComposerScanned: composer,
 			LyricistScanned: lyricist,
-			Remix:           remix,
 			Lyrics:          lyrics,
 			Comment:         comment,
 			FileMtime:       job.modTime,
@@ -659,7 +653,7 @@ func runFFprobe(path string) (duration int, formatLabel string, tags map[string]
 		"-select_streams", "a:0",
 		"-show_entries", "stream=codec_name,bits_per_sample",
 		"-show_entries", "format=duration,bit_rate",
-		"-show_entries", "format_tags=title,INAM,inam,artist,IART,iart,album,IPRD,iprd,album_artist,albumartist,TPE2,tpe2,date,year,ICRD,icrd,track,ITRK,itrk,disc,TPOS,tpos,IPRT,iprt,composer,lyricist,arranger,remix,remixer,vocal,voice_manipulator,illustrator,movie,source,lyrics,LYRICS,comment",
+		"-show_entries", "format_tags=title,INAM,inam,artist,IART,iart,album,IPRD,iprd,album_artist,albumartist,TPE2,tpe2,date,year,ICRD,icrd,track,ITRK,itrk,disc,TPOS,tpos,IPRT,iprt,composer,lyricist,arranger,vocal,voice_manipulator,illustrator,movie,source,lyrics,LYRICS,comment",
 		"-of", "json",
 		path,
 	)

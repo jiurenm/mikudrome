@@ -225,6 +225,50 @@ func TestUpdateTrackMetadataOnlyTouchesRequestedFields(t *testing.T) {
 	}
 }
 
+func TestBatchInserterFlushPreservesManualRemixWhenScanHasNoRemix(t *testing.T) {
+	st := newTestStore(t)
+
+	albumID, err := st.UpsertAlbum("Album", "", 0, "")
+	if err != nil {
+		t.Fatalf("UpsertAlbum: %v", err)
+	}
+	if err := st.UpsertTrack("Track", "/tmp/track.flac", "", "", albumID, 1, 1, "", 0, 0, ""); err != nil {
+		t.Fatalf("UpsertTrack: %v", err)
+	}
+
+	var trackID int64
+	if err := st.db.QueryRow(`SELECT id FROM tracks WHERE audio_path = ?`, "/tmp/track.flac").Scan(&trackID); err != nil {
+		t.Fatalf("select track id: %v", err)
+	}
+	manualRemix := "TeddyLoid"
+	if err := st.UpdateTrackMetadata(trackID, TrackMetadataPatch{Remix: &manualRemix}); err != nil {
+		t.Fatalf("UpdateTrackMetadata: %v", err)
+	}
+
+	batch, err := st.BeginBatch(1)
+	if err != nil {
+		t.Fatalf("BeginBatch: %v", err)
+	}
+	if err := batch.Add(
+		Track{Title: "Track Updated", AudioPath: "/tmp/track.flac", DiscNumber: 1, TrackNumber: 1},
+		Album{Title: "Album", CoverPath: "/cover.jpg"},
+		Producer{},
+	); err != nil {
+		t.Fatalf("batch.Add: %v", err)
+	}
+	if err := batch.Close(); err != nil {
+		t.Fatalf("batch.Close: %v", err)
+	}
+
+	row, ok, err := st.GetTrackMetadataByID(trackID)
+	if err != nil || !ok {
+		t.Fatalf("GetTrackMetadataByID ok=%v err=%v", ok, err)
+	}
+	if row.Remix != manualRemix {
+		t.Fatalf("remix = %q, want %q", row.Remix, manualRemix)
+	}
+}
+
 func TestGetTracksByAlbumIDUsesEffectiveComposerAndLyricist(t *testing.T) {
 	st := newTestStore(t)
 
