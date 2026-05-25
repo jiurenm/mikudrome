@@ -259,7 +259,8 @@ void main() {
       expect(service.playedQueues.single.map((track) => track.id), [401, 402]);
       expect(service.playedIndexes.single, 1);
       expect(service.orderModes.last, MobilePlaybackOrderMode.listLoop);
-      expect(service.seekPositions.last, const Duration(seconds: 75));
+      expect(service.seekPositions, [const Duration(seconds: 75)]);
+      expect(service.currentState.position, const Duration(seconds: 75));
     },
   );
 
