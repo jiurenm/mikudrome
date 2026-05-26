@@ -265,6 +265,31 @@ void main() {
   );
 
   testWidgets(
+    'restored mobile playback mini player opens details without starting audio',
+    (tester) async {
+      final service = _RecordingMobileAudioPlaybackService();
+      addTearDown(service.dispose);
+      await _seedPlaybackState(progress: 0.5);
+
+      await HttpOverrides.runZoned(() async {
+        await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byType(MobileMiniPlayer));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+
+        expect(
+          find.byKey(const ValueKey('mobile-player-immersive')),
+          findsOneWidget,
+        );
+      }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+      expect(service.playedQueues, isEmpty);
+    },
+  );
+
+  testWidgets(
     'restored mobile playback at zero progress starts without seeking',
     (tester) async {
       final service = _RecordingMobileAudioPlaybackService();

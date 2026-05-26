@@ -33,7 +33,6 @@ import '../models/album.dart';
 import '../models/producer.dart';
 import '../models/vocalist.dart';
 import '../utils/responsive.dart';
-import '../widgets/mobile_mini_player.dart';
 import '../widgets/mobile_player_sheet.dart';
 import '../widgets/mobile_more_screen.dart';
 import '../widgets/my_music_screen.dart';
@@ -1086,6 +1085,14 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     await _playerTogglePlayback();
   }
 
+  Future<void> _playMobileAudioFromPlayerControls() async {
+    if (_restoredNotStarted) {
+      await _togglePlayback();
+      return;
+    }
+    await _mobileAudioPlaybackService.play();
+  }
+
   Future<void> _seekPlayback(double value) async {
     if (_currentTrack == null) return;
     if (_canUseMobileAudioPlayback) {
@@ -1393,24 +1400,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
           child: Stack(
             children: [
               appShell,
-              if (currentTrack != null && _restoredNotStarted)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: bottomPadding,
-                  child: Material(
-                    color: Colors.transparent,
-                    child: MobileMiniPlayer(
-                      track: currentTrack,
-                      coverUrl: _coverUrlForTrack(currentTrack),
-                      isPlaying: _isPlaying,
-                      progress: _playbackProgress,
-                      onTap: () {},
-                      onPlayPause: _togglePlayback,
-                    ),
-                  ),
-                )
-              else if (currentTrack != null)
+              if (currentTrack != null)
                 MobilePlayerSheet(
                   track: currentTrack,
                   coverUrl: _coverUrlForTrack(currentTrack),
@@ -1452,7 +1442,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
                         _playbackMode == PlaybackMode.audio,
                     externalIsPlaying: _isPlaying,
                     externalProgress: _playbackProgress,
-                    onExternalPlay: _mobileAudioPlaybackService.play,
+                    onExternalPlay: _playMobileAudioFromPlayerControls,
                     onExternalPause: _mobileAudioPlaybackService.pause,
                     onExternalSeekToFraction: _seekMobileAudioPlayback,
                     currentCoverUrl: _coverUrlForTrack(currentTrack),

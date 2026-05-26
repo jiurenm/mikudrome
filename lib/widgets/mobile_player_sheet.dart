@@ -34,6 +34,8 @@ class MobilePlayerSheet extends StatefulWidget {
 
 class _MobilePlayerSheetState extends State<MobilePlayerSheet>
     with SingleTickerProviderStateMixin {
+  static const double _playerRevealThreshold = 0.08;
+
   late final AnimationController _controller;
 
   @override
@@ -98,7 +100,8 @@ class _MobilePlayerSheetState extends State<MobilePlayerSheet>
       animation: _controller,
       builder: (context, child) {
         final top = collapsedTop * (1 - _controller.value);
-        final isExpanded = _controller.value > 0.1;
+        final isOpen = _controller.value > 0.1;
+        final showPlayer = _controller.value > _playerRevealThreshold;
         return Positioned(
           top: top,
           left: 0,
@@ -111,7 +114,7 @@ class _MobilePlayerSheetState extends State<MobilePlayerSheet>
                 // Mini player bar — always in the tree, hidden via Offstage
                 // when expanded to keep Column children stable.
                 Offstage(
-                  offstage: isExpanded,
+                  offstage: showPlayer,
                   child: GestureDetector(
                     onVerticalDragUpdate: _handleDragUpdate,
                     onVerticalDragEnd: _handleDragEnd,
@@ -130,11 +133,17 @@ class _MobilePlayerSheetState extends State<MobilePlayerSheet>
                 // drag when collapsed so offstage player can't intercept.
                 Expanded(
                   child: GestureDetector(
-                    onVerticalDragUpdate: isExpanded ? _handleDragUpdate : null,
-                    onVerticalDragEnd: isExpanded ? _handleDragEnd : null,
+                    onVerticalDragUpdate: isOpen ? _handleDragUpdate : null,
+                    onVerticalDragEnd: isOpen ? _handleDragEnd : null,
                     child: TickerMode(
-                      enabled: isExpanded,
-                      child: Offstage(offstage: !isExpanded, child: child!),
+                      enabled: showPlayer,
+                      child: Offstage(
+                        offstage: !showPlayer,
+                        child: _ExpandedPlayerViewport(
+                          height: screenHeight,
+                          child: child!,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -146,6 +155,28 @@ class _MobilePlayerSheetState extends State<MobilePlayerSheet>
       // Build playerBuilder once as `child` — AnimatedBuilder preserves
       // the child across rebuilds, preventing PlayerScreen recreation.
       child: widget.playerBuilder(_collapse),
+    );
+  }
+}
+
+class _ExpandedPlayerViewport extends StatelessWidget {
+  const _ExpandedPlayerViewport({
+    required this.height,
+    required this.child,
+  });
+
+  final double height;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: OverflowBox(
+        alignment: Alignment.topCenter,
+        minHeight: height,
+        maxHeight: height,
+        child: SizedBox(height: height, child: child),
+      ),
     );
   }
 }
