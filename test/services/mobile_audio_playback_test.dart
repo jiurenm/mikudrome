@@ -117,6 +117,31 @@ void main() {
   });
 
   test(
+    'just_audio service starts restored queue at requested initial position',
+    () async {
+      final player = FakeJustAudioPlayer();
+      final service = audio_service.JustAudioMobileAudioPlaybackService(
+        player: player,
+      );
+
+      await service.playQueue(
+        queue: [_track(1), _track(2)],
+        index: 1,
+        audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+        initialPosition: const Duration(seconds: 75),
+      );
+
+      expect(player.initialIndex, 1);
+      expect(player.initialPosition, const Duration(seconds: 75));
+      expect(service.currentState.track?.id, 2);
+      expect(service.currentState.index, 1);
+      expect(service.currentState.position, const Duration(seconds: 75));
+
+      await service.dispose();
+    },
+  );
+
+  test(
     'just_audio service applies list loop mode to the player queue',
     () async {
       final player = FakeJustAudioPlayer();

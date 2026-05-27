@@ -78,6 +78,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     required int initialIndex,
     CoverUrlForTrack? coverUrlForTrack,
     MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
+    Duration initialPosition = Duration.zero,
   }) async {
     if (_disposed) return;
     _orderMode = orderMode;
@@ -97,6 +98,10 @@ class MikudromeAudioHandler extends BaseAudioHandler
     final nextTracks = List<Track>.unmodifiable(tracks);
     final nextAudioUrls = List<String>.unmodifiable(audioUrls);
     final clampedIndex = initialIndex.clamp(0, nextTracks.length - 1);
+    final clampedPosition = _clampPositionForTrack(
+      initialPosition,
+      nextTracks[clampedIndex],
+    );
     final artHeaders = ApiConfig.defaultHeaders.isEmpty
         ? null
         : ApiConfig.defaultHeaders;
@@ -122,7 +127,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
           )
           .toList(growable: false),
       initialIndex: clampedIndex,
-      initialPosition: Duration.zero,
+      initialPosition: clampedPosition,
     );
     await _player.setLoopMode(_loopModeForOrderMode(_orderMode));
     _tracks = nextTracks;
@@ -130,12 +135,16 @@ class MikudromeAudioHandler extends BaseAudioHandler
     queue.add(items);
     mediaItem.add(items[clampedIndex]);
     _currentIndex = clampedIndex;
-    _position = Duration.zero;
+    _position = clampedPosition;
     _duration = Duration(seconds: _tracks[clampedIndex].durationSeconds);
     _isCompleted = false;
     _lastPausedSeekPosition = null;
     _publishPlaybackState();
-    _emitMikudromeState(index: clampedIndex, isPlaying: _player.playing);
+    _emitMikudromeState(
+      index: clampedIndex,
+      position: clampedPosition,
+      isPlaying: _player.playing,
+    );
     await _startPlaybackSafely(clampedIndex);
   }
 
@@ -157,6 +166,13 @@ class MikudromeAudioHandler extends BaseAudioHandler
     final coverUrl = coverUrlForTrack?.call(track).trim() ?? '';
     if (coverUrl.isEmpty) return null;
     return Uri.tryParse(coverUrl);
+  }
+
+  Duration _clampPositionForTrack(Duration position, Track track) {
+    if (position <= Duration.zero) return Duration.zero;
+    final duration = Duration(seconds: track.durationSeconds);
+    if (duration <= Duration.zero || position <= duration) return position;
+    return duration;
   }
 
   @override
@@ -500,6 +516,7 @@ class JustAudioMobileAudioPlaybackService
     required AudioUrlForTrack audioUrlForTrack,
     CoverUrlForTrack? coverUrlForTrack,
     MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
+    Duration initialPosition = Duration.zero,
   }) async {
     if (_disposed) return;
 
@@ -514,6 +531,7 @@ class JustAudioMobileAudioPlaybackService
       initialIndex: index,
       coverUrlForTrack: coverUrlForTrack,
       orderMode: orderMode,
+      initialPosition: initialPosition,
     );
   }
 

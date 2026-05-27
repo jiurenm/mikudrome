@@ -743,6 +743,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   Future<void> _playMobileAudioQueue({
     required List<Track> queue,
     required int index,
+    Duration initialPosition = Duration.zero,
   }) {
     return _mobileAudioPlaybackService.playQueue(
       queue: queue,
@@ -750,13 +751,24 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       audioUrlForTrack: _mobileAudioUrlForTrack,
       coverUrlForTrack: _coverUrlForTrack,
       orderMode: _mobilePlaybackOrderMode,
+      initialPosition: initialPosition,
     );
   }
 
   Future<void> _playRestoredMobileAudioQueue(double resumeProgress) async {
-    await _playMobileAudioQueue(queue: _playerQueue, index: _playerIndex);
-    if (resumeProgress <= 0 || _currentTrack == null) return;
-    await _seekMobileAudioPlayback(resumeProgress);
+    final track = _currentTrack;
+    if (track == null) return;
+    final progress = resumeProgress.clamp(0.0, 1.0).toDouble();
+    final initialPosition = progress > 0 && track.durationSeconds > 0
+        ? Duration(
+            milliseconds: (track.durationSeconds * 1000 * progress).round(),
+          )
+        : Duration.zero;
+    await _playMobileAudioQueue(
+      queue: _playerQueue,
+      index: _playerIndex,
+      initialPosition: initialPosition,
+    );
   }
 
   Future<void> _routeMobileAudioPlaybackForCurrentMode() {
@@ -777,9 +789,19 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     }
 
     final progress = _playbackProgress;
-    await _playMobileAudioQueue(queue: _playerQueue, index: _playerIndex);
-    if (progress <= 0 || _currentTrack == null) return;
-    await _seekMobileAudioPlayback(progress);
+    final track = _currentTrack;
+    final initialPosition = progress > 0 && track != null
+        ? Duration(
+            milliseconds:
+                (track.durationSeconds * 1000 * progress.clamp(0.0, 1.0))
+                    .round(),
+          )
+        : Duration.zero;
+    await _playMobileAudioQueue(
+      queue: _playerQueue,
+      index: _playerIndex,
+      initialPosition: initialPosition,
+    );
   }
 
   void _handleMobileAudioState(MobileAudioPlaybackState state) {

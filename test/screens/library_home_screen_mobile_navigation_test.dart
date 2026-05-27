@@ -259,7 +259,8 @@ void main() {
       expect(service.playedQueues.single.map((track) => track.id), [401, 402]);
       expect(service.playedIndexes.single, 1);
       expect(service.orderModes.last, MobilePlaybackOrderMode.listLoop);
-      expect(service.seekPositions, [const Duration(seconds: 75)]);
+      expect(service.initialPositions.single, const Duration(seconds: 75));
+      expect(service.seekPositions, isEmpty);
       expect(service.currentState.position, const Duration(seconds: 75));
     },
   );
@@ -311,6 +312,7 @@ void main() {
 
       expect(service.playedQueues, hasLength(1));
       expect(service.playedIndexes.single, 1);
+      expect(service.initialPositions.single, Duration.zero);
       expect(service.seekPositions, isEmpty);
     },
   );
@@ -751,6 +753,7 @@ class _RecordingMobileAudioPlaybackService
   final playedQueues = <List<Track>>[];
   final playedIndexes = <int>[];
   final orderModes = <MobilePlaybackOrderMode>[];
+  final initialPositions = <Duration>[];
   final seekPositions = <Duration>[];
 
   @override
@@ -760,16 +763,19 @@ class _RecordingMobileAudioPlaybackService
     required AudioUrlForTrack audioUrlForTrack,
     CoverUrlForTrack? coverUrlForTrack,
     MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
+    Duration initialPosition = Duration.zero,
   }) {
     playedQueues.add(List<Track>.from(queue));
     playedIndexes.add(index);
     orderModes.add(orderMode);
+    initialPositions.add(initialPosition);
     return super.playQueue(
       queue: queue,
       index: index,
       audioUrlForTrack: audioUrlForTrack,
       coverUrlForTrack: coverUrlForTrack,
       orderMode: orderMode,
+      initialPosition: initialPosition,
     );
   }
 

@@ -68,6 +68,7 @@ abstract class MobileAudioPlaybackService {
     required AudioUrlForTrack audioUrlForTrack,
     CoverUrlForTrack? coverUrlForTrack,
     MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
+    Duration initialPosition = Duration.zero,
   });
 
   Future<void> setPlaybackOrderMode(MobilePlaybackOrderMode orderMode);
@@ -104,6 +105,7 @@ class FakeMobileAudioPlaybackService implements MobileAudioPlaybackService {
     required AudioUrlForTrack audioUrlForTrack,
     CoverUrlForTrack? coverUrlForTrack,
     MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
+    Duration initialPosition = Duration.zero,
   }) async {
     _audioUrlForTrack = audioUrlForTrack;
     if (queue.isEmpty) {
@@ -119,6 +121,7 @@ class FakeMobileAudioPlaybackService implements MobileAudioPlaybackService {
         queue: immutableQueue,
         index: clampedIndex,
         isPlaying: true,
+        position: initialPosition,
         duration: Duration(seconds: track.durationSeconds),
         audioUrl: audioUrlForTrack(track),
       ),
@@ -218,6 +221,7 @@ class NoopMobileAudioPlaybackService implements MobileAudioPlaybackService {
     required AudioUrlForTrack audioUrlForTrack,
     CoverUrlForTrack? coverUrlForTrack,
     MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
+    Duration initialPosition = Duration.zero,
   }) async {}
 
   @override
