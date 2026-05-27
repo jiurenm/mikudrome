@@ -38,9 +38,7 @@ func (s *Store) DailyRecommendations(now time.Time, limit int) ([]Track, error) 
 		}
 		return candidates[i].Score > candidates[j].Score
 	})
-	if len(candidates) > limit {
-		candidates = candidates[:limit]
-	}
+	candidates = capDailyRecommendationFavorites(candidates, limit)
 	tracks := make([]Track, len(candidates))
 	for i, candidate := range candidates {
 		tracks[i] = candidate.Track
@@ -76,6 +74,40 @@ func (s *Store) listRecommendationCandidates() ([]recommendationCandidate, error
 		out = append(out, candidate)
 	}
 	return out, rows.Err()
+}
+
+func capDailyRecommendationFavorites(candidates []recommendationCandidate, limit int) []recommendationCandidate {
+	favoriteLimit := dailyRecommendationFavoriteLimit(limit)
+	out := make([]recommendationCandidate, 0, recommendationResultCapacity(candidates, limit))
+	favoriteCount := 0
+	for _, candidate := range candidates {
+		if len(out) == limit {
+			break
+		}
+		if candidate.Favorite {
+			if favoriteCount == favoriteLimit {
+				continue
+			}
+			favoriteCount++
+		}
+		out = append(out, candidate)
+	}
+	return out
+}
+
+func dailyRecommendationFavoriteLimit(limit int) int {
+	favoriteLimit := limit / 4
+	if favoriteLimit < 1 {
+		return 1
+	}
+	return favoriteLimit
+}
+
+func recommendationResultCapacity(candidates []recommendationCandidate, limit int) int {
+	if len(candidates) < limit {
+		return len(candidates)
+	}
+	return limit
 }
 
 func recommendationDateAnchor(localNow time.Time) time.Time {

@@ -197,6 +197,36 @@ func TestDailyRecommendationsFavoritesAndHistoryBoostTracks(t *testing.T) {
 	}
 }
 
+func TestDailyRecommendationsCapsFavoritesToQuarterOfLimit(t *testing.T) {
+	s := newTestStore(t)
+	ids := seedRecommendationTracks(t, s, 60)
+	favoriteIDs := make(map[int64]bool, 20)
+	for _, id := range ids[:20] {
+		if err := s.AddFavorite(id); err != nil {
+			t.Fatalf("AddFavorite %d: %v", id, err)
+		}
+		favoriteIDs[id] = true
+	}
+
+	got, err := s.DailyRecommendations(time.Date(2026, 5, 22, 10, 0, 0, 0, time.Local), 20)
+	if err != nil {
+		t.Fatalf("DailyRecommendations: %v", err)
+	}
+
+	if len(got) != 20 {
+		t.Fatalf("len(got) = %d, want 20", len(got))
+	}
+	favoriteCount := 0
+	for _, track := range got {
+		if favoriteIDs[track.ID] {
+			favoriteCount++
+		}
+	}
+	if favoriteCount != 5 {
+		t.Fatalf("favorite recommendations = %d, want 5: %v", favoriteCount, trackIDs(got))
+	}
+}
+
 func TestDailyRecommendationsScoreAnchorsRecencyToLocalDate(t *testing.T) {
 	now := time.Date(2026, 5, 22, 10, 0, 0, 0, time.Local)
 	localNow := now.Local()
