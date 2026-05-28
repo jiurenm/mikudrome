@@ -5,6 +5,8 @@ export 'mobile_audio_playback_service.dart';
 
 typedef AudioUrlForTrack = String Function(Track track);
 typedef CoverUrlForTrack = String Function(Track track);
+typedef TrackFavoriteStatus = bool Function(int trackId);
+typedef TrackFavoriteToggle = Future<void> Function(Track track);
 
 enum MobilePlaybackOrderMode { sequential, listLoop, singleLoop }
 
@@ -69,6 +71,8 @@ abstract class MobileAudioPlaybackService {
     CoverUrlForTrack? coverUrlForTrack,
     MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
     Duration initialPosition = Duration.zero,
+    TrackFavoriteStatus? isTrackFavorited,
+    TrackFavoriteToggle? toggleTrackFavorite,
   });
 
   Future<void> setPlaybackOrderMode(MobilePlaybackOrderMode orderMode);
@@ -106,6 +110,8 @@ class FakeMobileAudioPlaybackService implements MobileAudioPlaybackService {
     CoverUrlForTrack? coverUrlForTrack,
     MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
     Duration initialPosition = Duration.zero,
+    TrackFavoriteStatus? isTrackFavorited,
+    TrackFavoriteToggle? toggleTrackFavorite,
   }) async {
     _audioUrlForTrack = audioUrlForTrack;
     if (queue.isEmpty) {
@@ -222,6 +228,8 @@ class NoopMobileAudioPlaybackService implements MobileAudioPlaybackService {
     CoverUrlForTrack? coverUrlForTrack,
     MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
     Duration initialPosition = Duration.zero,
+    TrackFavoriteStatus? isTrackFavorited,
+    TrackFavoriteToggle? toggleTrackFavorite,
   }) async {}
 
   @override
