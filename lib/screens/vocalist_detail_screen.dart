@@ -80,7 +80,11 @@ class _VocalistDetailScreenState extends State<VocalistDetailScreen> {
       final result = await ApiClient().getVocalistTracks(widget.vocalist.name);
       if (!mounted) return;
       if (result == null) {
-        throw StateError('Vocalist not found');
+        setState(() {
+          _error = 'Vocalist not found';
+          _loading = false;
+        });
+        return;
       }
       setState(() {
         _loadedName = result.name;
@@ -121,6 +125,13 @@ class _VocalistDetailScreenState extends State<VocalistDetailScreen> {
   }
 
   void _shufflePlay() {
+    if (_tracks.isEmpty) return;
+    final shuffled = List<Track>.from(_tracks);
+    shuffled.shuffle(Random());
+    _playTrack(shuffled.first, 0);
+  }
+
+  void _shufflePlayWithShuffledQueue() {
     if (_tracks.isEmpty) return;
     final shuffled = List<Track>.from(_tracks);
     shuffled.shuffle(Random());
@@ -250,7 +261,7 @@ class _VocalistDetailScreenState extends State<VocalistDetailScreen> {
                 mvCount: _tracksWithMv.length,
                 hasTracks: _tracks.isNotEmpty,
                 onPlayAll: _playAll,
-                onShuffle: _shufflePlay,
+                onShuffle: _shufflePlayWithShuffledQueue,
               ),
             ),
             SliverToBoxAdapter(

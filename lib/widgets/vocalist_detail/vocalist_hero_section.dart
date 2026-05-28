@@ -110,7 +110,9 @@ class VocalistHeroSection extends StatelessWidget {
                   ).textTheme.bodySmall?.copyWith(color: AppTheme.textMuted),
                 ),
                 const SizedBox(height: 14),
-                Row(
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
                   children: [
                     FilledButton.icon(
                       onPressed: hasTracks ? onPlayAll : null,
@@ -132,7 +134,6 @@ class VocalistHeroSection extends StatelessWidget {
                       icon: const Icon(Icons.play_arrow_rounded, size: 20),
                       label: const Text('播放全部'),
                     ),
-                    const SizedBox(width: 10),
                     IconButton.filled(
                       key: const ValueKey('vocalist-detail-mobile-shuffle'),
                       onPressed: hasTracks ? onShuffle : null,

@@ -67,6 +67,34 @@ void main() {
       expect(shuffleCount, 1);
     });
 
+    testWidgets('hero action controls wrap on narrow mobile widths', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _harness(
+          size: const Size(320, 568),
+          child: VocalistHeroSection(
+            name: '初音ミク',
+            avatarUrl: 'http://example.test/avatar.svg',
+            color: AppTheme.mikuGreen,
+            trackCount: 39,
+            albumCount: 4,
+            mvCount: 7,
+            hasTracks: true,
+            onPlayAll: () {},
+            onShuffle: () {},
+          ),
+        ),
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('播放全部'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('vocalist-detail-mobile-shuffle')),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('tab bar renders stable mobile segments and changes index', (
       tester,
     ) async {
@@ -540,6 +568,58 @@ void main() {
       );
       expect(find.text('All Tracks'), findsOneWidget);
     });
+
+    testWidgets('desktop shuffle keeps original queue order', (tester) async {
+      Track? playedTrack;
+      List<Track> playedQueue = const [];
+      var playedIndex = -1;
+
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(
+          _harness(
+            size: const Size(1024, 768),
+            child: VocalistDetailScreen(
+              vocalist: const Vocalist(name: '初音ミク'),
+              onPlayTrack: (track, queue, index) {
+                playedTrack = track;
+                playedQueue = queue;
+                playedIndex = index;
+              },
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => _VocalistDetailFakeHttpClient());
+
+      await tester.tap(find.text('Shuffle Play'));
+
+      expect(playedQueue.map((track) => track.title), [
+        'Tell Your World',
+        'Unknown Mother-Goose',
+      ]);
+      expect(playedQueue.contains(playedTrack), isTrue);
+      expect(playedIndex, 0);
+    });
+
+    testWidgets('not found detail displays stable not found message', (
+      tester,
+    ) async {
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(
+          _harness(
+            size: const Size(390, 844),
+            child: VocalistDetailScreen(
+              vocalist: const Vocalist(name: '初音ミク'),
+              onBack: () {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => _VocalistNotFoundHttpClient());
+
+      expect(find.text('Vocalist not found'), findsOneWidget);
+      expect(find.text('Bad state: Vocalist not found'), findsNothing);
+    });
   });
 }
 
@@ -698,6 +778,25 @@ class _AlwaysFailingVocalistHttpClient implements HttpClient {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class _VocalistNotFoundHttpClient implements HttpClient {
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async => openUrl('GET', url);
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) async {
+    if (_isVocalistTracksUrl(url)) {
+      return _VocalistNotFoundRequest(url);
+    }
+    return _VocalistDetailFakeHttpClientRequest(url);
+  }
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 class _VocalistDetailFakeHttpClientRequest implements HttpClientRequest {
   _VocalistDetailFakeHttpClientRequest(
     this.url, {
@@ -816,6 +915,13 @@ class _AlwaysFailingVocalistRequest
   @override
   Future<HttpClientResponse> close() async =>
       _FailingVocalistDetailHttpClientResponse(url);
+}
+
+class _VocalistNotFoundRequest extends _VocalistDetailFakeHttpClientRequest {
+  _VocalistNotFoundRequest(super.url);
+
+  @override
+  Future<HttpClientResponse> close() async => _VocalistNotFoundResponse(url);
 }
 
 class _VocalistDetailFakeHttpClientResponse extends Stream<List<int>>
@@ -973,6 +1079,16 @@ class _FailingVocalistDetailHttpClientResponse
 
   @override
   String get reasonPhrase => 'Internal Server Error';
+}
+
+class _VocalistNotFoundResponse extends _VocalistDetailFakeHttpClientResponse {
+  _VocalistNotFoundResponse(super.url);
+
+  @override
+  int get statusCode => HttpStatus.notFound;
+
+  @override
+  String get reasonPhrase => 'Not Found';
 }
 
 class _VocalistDetailResponseSet {
