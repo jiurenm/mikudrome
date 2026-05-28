@@ -158,6 +158,15 @@ void main() {
       await tester.pumpAndSettle();
     }, createHttpClient: (_) => _LibraryFakeHttpClient());
 
+    expect(
+      find.byKey(const ValueKey('vocalist-detail-mobile-app-bar')),
+      findsOneWidget,
+    );
+    expect(find.text('歌曲 1'), findsOneWidget);
+
+    await tester.tap(find.text('歌曲 1'));
+    await tester.pumpAndSettle();
+
     expect(find.text('Vocal Track'), findsOneWidget);
     expect(find.text('虚拟歌手'), findsNothing);
   });
