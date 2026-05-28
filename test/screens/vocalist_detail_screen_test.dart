@@ -389,6 +389,157 @@ void main() {
       expect(find.text('刷新失败，请稍后再试'), findsOneWidget);
       expect(find.text('Retry'), findsNothing);
     });
+
+    testWidgets('mobile detail uses initial counts while loading', (
+      tester,
+    ) async {
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(
+          _harness(
+            size: const Size(390, 844),
+            child: VocalistDetailScreen(
+              vocalist: const Vocalist(
+                name: '初音ミク',
+                trackCount: 39,
+                albumCount: 4,
+              ),
+              onBack: () {},
+            ),
+          ),
+        );
+        await tester.pump();
+      }, createHttpClient: (_) => _NeverCompletingVocalistHttpClient());
+
+      expect(find.text('39 首歌曲 · 4 张专辑 · 0 个MV'), findsOneWidget);
+      expect(find.text('专辑 4'), findsOneWidget);
+      expect(find.text('歌曲 39'), findsOneWidget);
+      expect(find.text('MV 0'), findsOneWidget);
+    });
+
+    testWidgets('mobile pull-to-refresh updates visible data', (tester) async {
+      final client = _SequencedVocalistHttpClient([
+        const _VocalistDetailResponseSet(
+          name: '初音ミク',
+          albumTitle: 'Initial Album',
+          firstTrackTitle: 'Initial Track',
+          secondTrackTitle: 'Initial B-side',
+        ),
+        const _VocalistDetailResponseSet(
+          name: '初音ミク',
+          albumTitle: 'Refreshed Album',
+          firstTrackTitle: 'Refreshed Track',
+          secondTrackTitle: 'Refreshed B-side',
+          firstTrackId: 3,
+          secondTrackId: 4,
+        ),
+      ]);
+
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(
+          _harness(
+            size: const Size(390, 844),
+            child: VocalistDetailScreen(
+              vocalist: const Vocalist(name: '初音ミク'),
+              onBack: () {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Initial Album'), findsOneWidget);
+
+        await tester.fling(
+          find.byType(CustomScrollView),
+          const Offset(0, 500),
+          1000,
+        );
+        await tester.pump();
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => client);
+
+      expect(find.text('Refreshed Album'), findsOneWidget);
+      expect(client.completedResponses, 2);
+    });
+
+    testWidgets('mobile refresh failure keeps visible data', (tester) async {
+      final client = _FailingAfterFirstVocalistHttpClient(
+        const _VocalistDetailResponseSet(
+          name: '初音ミク',
+          albumTitle: 'Stable Album',
+          firstTrackTitle: 'Stable Track',
+          secondTrackTitle: 'Stable B-side',
+        ),
+      );
+
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(
+          _harness(
+            size: const Size(390, 844),
+            child: VocalistDetailScreen(
+              vocalist: const Vocalist(name: '初音ミク'),
+              onBack: () {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Stable Album'), findsOneWidget);
+
+        await tester.fling(
+          find.byType(CustomScrollView),
+          const Offset(0, 500),
+          1000,
+        );
+        await tester.pump();
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => client);
+
+      expect(find.text('Stable Album'), findsOneWidget);
+      expect(find.text('刷新失败，请稍后再试'), findsOneWidget);
+      expect(find.text('Retry'), findsNothing);
+    });
+
+    testWidgets('mobile initial failure shows retry', (tester) async {
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(
+          _harness(
+            size: const Size(390, 844),
+            child: VocalistDetailScreen(
+              vocalist: const Vocalist(name: '初音ミク'),
+              onBack: () {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => _AlwaysFailingVocalistHttpClient());
+
+      expect(find.text('Retry'), findsOneWidget);
+      expect(find.text('刷新失败，请稍后再试'), findsNothing);
+    });
+
+    testWidgets('desktop detail does not render mobile hero or tabs', (
+      tester,
+    ) async {
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(
+          _harness(
+            size: const Size(1024, 768),
+            child: VocalistDetailScreen(vocalist: const Vocalist(name: '初音ミク')),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => _VocalistDetailFakeHttpClient());
+
+      expect(
+        find.byKey(const ValueKey('vocalist-detail-mobile-hero')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('vocalist-detail-mobile-tabs')),
+        findsNothing,
+      );
+      expect(find.text('All Tracks'), findsOneWidget);
+    });
   });
 }
 
@@ -441,6 +592,96 @@ class _FailingAfterEmptyVocalistDetailHttpClient implements HttpClient {
     _requestCount++;
     if (_requestCount == 1) return _EmptyVocalistDetailHttpClientRequest(url);
     return _FailingVocalistDetailHttpClientRequest(url);
+  }
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _NeverCompletingVocalistHttpClient implements HttpClient {
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async =>
+      _NeverCompletingVocalistRequest(url);
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) async =>
+      _NeverCompletingVocalistRequest(url);
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _SequencedVocalistHttpClient implements HttpClient {
+  _SequencedVocalistHttpClient(this._responses);
+
+  final List<_VocalistDetailResponseSet> _responses;
+  int _requestCount = 0;
+  int completedResponses = 0;
+
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async => openUrl('GET', url);
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) async {
+    if (_isVocalistTracksUrl(url)) {
+      final index = _requestCount.clamp(0, _responses.length - 1);
+      _requestCount++;
+      return _SequencedVocalistRequest(url, this, _responses[index]);
+    }
+    return _VocalistDetailFakeHttpClientRequest(url);
+  }
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FailingAfterFirstVocalistHttpClient implements HttpClient {
+  _FailingAfterFirstVocalistHttpClient(this._firstResponse);
+
+  final _VocalistDetailResponseSet _firstResponse;
+  int _requestCount = 0;
+
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async => openUrl('GET', url);
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) async {
+    if (_isVocalistTracksUrl(url)) {
+      _requestCount++;
+      if (_requestCount == 1) {
+        return _FailingAfterFirstVocalistRequest(url, _firstResponse);
+      }
+      return _FailingVocalistDetailHttpClientRequest(url);
+    }
+    return _VocalistDetailFakeHttpClientRequest(url);
+  }
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _AlwaysFailingVocalistHttpClient implements HttpClient {
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async => openUrl('GET', url);
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) async {
+    if (_isVocalistTracksUrl(url)) {
+      return _AlwaysFailingVocalistRequest(url);
+    }
+    return _VocalistDetailFakeHttpClientRequest(url);
   }
 
   @override
@@ -532,6 +773,51 @@ class _FailingVocalistDetailHttpClientRequest
       _FailingVocalistDetailHttpClientResponse(url);
 }
 
+class _NeverCompletingVocalistRequest
+    extends _VocalistDetailFakeHttpClientRequest {
+  _NeverCompletingVocalistRequest(super.url);
+
+  @override
+  Future<HttpClientResponse> close() => Completer<HttpClientResponse>().future;
+}
+
+class _SequencedVocalistRequest extends _VocalistDetailFakeHttpClientRequest {
+  _SequencedVocalistRequest(
+    Uri url,
+    this._client,
+    _VocalistDetailResponseSet responseSet,
+  ) : super(url, responseSet: responseSet);
+
+  final _SequencedVocalistHttpClient _client;
+
+  @override
+  Future<HttpClientResponse> close() async {
+    _client.completedResponses++;
+    return _VocalistDetailFakeHttpClientResponse(url, responseSet: responseSet);
+  }
+}
+
+class _FailingAfterFirstVocalistRequest
+    extends _VocalistDetailFakeHttpClientRequest {
+  _FailingAfterFirstVocalistRequest(
+    Uri url,
+    _VocalistDetailResponseSet responseSet,
+  ) : super(url, responseSet: responseSet);
+
+  @override
+  Future<HttpClientResponse> close() async =>
+      _VocalistDetailFakeHttpClientResponse(url, responseSet: responseSet);
+}
+
+class _AlwaysFailingVocalistRequest
+    extends _VocalistDetailFakeHttpClientRequest {
+  _AlwaysFailingVocalistRequest(super.url);
+
+  @override
+  Future<HttpClientResponse> close() async =>
+      _FailingVocalistDetailHttpClientResponse(url);
+}
+
 class _VocalistDetailFakeHttpClientResponse extends Stream<List<int>>
     implements HttpClientResponse {
   _VocalistDetailFakeHttpClientResponse(
@@ -557,7 +843,7 @@ class _VocalistDetailFakeHttpClientResponse extends Stream<List<int>>
         'tracks': [
           if (responseSet.includeTracks)
             {
-              'id': 1,
+              'id': responseSet.firstTrackId,
               'title': responseSet.firstTrackTitle,
               'audio_path': '/audio/1.flac',
               'video_path': '/video/1.mp4',
@@ -569,7 +855,7 @@ class _VocalistDetailFakeHttpClientResponse extends Stream<List<int>>
             },
           if (responseSet.includeTracks)
             {
-              'id': 2,
+              'id': responseSet.secondTrackId,
               'title': responseSet.secondTrackTitle,
               'audio_path': '/audio/2.flac',
               'video_path': '',
@@ -695,6 +981,8 @@ class _VocalistDetailResponseSet {
     this.albumTitle = 'Miku Expo',
     this.firstTrackTitle = 'Tell Your World',
     this.secondTrackTitle = 'Unknown Mother-Goose',
+    this.firstTrackId = 1,
+    this.secondTrackId = 2,
     this.includeAlbum = true,
     this.includeTracks = true,
   });
@@ -703,9 +991,14 @@ class _VocalistDetailResponseSet {
   final String albumTitle;
   final String firstTrackTitle;
   final String secondTrackTitle;
+  final int firstTrackId;
+  final int secondTrackId;
   final bool includeAlbum;
   final bool includeTracks;
 }
+
+bool _isVocalistTracksUrl(Uri url) =>
+    url.path.contains('/api/vocalists/') && url.path.endsWith('/tracks');
 
 class _VocalistDetailFakeHttpHeaders implements HttpHeaders {
   static const Map<String, List<String>> _values = {
