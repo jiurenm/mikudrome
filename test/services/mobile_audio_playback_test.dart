@@ -801,6 +801,19 @@ void main() {
     );
   });
 
+  test('android favorite notification icons exist', () {
+    expect(
+      File('android/app/src/main/res/drawable/ic_favorite.xml').existsSync(),
+      isTrue,
+    );
+    expect(
+      File(
+        'android/app/src/main/res/drawable/ic_favorite_border.xml',
+      ).existsSync(),
+      isTrue,
+    );
+  });
+
   test('audio service config uses dedicated android notification icon', () {
     final source = File(
       'lib/services/mobile_audio_playback_audio_service.dart',
