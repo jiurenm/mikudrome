@@ -231,6 +231,68 @@ void main() {
       expect(playedTrack?.title, playedQueue.first.title);
       expect(playedIndex, 0);
     });
+
+    testWidgets('mobile empty detail load shows loaded zero counts', (
+      tester,
+    ) async {
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(
+          _harness(
+            size: const Size(390, 844),
+            child: VocalistDetailScreen(
+              vocalist: const Vocalist(
+                name: '初音ミク',
+                trackCount: 39,
+                albumCount: 4,
+              ),
+              onBack: () {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => _EmptyVocalistDetailHttpClient());
+
+      expect(find.text('0 首歌曲 · 0 张专辑 · 0 个MV'), findsOneWidget);
+      expect(find.text('专辑 0'), findsOneWidget);
+      expect(find.text('歌曲 0'), findsOneWidget);
+      expect(find.text('MV 0'), findsOneWidget);
+      expect(find.text('39 首歌曲 · 4 张专辑 · 0 个MV'), findsNothing);
+    });
+
+    testWidgets('mobile refresh failure preserves empty detail page', (
+      tester,
+    ) async {
+      final client = _FailingAfterEmptyVocalistDetailHttpClient();
+
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(
+          _harness(
+            size: const Size(390, 844),
+            child: VocalistDetailScreen(
+              vocalist: const Vocalist(
+                name: '初音ミク',
+                trackCount: 39,
+                albumCount: 4,
+              ),
+              onBack: () {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.fling(
+          find.byType(CustomScrollView),
+          const Offset(0, 500),
+          1000,
+        );
+        await tester.pump();
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => client);
+
+      expect(find.text('0 首歌曲 · 0 张专辑 · 0 个MV'), findsOneWidget);
+      expect(find.text('刷新失败，请稍后再试'), findsOneWidget);
+      expect(find.text('Retry'), findsNothing);
+    });
   });
 }
 
@@ -242,6 +304,42 @@ class _VocalistDetailFakeHttpClient implements HttpClient {
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) async =>
       _VocalistDetailFakeHttpClientRequest(url);
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _EmptyVocalistDetailHttpClient implements HttpClient {
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async =>
+      _EmptyVocalistDetailHttpClientRequest(url);
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) async =>
+      _EmptyVocalistDetailHttpClientRequest(url);
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FailingAfterEmptyVocalistDetailHttpClient implements HttpClient {
+  int _requestCount = 0;
+
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async => openUrl('GET', url);
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) async {
+    _requestCount++;
+    if (_requestCount == 1) return _EmptyVocalistDetailHttpClientRequest(url);
+    return _FailingVocalistDetailHttpClientRequest(url);
+  }
 
   @override
   void close({bool force = false}) {}
@@ -308,6 +406,24 @@ class _VocalistDetailFakeHttpClientRequest implements HttpClientRequest {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _EmptyVocalistDetailHttpClientRequest
+    extends _VocalistDetailFakeHttpClientRequest {
+  _EmptyVocalistDetailHttpClientRequest(super.url);
+
+  @override
+  Future<HttpClientResponse> close() async =>
+      _EmptyVocalistDetailHttpClientResponse(url);
+}
+
+class _FailingVocalistDetailHttpClientRequest
+    extends _VocalistDetailFakeHttpClientRequest {
+  _FailingVocalistDetailHttpClientRequest(super.url);
+
+  @override
+  Future<HttpClientResponse> close() async =>
+      _FailingVocalistDetailHttpClientResponse(url);
 }
 
 class _VocalistDetailFakeHttpClientResponse extends Stream<List<int>>
@@ -423,6 +539,43 @@ class _VocalistDetailFakeHttpClientResponse extends Stream<List<int>>
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _EmptyVocalistDetailHttpClientResponse
+    extends _VocalistDetailFakeHttpClientResponse {
+  _EmptyVocalistDetailHttpClientResponse(super.url);
+
+  @override
+  int get statusCode => HttpStatus.ok;
+
+  @override
+  StreamSubscription<List<int>> listen(
+    void Function(List<int> data)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    final body = utf8.encode(
+      jsonEncode({'name': '初音ミク', 'albums': [], 'tracks': []}),
+    );
+    return Stream<List<int>>.fromIterable([body]).listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    );
+  }
+}
+
+class _FailingVocalistDetailHttpClientResponse
+    extends _VocalistDetailFakeHttpClientResponse {
+  _FailingVocalistDetailHttpClientResponse(super.url);
+
+  @override
+  int get statusCode => HttpStatus.internalServerError;
+
+  @override
+  String get reasonPhrase => 'Internal Server Error';
 }
 
 class _VocalistDetailFakeHttpHeaders implements HttpHeaders {

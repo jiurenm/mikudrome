@@ -40,21 +40,20 @@ class _VocalistDetailScreenState extends State<VocalistDetailScreen> {
   List<Album> _albums = [];
   List<Track> _tracks = [];
   bool _loading = true;
+  bool _hasLoadedDetail = false;
   String? _error;
   String? _refreshError;
 
   String get _displayName => _loadedName ?? widget.vocalist.name;
 
   int get _displayTrackCount =>
-      _tracks.isNotEmpty ? _tracks.length : widget.vocalist.trackCount;
+      _hasLoadedDetail ? _tracks.length : widget.vocalist.trackCount;
 
   int get _displayAlbumCount =>
-      _albums.isNotEmpty ? _albums.length : widget.vocalist.albumCount;
+      _hasLoadedDetail ? _albums.length : widget.vocalist.albumCount;
 
   List<Track> get _tracksWithMv =>
       _tracks.where((track) => track.videoPath.isNotEmpty).toList();
-
-  bool get _hasDetailData => _tracks.isNotEmpty || _albums.isNotEmpty;
 
   List<Widget> _mobileRefreshErrorWidgets(BuildContext context) {
     if (!isMobile(context) || _refreshError == null) return const [];
@@ -87,13 +86,14 @@ class _VocalistDetailScreenState extends State<VocalistDetailScreen> {
         _loadedName = result.name;
         _tracks = result.tracks;
         _albums = result.albums;
+        _hasLoadedDetail = true;
         _loading = false;
         _error = null;
         _refreshError = null;
       });
     } catch (e) {
       if (!mounted) return;
-      if (_hasDetailData) {
+      if (_hasLoadedDetail) {
         setState(() {
           _refreshError = '刷新失败，请稍后再试';
           _loading = false;
