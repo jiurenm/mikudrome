@@ -7,6 +7,10 @@ import '../api/config.dart';
 import '../models/track.dart';
 import 'mobile_audio_playback.dart';
 
+const _toggleFavoriteAction = 'toggleFavorite';
+const _favoriteIcon = 'drawable/ic_favorite';
+const _favoriteBorderIcon = 'drawable/ic_favorite_border';
+
 Future<MikudromeAudioHandler>? _audioServiceHandlerInit;
 
 MobileAudioPlaybackService createMobileAudioPlaybackService() {
@@ -67,6 +71,8 @@ class MikudromeAudioHandler extends BaseAudioHandler
   bool _isCompleted = false;
   MobilePlaybackOrderMode _orderMode = MobilePlaybackOrderMode.sequential;
   Duration? _lastPausedSeekPosition;
+  TrackFavoriteStatus? _isTrackFavorited;
+  TrackFavoriteToggle? _toggleTrackFavorite;
   bool _disposed = false;
 
   Stream<MobileAudioPlaybackState> get mikudromeState =>
@@ -79,14 +85,20 @@ class MikudromeAudioHandler extends BaseAudioHandler
     CoverUrlForTrack? coverUrlForTrack,
     MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
     Duration initialPosition = Duration.zero,
+    TrackFavoriteStatus? isTrackFavorited,
+    TrackFavoriteToggle? toggleTrackFavorite,
   }) async {
     if (_disposed) return;
     _orderMode = orderMode;
+    _isTrackFavorited = isTrackFavorited;
+    _toggleTrackFavorite = toggleTrackFavorite;
     if (tracks.isEmpty) {
       _tracks = const [];
       _audioUrls = const [];
       _currentIndex = null;
       _lastPausedSeekPosition = null;
+      _isTrackFavorited = null;
+      _toggleTrackFavorite = null;
       queue.add(const []);
       mediaItem.add(null);
       await _player.stop();
@@ -253,6 +265,25 @@ class MikudromeAudioHandler extends BaseAudioHandler
   Future<void> skipToPrevious() => _player.seekToPrevious();
 
   @override
+  Future<dynamic> customAction(
+    String name, [
+    Map<String, dynamic>? extras,
+  ]) async {
+    if (name != _toggleFavoriteAction) {
+      return super.customAction(name, extras);
+    }
+    final toggle = _toggleTrackFavorite;
+    final track = _currentTrack;
+    if (toggle == null || track == null) return null;
+    try {
+      await toggle(track);
+    } finally {
+      _publishPlaybackState();
+    }
+    return null;
+  }
+
+  @override
   Future<void> stop() async {
     await _player.stop();
     _tracks = const [];
@@ -262,6 +293,8 @@ class MikudromeAudioHandler extends BaseAudioHandler
     _duration = Duration.zero;
     _isCompleted = false;
     _lastPausedSeekPosition = null;
+    _isTrackFavorited = null;
+    _toggleTrackFavorite = null;
     queue.add(const []);
     mediaItem.add(null);
     _publishPlaybackState(processingState: AudioProcessingState.idle);
@@ -387,18 +420,13 @@ class MikudromeAudioHandler extends BaseAudioHandler
     final updatePosition = _lastPausedSeekPosition ?? _position;
     playbackState.add(
       PlaybackState(
-        controls: const [
-          MediaControl.skipToPrevious,
-          MediaControl.play,
-          MediaControl.pause,
-          MediaControl.skipToNext,
-        ],
+        controls: _mediaControlsForState(playing),
         systemActions: const {
           MediaAction.seek,
           MediaAction.seekForward,
           MediaAction.seekBackward,
         },
-        androidCompactActionIndices: const [0, 1, 3],
+        androidCompactActionIndices: const [0, 1, 2],
         processingState: processingState,
         playing: playing,
         updatePosition: updatePosition,
@@ -406,6 +434,26 @@ class MikudromeAudioHandler extends BaseAudioHandler
             ? 1.0
             : 0.0,
       ),
+    );
+  }
+
+  List<MediaControl> _mediaControlsForState(bool playing) {
+    return [
+      MediaControl.skipToPrevious,
+      playing ? MediaControl.pause : MediaControl.play,
+      MediaControl.skipToNext,
+      _favoriteControlForCurrentTrack(),
+    ];
+  }
+
+  MediaControl _favoriteControlForCurrentTrack() {
+    final track = _currentTrack;
+    final isFavorite =
+        track != null && (_isTrackFavorited?.call(track.id) ?? false);
+    return MediaControl.custom(
+      androidIcon: isFavorite ? _favoriteIcon : _favoriteBorderIcon,
+      label: isFavorite ? 'Remove from favorites' : 'Add to favorites',
+      name: _toggleFavoriteAction,
     );
   }
 
@@ -446,6 +494,12 @@ class MikudromeAudioHandler extends BaseAudioHandler
 
   bool get _effectiveIsPlaying =>
       _lastPausedSeekPosition == null && _player.playing;
+
+  Track? get _currentTrack {
+    final index = _currentIndex;
+    if (index == null || index < 0 || index >= _tracks.length) return null;
+    return _tracks[index];
+  }
 
   Future<void> dispose() async {
     if (_disposed) return;
@@ -517,6 +571,8 @@ class JustAudioMobileAudioPlaybackService
     CoverUrlForTrack? coverUrlForTrack,
     MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
     Duration initialPosition = Duration.zero,
+    TrackFavoriteStatus? isTrackFavorited,
+    TrackFavoriteToggle? toggleTrackFavorite,
   }) async {
     if (_disposed) return;
 
@@ -532,6 +588,8 @@ class JustAudioMobileAudioPlaybackService
       coverUrlForTrack: coverUrlForTrack,
       orderMode: orderMode,
       initialPosition: initialPosition,
+      isTrackFavorited: isTrackFavorited,
+      toggleTrackFavorite: toggleTrackFavorite,
     );
   }
 

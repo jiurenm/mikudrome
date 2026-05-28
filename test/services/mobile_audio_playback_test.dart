@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:audio_service/audio_service.dart' show AudioProcessingState;
+import 'package:audio_service/audio_service.dart'
+    show AudioProcessingState, MediaControl;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
@@ -60,6 +61,116 @@ void main() {
     await handler.dispose();
   });
 
+  test(
+    'audio handler publishes favorite custom control for current track',
+    () async {
+      final player = FakeJustAudioPlayer();
+      final favorites = <int>{};
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+
+      await handler.setMikudromeQueue(
+        tracks: [_track(1)],
+        audioUrls: const ['http://server/audio/1'],
+        initialIndex: 0,
+        isTrackFavorited: favorites.contains,
+        toggleTrackFavorite: (track) async {
+          favorites.contains(track.id)
+              ? favorites.remove(track.id)
+              : favorites.add(track.id);
+        },
+      );
+
+      final favoriteControl = _favoriteControl(handler);
+      expect(favoriteControl.label, 'Add to favorites');
+      expect(favoriteControl.androidIcon, 'drawable/ic_favorite_border');
+      expect(favoriteControl.customAction?.name, 'toggleFavorite');
+      expect(handler.playbackState.value.androidCompactActionIndices, [
+        0,
+        1,
+        2,
+      ]);
+
+      await handler.dispose();
+    },
+  );
+
+  test(
+    'audio handler refreshes favorite control after custom action',
+    () async {
+      final player = FakeJustAudioPlayer();
+      final favorites = <int>{};
+      final toggledTrackIds = <int>[];
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+
+      await handler.setMikudromeQueue(
+        tracks: [_track(1)],
+        audioUrls: const ['http://server/audio/1'],
+        initialIndex: 0,
+        isTrackFavorited: favorites.contains,
+        toggleTrackFavorite: (track) async {
+          toggledTrackIds.add(track.id);
+          favorites.contains(track.id)
+              ? favorites.remove(track.id)
+              : favorites.add(track.id);
+        },
+      );
+
+      await handler.customAction('toggleFavorite');
+
+      expect(toggledTrackIds, [1]);
+      final favoriteControl = _favoriteControl(handler);
+      expect(favoriteControl.label, 'Remove from favorites');
+      expect(favoriteControl.androidIcon, 'drawable/ic_favorite');
+
+      await handler.dispose();
+    },
+  );
+
+  test('audio handler updates favorite control when track changes', () async {
+    final player = FakeJustAudioPlayer();
+    final favorites = <int>{2};
+    final handler = audio_service.MikudromeAudioHandler(player: player);
+
+    await handler.setMikudromeQueue(
+      tracks: [_track(1), _track(2)],
+      audioUrls: const ['http://server/audio/1', 'http://server/audio/2'],
+      initialIndex: 0,
+      isTrackFavorited: favorites.contains,
+      toggleTrackFavorite: (track) async {},
+    );
+
+    expect(_favoriteControl(handler).label, 'Add to favorites');
+
+    player.setCurrentIndex(1);
+
+    expect(handler.mediaItem.value?.title, 'Track 2');
+    expect(_favoriteControl(handler).label, 'Remove from favorites');
+    expect(_favoriteControl(handler).androidIcon, 'drawable/ic_favorite');
+
+    await handler.dispose();
+  });
+
+  test(
+    'audio handler favorite custom action is safe without callback or queue',
+    () async {
+      final player = FakeJustAudioPlayer();
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+
+      await handler.customAction('toggleFavorite');
+
+      await handler.setMikudromeQueue(
+        tracks: [_track(1)],
+        audioUrls: const ['http://server/audio/1'],
+        initialIndex: 0,
+      );
+      await handler.customAction('toggleFavorite');
+
+      expect(_favoriteControl(handler).label, 'Add to favorites');
+
+      await handler.dispose();
+    },
+  );
+
   test('audio-service-backed service exposes handler queue state', () async {
     final player = FakeJustAudioPlayer();
     final handler = audio_service.MikudromeAudioHandler(player: player);
@@ -80,6 +191,28 @@ void main() {
     expect(player.playCalls, 1);
     expect(service.currentState.track?.id, 2);
     expect(service.currentState.isPlaying, isTrue);
+
+    await service.dispose();
+  });
+
+  test('audio-service-backed service forwards favorite callbacks', () async {
+    final player = FakeJustAudioPlayer();
+    final handler = audio_service.MikudromeAudioHandler(player: player);
+    final service = audio_service.JustAudioMobileAudioPlaybackService(
+      handler: handler,
+    );
+
+    await service.playQueue(
+      queue: [_track(1)],
+      index: 0,
+      audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+      isTrackFavorited: (trackId) => trackId == 1,
+      toggleTrackFavorite: (track) async {},
+    );
+
+    final favoriteControl = _favoriteControl(handler);
+    expect(favoriteControl.label, 'Remove from favorites');
+    expect(favoriteControl.androidIcon, 'drawable/ic_favorite');
 
     await service.dispose();
   });
@@ -681,6 +814,19 @@ void main() {
     );
   });
 
+  test('android favorite notification icons exist', () {
+    expect(
+      File('android/app/src/main/res/drawable/ic_favorite.xml').existsSync(),
+      isTrue,
+    );
+    expect(
+      File(
+        'android/app/src/main/res/drawable/ic_favorite_border.xml',
+      ).existsSync(),
+      isTrue,
+    );
+  });
+
   test('audio service config uses dedicated android notification icon', () {
     final source = File(
       'lib/services/mobile_audio_playback_audio_service.dart',
@@ -912,6 +1058,12 @@ Track _track(int id) => Track(
   albumId: id,
   durationSeconds: 120,
 );
+
+MediaControl _favoriteControl(audio_service.MikudromeAudioHandler handler) {
+  return handler.playbackState.value.controls.singleWhere(
+    (control) => control.customAction?.name == 'toggleFavorite',
+  );
+}
 
 class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
   final _playing = StreamController<bool>.broadcast(sync: true);

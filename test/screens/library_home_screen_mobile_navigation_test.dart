@@ -235,6 +235,25 @@ void main() {
     ]);
   });
 
+  testWidgets('mobile audio queue receives favorite callbacks', (tester) async {
+    final service = _RecordingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('GHOST').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '播放全部'));
+      await tester.pump(const Duration(milliseconds: 500));
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(service.lastIsTrackFavorited, isNotNull);
+    expect(service.lastToggleTrackFavorite, isNotNull);
+    expect(service.lastIsTrackFavorited!(101), isFalse);
+  });
+
   testWidgets(
     'restored mobile playback shows paused mini player and resumes from saved progress',
     (tester) async {
@@ -764,6 +783,8 @@ class _RecordingMobileAudioPlaybackService
   final orderModes = <MobilePlaybackOrderMode>[];
   final initialPositions = <Duration>[];
   final seekPositions = <Duration>[];
+  TrackFavoriteStatus? lastIsTrackFavorited;
+  TrackFavoriteToggle? lastToggleTrackFavorite;
 
   @override
   Future<void> playQueue({
@@ -773,11 +794,15 @@ class _RecordingMobileAudioPlaybackService
     CoverUrlForTrack? coverUrlForTrack,
     MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
     Duration initialPosition = Duration.zero,
+    TrackFavoriteStatus? isTrackFavorited,
+    TrackFavoriteToggle? toggleTrackFavorite,
   }) {
     playedQueues.add(List<Track>.from(queue));
     playedIndexes.add(index);
     orderModes.add(orderMode);
     initialPositions.add(initialPosition);
+    lastIsTrackFavorited = isTrackFavorited;
+    lastToggleTrackFavorite = toggleTrackFavorite;
     return super.playQueue(
       queue: queue,
       index: index,
@@ -785,6 +810,8 @@ class _RecordingMobileAudioPlaybackService
       coverUrlForTrack: coverUrlForTrack,
       orderMode: orderMode,
       initialPosition: initialPosition,
+      isTrackFavorited: isTrackFavorited,
+      toggleTrackFavorite: toggleTrackFavorite,
     );
   }
 
