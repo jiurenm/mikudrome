@@ -61,60 +61,70 @@ void main() {
     await handler.dispose();
   });
 
-  test('audio handler publishes favorite custom control for current track', () async {
-    final player = FakeJustAudioPlayer();
-    final favorites = <int>{};
-    final handler = audio_service.MikudromeAudioHandler(player: player);
+  test(
+    'audio handler publishes favorite custom control for current track',
+    () async {
+      final player = FakeJustAudioPlayer();
+      final favorites = <int>{};
+      final handler = audio_service.MikudromeAudioHandler(player: player);
 
-    await handler.setMikudromeQueue(
-      tracks: [_track(1)],
-      audioUrls: const ['http://server/audio/1'],
-      initialIndex: 0,
-      isTrackFavorited: favorites.contains,
-      toggleTrackFavorite: (track) async {
-        favorites.contains(track.id)
-            ? favorites.remove(track.id)
-            : favorites.add(track.id);
-      },
-    );
+      await handler.setMikudromeQueue(
+        tracks: [_track(1)],
+        audioUrls: const ['http://server/audio/1'],
+        initialIndex: 0,
+        isTrackFavorited: favorites.contains,
+        toggleTrackFavorite: (track) async {
+          favorites.contains(track.id)
+              ? favorites.remove(track.id)
+              : favorites.add(track.id);
+        },
+      );
 
-    final favoriteControl = _favoriteControl(handler);
-    expect(favoriteControl.label, 'Add to favorites');
-    expect(favoriteControl.androidIcon, 'drawable/ic_favorite_border');
-    expect(favoriteControl.customAction?.name, 'toggleFavorite');
-    expect(handler.playbackState.value.androidCompactActionIndices, [0, 1, 2]);
+      final favoriteControl = _favoriteControl(handler);
+      expect(favoriteControl.label, 'Add to favorites');
+      expect(favoriteControl.androidIcon, 'drawable/ic_favorite_border');
+      expect(favoriteControl.customAction?.name, 'toggleFavorite');
+      expect(handler.playbackState.value.androidCompactActionIndices, [
+        0,
+        1,
+        2,
+      ]);
 
-    await handler.dispose();
-  });
+      await handler.dispose();
+    },
+  );
 
-  test('audio handler refreshes favorite control after custom action', () async {
-    final player = FakeJustAudioPlayer();
-    final favorites = <int>{};
-    final toggledTrackIds = <int>[];
-    final handler = audio_service.MikudromeAudioHandler(player: player);
+  test(
+    'audio handler refreshes favorite control after custom action',
+    () async {
+      final player = FakeJustAudioPlayer();
+      final favorites = <int>{};
+      final toggledTrackIds = <int>[];
+      final handler = audio_service.MikudromeAudioHandler(player: player);
 
-    await handler.setMikudromeQueue(
-      tracks: [_track(1)],
-      audioUrls: const ['http://server/audio/1'],
-      initialIndex: 0,
-      isTrackFavorited: favorites.contains,
-      toggleTrackFavorite: (track) async {
-        toggledTrackIds.add(track.id);
-        favorites.contains(track.id)
-            ? favorites.remove(track.id)
-            : favorites.add(track.id);
-      },
-    );
+      await handler.setMikudromeQueue(
+        tracks: [_track(1)],
+        audioUrls: const ['http://server/audio/1'],
+        initialIndex: 0,
+        isTrackFavorited: favorites.contains,
+        toggleTrackFavorite: (track) async {
+          toggledTrackIds.add(track.id);
+          favorites.contains(track.id)
+              ? favorites.remove(track.id)
+              : favorites.add(track.id);
+        },
+      );
 
-    await handler.customAction('toggleFavorite');
+      await handler.customAction('toggleFavorite');
 
-    expect(toggledTrackIds, [1]);
-    final favoriteControl = _favoriteControl(handler);
-    expect(favoriteControl.label, 'Remove from favorites');
-    expect(favoriteControl.androidIcon, 'drawable/ic_favorite');
+      expect(toggledTrackIds, [1]);
+      final favoriteControl = _favoriteControl(handler);
+      expect(favoriteControl.label, 'Remove from favorites');
+      expect(favoriteControl.androidIcon, 'drawable/ic_favorite');
 
-    await handler.dispose();
-  });
+      await handler.dispose();
+    },
+  );
 
   test('audio handler updates favorite control when track changes', () async {
     final player = FakeJustAudioPlayer();
@@ -140,23 +150,26 @@ void main() {
     await handler.dispose();
   });
 
-  test('audio handler favorite custom action is safe without callback or queue', () async {
-    final player = FakeJustAudioPlayer();
-    final handler = audio_service.MikudromeAudioHandler(player: player);
+  test(
+    'audio handler favorite custom action is safe without callback or queue',
+    () async {
+      final player = FakeJustAudioPlayer();
+      final handler = audio_service.MikudromeAudioHandler(player: player);
 
-    await handler.customAction('toggleFavorite');
+      await handler.customAction('toggleFavorite');
 
-    await handler.setMikudromeQueue(
-      tracks: [_track(1)],
-      audioUrls: const ['http://server/audio/1'],
-      initialIndex: 0,
-    );
-    await handler.customAction('toggleFavorite');
+      await handler.setMikudromeQueue(
+        tracks: [_track(1)],
+        audioUrls: const ['http://server/audio/1'],
+        initialIndex: 0,
+      );
+      await handler.customAction('toggleFavorite');
 
-    expect(_favoriteControl(handler).label, 'Add to favorites');
+      expect(_favoriteControl(handler).label, 'Add to favorites');
 
-    await handler.dispose();
-  });
+      await handler.dispose();
+    },
+  );
 
   test('audio-service-backed service exposes handler queue state', () async {
     final player = FakeJustAudioPlayer();
