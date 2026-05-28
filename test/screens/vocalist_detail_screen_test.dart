@@ -524,7 +524,7 @@ void main() {
         await tester.pumpWidget(
           _harness(
             size: const Size(1024, 768),
-            child: VocalistDetailScreen(vocalist: const Vocalist(name: '初音ミク')),
+            child: const VocalistDetailScreen(vocalist: Vocalist(name: '初音ミク')),
           ),
         );
         await tester.pumpAndSettle();
@@ -632,7 +632,11 @@ class _SequencedVocalistHttpClient implements HttpClient {
     if (_isVocalistTracksUrl(url)) {
       final index = _requestCount.clamp(0, _responses.length - 1);
       _requestCount++;
-      return _SequencedVocalistRequest(url, this, _responses[index]);
+      return _SequencedVocalistRequest(
+        url,
+        this,
+        responseSet: _responses[index],
+      );
     }
     return _VocalistDetailFakeHttpClientRequest(url);
   }
@@ -658,7 +662,10 @@ class _FailingAfterFirstVocalistHttpClient implements HttpClient {
     if (_isVocalistTracksUrl(url)) {
       _requestCount++;
       if (_requestCount == 1) {
-        return _FailingAfterFirstVocalistRequest(url, _firstResponse);
+        return _FailingAfterFirstVocalistRequest(
+          url,
+          responseSet: _firstResponse,
+        );
       }
       return _FailingVocalistDetailHttpClientRequest(url);
     }
@@ -782,11 +789,7 @@ class _NeverCompletingVocalistRequest
 }
 
 class _SequencedVocalistRequest extends _VocalistDetailFakeHttpClientRequest {
-  _SequencedVocalistRequest(
-    Uri url,
-    this._client,
-    _VocalistDetailResponseSet responseSet,
-  ) : super(url, responseSet: responseSet);
+  _SequencedVocalistRequest(super.url, this._client, {super.responseSet});
 
   final _SequencedVocalistHttpClient _client;
 
@@ -799,10 +802,7 @@ class _SequencedVocalistRequest extends _VocalistDetailFakeHttpClientRequest {
 
 class _FailingAfterFirstVocalistRequest
     extends _VocalistDetailFakeHttpClientRequest {
-  _FailingAfterFirstVocalistRequest(
-    Uri url,
-    _VocalistDetailResponseSet responseSet,
-  ) : super(url, responseSet: responseSet);
+  _FailingAfterFirstVocalistRequest(super.url, {super.responseSet});
 
   @override
   Future<HttpClientResponse> close() async =>
