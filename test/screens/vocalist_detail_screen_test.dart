@@ -259,6 +259,102 @@ void main() {
       expect(find.text('39 首歌曲 · 4 张专辑 · 0 个MV'), findsNothing);
     });
 
+    testWidgets('mobile tracks tab uses mobile rows instead of desktop table', (
+      tester,
+    ) async {
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(
+          _harness(
+            size: const Size(390, 844),
+            child: VocalistDetailScreen(
+              vocalist: const Vocalist(name: '初音ミク'),
+              onBack: () {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => _VocalistDetailFakeHttpClient());
+
+      await tester.tap(find.text('歌曲 2'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Title / Vocalists'), findsNothing);
+      expect(find.text('Tags / MV'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('producer-track-mobile-row-1')),
+        findsOneWidget,
+      );
+      expect(find.text('Tell Your World'), findsOneWidget);
+      expect(find.text('kz feat. 初音ミク'), findsOneWidget);
+      expect(find.text('03:45'), findsOneWidget);
+      expect(find.text('FLAC'), findsOneWidget);
+    });
+
+    testWidgets('mobile MV tab only shows local MV tracks', (tester) async {
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(
+          _harness(
+            size: const Size(390, 844),
+            child: VocalistDetailScreen(
+              vocalist: const Vocalist(name: '初音ミク'),
+              onBack: () {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => _VocalistDetailFakeHttpClient());
+
+      await tester.tap(find.text('MV 1'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('producer-mv-mobile-grid')),
+        findsOneWidget,
+      );
+      expect(find.text('Tell Your World'), findsOneWidget);
+      expect(find.text('Unknown Mother-Goose'), findsNothing);
+      expect(find.text('本地MV'), findsOneWidget);
+    });
+
+    testWidgets('mobile tabs render localized empty states', (tester) async {
+      await HttpOverrides.runZoned(
+        () async {
+          await tester.pumpWidget(
+            _harness(
+              size: const Size(390, 844),
+              child: VocalistDetailScreen(
+                vocalist: const Vocalist(name: '初音ミク'),
+                onBack: () {},
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+        },
+        createHttpClient: (_) => _VocalistDetailFakeHttpClient(
+          responseSet: const _VocalistDetailResponseSet(
+            name: '初音ミク',
+            albumTitle: '',
+            firstTrackTitle: '',
+            secondTrackTitle: '',
+            includeAlbum: false,
+            includeTracks: false,
+          ),
+        ),
+      );
+
+      expect(find.text('还没有专辑'), findsOneWidget);
+
+      await tester.tap(find.text('歌曲 0'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('还没有歌曲'), findsOneWidget);
+
+      await tester.tap(find.text('MV 0'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('还没有本地MV'), findsOneWidget);
+    });
+
     testWidgets('mobile refresh failure preserves empty detail page', (
       tester,
     ) async {
@@ -297,13 +393,19 @@ void main() {
 }
 
 class _VocalistDetailFakeHttpClient implements HttpClient {
+  _VocalistDetailFakeHttpClient({
+    this.responseSet = const _VocalistDetailResponseSet(),
+  });
+
+  final _VocalistDetailResponseSet responseSet;
+
   @override
   Future<HttpClientRequest> getUrl(Uri url) async =>
-      _VocalistDetailFakeHttpClientRequest(url);
+      _VocalistDetailFakeHttpClientRequest(url, responseSet: responseSet);
 
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) async =>
-      _VocalistDetailFakeHttpClientRequest(url);
+      _VocalistDetailFakeHttpClientRequest(url, responseSet: responseSet);
 
   @override
   void close({bool force = false}) {}
@@ -349,9 +451,13 @@ class _FailingAfterEmptyVocalistDetailHttpClient implements HttpClient {
 }
 
 class _VocalistDetailFakeHttpClientRequest implements HttpClientRequest {
-  _VocalistDetailFakeHttpClientRequest(this.url);
+  _VocalistDetailFakeHttpClientRequest(
+    this.url, {
+    this.responseSet = const _VocalistDetailResponseSet(),
+  });
 
   final Uri url;
+  final _VocalistDetailResponseSet responseSet;
   bool _followRedirects = true;
   int _maxRedirects = 5;
   int _contentLength = 0;
@@ -359,7 +465,7 @@ class _VocalistDetailFakeHttpClientRequest implements HttpClientRequest {
 
   @override
   Future<HttpClientResponse> close() async =>
-      _VocalistDetailFakeHttpClientResponse(url);
+      _VocalistDetailFakeHttpClientResponse(url, responseSet: responseSet);
 
   @override
   Encoding get encoding => utf8;
@@ -428,45 +534,50 @@ class _FailingVocalistDetailHttpClientRequest
 
 class _VocalistDetailFakeHttpClientResponse extends Stream<List<int>>
     implements HttpClientResponse {
-  _VocalistDetailFakeHttpClientResponse(Uri url)
-    : _bytes = utf8.encode(_bodyFor(url));
+  _VocalistDetailFakeHttpClientResponse(
+    Uri url, {
+    _VocalistDetailResponseSet responseSet = const _VocalistDetailResponseSet(),
+  }) : _bytes = utf8.encode(_bodyFor(url, responseSet));
 
   final List<int> _bytes;
 
-  static String _bodyFor(Uri url) {
+  static String _bodyFor(Uri url, _VocalistDetailResponseSet responseSet) {
     if (url.path.contains('/api/vocalists/') && url.path.endsWith('/tracks')) {
       return jsonEncode({
-        'name': '初音ミク',
+        'name': responseSet.name,
         'albums': [
-          {
-            'id': 39,
-            'title': 'Miku Expo',
-            'producer_name': 'kz',
-            'track_count': 2,
-          },
+          if (responseSet.includeAlbum)
+            {
+              'id': 39,
+              'title': responseSet.albumTitle,
+              'producer_name': 'kz',
+              'track_count': 2,
+            },
         ],
         'tracks': [
-          {
-            'id': 1,
-            'title': 'Tell Your World',
-            'audio_path': '/audio/1.flac',
-            'video_path': '/video/1.mp4',
-            'video_thumb_path': '/thumb/1.jpg',
-            'duration_seconds': 225,
-            'format': 'FLAC',
-            'composer': 'kz',
-            'vocal': '初音ミク',
-          },
-          {
-            'id': 2,
-            'title': 'Unknown Mother-Goose',
-            'audio_path': '/audio/2.flac',
-            'video_path': '',
-            'duration_seconds': 180,
-            'format': 'MP3',
-            'composer': 'wowaka',
-            'vocal': '初音ミク',
-          },
+          if (responseSet.includeTracks)
+            {
+              'id': 1,
+              'title': responseSet.firstTrackTitle,
+              'audio_path': '/audio/1.flac',
+              'video_path': '/video/1.mp4',
+              'video_thumb_path': '/thumb/1.jpg',
+              'duration_seconds': 225,
+              'format': 'FLAC',
+              'composer': 'kz',
+              'vocal': '初音ミク',
+            },
+          if (responseSet.includeTracks)
+            {
+              'id': 2,
+              'title': responseSet.secondTrackTitle,
+              'audio_path': '/audio/2.flac',
+              'video_path': '',
+              'duration_seconds': 180,
+              'format': 'MP3',
+              'composer': 'wowaka',
+              'vocal': '初音ミク',
+            },
         ],
       });
     }
@@ -576,6 +687,24 @@ class _FailingVocalistDetailHttpClientResponse
 
   @override
   String get reasonPhrase => 'Internal Server Error';
+}
+
+class _VocalistDetailResponseSet {
+  const _VocalistDetailResponseSet({
+    this.name = '初音ミク',
+    this.albumTitle = 'Miku Expo',
+    this.firstTrackTitle = 'Tell Your World',
+    this.secondTrackTitle = 'Unknown Mother-Goose',
+    this.includeAlbum = true,
+    this.includeTracks = true,
+  });
+
+  final String name;
+  final String albumTitle;
+  final String firstTrackTitle;
+  final String secondTrackTitle;
+  final bool includeAlbum;
+  final bool includeTracks;
 }
 
 class _VocalistDetailFakeHttpHeaders implements HttpHeaders {
