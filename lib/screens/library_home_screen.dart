@@ -752,6 +752,13 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       coverUrlForTrack: _coverUrlForTrack,
       orderMode: _mobilePlaybackOrderMode,
       initialPosition: initialPosition,
+      isTrackFavorited: PlaylistRepository.instance.isFavorite,
+      toggleTrackFavorite: (track) {
+        return PlaylistRepository.instance.toggleFavorite(
+          track.id,
+          ApiClient(),
+        );
+      },
     );
   }
 
