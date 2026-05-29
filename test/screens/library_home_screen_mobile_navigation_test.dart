@@ -528,6 +528,50 @@ void main() {
     }, createHttpClient: (_) => _LibraryFakeHttpClient());
   });
 
+  testWidgets('mixed queue returns from audio-only item to next MV', (
+    tester,
+  ) async {
+    final service = _RecordingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+      await _openAlbumMvFromDiscoverHome(tester);
+
+      _invokeScopedIconButton(
+        tester,
+        scope: find.byKey(const ValueKey('mobile-mv-player-surface')),
+        icon: Icons.skip_next,
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-player-immersive')),
+        findsOneWidget,
+      );
+      expect(find.text('Ghost Track 2'), findsWidgets);
+      expect(service.currentState.index, 1);
+
+      _invokeScopedIconButton(
+        tester,
+        scope: find.byKey(const ValueKey('mobile-player-immersive')),
+        icon: Icons.skip_next,
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+      expect(find.text('Ghost Track 3'), findsWidgets);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+  });
+
   testWidgets('system back returns from a mobile destination to My Music', (
     tester,
   ) async {
@@ -754,6 +798,7 @@ class _LibraryFakeHttpClientResponse extends Stream<List<int>>
             'id': 103,
             'title': 'Ghost Track 3',
             'audio_path': 'ghost-3.flac',
+            'video_path': 'ghost-3.mp4',
             'album_id': 1,
             'track_number': 3,
             'duration_seconds': 222,
@@ -1162,6 +1207,18 @@ Future<void> _openAlbumMvFromDiscoverHome(WidgetTester tester) async {
     find.byKey(const ValueKey('mobile-mv-player-surface')),
     findsOneWidget,
   );
+}
+
+void _invokeScopedIconButton(
+  WidgetTester tester, {
+  required Finder scope,
+  required IconData icon,
+}) {
+  final iconFinder = find.descendant(of: scope, matching: find.byIcon(icon));
+  final control = tester.widget<IconButton>(
+    find.ancestor(of: iconFinder, matching: find.byType(IconButton)).first,
+  );
+  control.onPressed!();
 }
 
 Future<void> _pumpMobileLibrary(

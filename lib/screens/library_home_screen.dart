@@ -926,10 +926,13 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   }
 
   PlaybackMode _nextModeForTrack(Track track) {
-    if (_playbackMode == PlaybackMode.video && !track.hasVideo) {
-      return PlaybackMode.audio;
-    }
-    return track.hasVideo ? _playbackMode : PlaybackMode.audio;
+    return resolvePlaybackModeForIntent(
+      track: track,
+      isMobileSurface: _isMobilePlaybackSurface,
+      intent: PlaybackStartIntent.preserve,
+      preferVideoOnExpand: _preferVideoOnExpand,
+      playerIsOpen: _showPlayer,
+    );
   }
 
   void _openPlayerForQueue({

@@ -130,6 +130,31 @@ void main() {
     });
   });
 
+  group('mixed queue video intent', () {
+    test(
+      'audio-only queue item forces audio but preserves future video intent',
+      () {
+        const audioOnly = Track(
+          id: 2,
+          title: 'Audio only',
+          audioPath: '/audio/2.flac',
+          videoPath: '',
+        );
+
+        expect(
+          resolvePlaybackModeForIntent(
+            track: audioOnly,
+            isMobileSurface: true,
+            intent: PlaybackStartIntent.preserve,
+            preferVideoOnExpand: true,
+            playerIsOpen: true,
+          ),
+          PlaybackMode.audio,
+        );
+      },
+    );
+  });
+
   group('didPlaybackReachEnd', () {
     test('treats completed state as ended even before position catches up', () {
       expect(
