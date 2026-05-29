@@ -74,7 +74,36 @@ void main() {
       );
     });
 
-    test('expanded mixed queue returns to MV when video intent is preserved', () {
+    test(
+      'expanded mixed queue returns to MV when video intent is preserved',
+      () {
+        expect(
+          resolvePlaybackModeForIntent(
+            track: _trackWithVideo,
+            isMobileSurface: true,
+            intent: PlaybackStartIntent.preserve,
+            preferVideoOnExpand: true,
+            playerIsOpen: true,
+          ),
+          PlaybackMode.video,
+        );
+      },
+    );
+
+    test('collapsed mixed queue remains audio-first until reopened', () {
+      expect(
+        resolvePlaybackModeForIntent(
+          track: _trackWithVideo,
+          isMobileSurface: true,
+          intent: PlaybackStartIntent.preserve,
+          preferVideoOnExpand: true,
+          playerIsOpen: false,
+        ),
+        PlaybackMode.audio,
+      );
+    });
+
+    test('reopen restores MV only when the player is opening visibly', () {
       expect(
         resolvePlaybackModeForIntent(
           track: _trackWithVideo,
@@ -87,14 +116,14 @@ void main() {
       );
     });
 
-    test('collapsed mixed queue remains audio-first until reopened', () {
+    test('reopen does not force MV after audio-first entry', () {
       expect(
         resolvePlaybackModeForIntent(
           track: _trackWithVideo,
           isMobileSurface: true,
           intent: PlaybackStartIntent.preserve,
-          preferVideoOnExpand: true,
-          playerIsOpen: false,
+          preferVideoOnExpand: false,
+          playerIsOpen: true,
         ),
         PlaybackMode.audio,
       );

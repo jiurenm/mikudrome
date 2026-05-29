@@ -1176,17 +1176,53 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   }
 
   void _openCurrentPlayer() {
-    if (_currentTrack == null) return;
+    final currentTrack = _currentTrack;
+    if (currentTrack == null) return;
     setState(() {
       _restoredNotStarted = false;
       _showPlayer = true;
+      _playbackMode = resolvePlaybackModeForIntent(
+        track: currentTrack,
+        isMobileSurface: _isMobilePlaybackSurface,
+        intent: PlaybackStartIntent.preserve,
+        preferVideoOnExpand: _preferVideoOnExpand,
+        playerIsOpen: true,
+      );
     });
+    if (_isMobilePlaybackSurface && _playbackMode == PlaybackMode.video) {
+      _resumeProgress = _playbackProgress;
+    }
   }
 
   void _closePlayer() {
     setState(() {
       _showPlayer = false;
     });
+  }
+
+  Future<void> _collapseMobileVideoToAudio() async {
+    final currentTrack = _currentTrack;
+    if (currentTrack == null) {
+      _closePlayer();
+      return;
+    }
+    final progress = _playbackProgress.clamp(0.0, 1.0).toDouble();
+    final initialPosition = currentTrack.durationSeconds > 0
+        ? Duration(
+            milliseconds: (currentTrack.durationSeconds * 1000 * progress)
+                .round(),
+          )
+        : Duration.zero;
+    setState(() {
+      _playbackMode = PlaybackMode.audio;
+      _showPlayer = false;
+      _preferVideoOnExpand = currentTrack.hasVideo;
+    });
+    await _playMobileAudioQueue(
+      queue: _playerQueue,
+      index: _playerIndex,
+      initialPosition: initialPosition,
+    );
   }
 
   double _lastSavedProgress = 0;
@@ -1222,6 +1258,11 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   void _onVideoControllerChanged(VideoPlayerController? c) {
     if (!mounted) return;
     setState(() => _videoController = c);
+    if (c != null &&
+        _isMobilePlaybackSurface &&
+        _playbackMode == PlaybackMode.video) {
+      unawaited(_mobileAudioPlaybackService.stop());
+    }
   }
 
   String _albumContextLabel(Album album) => 'Album / ${album.title}';
@@ -1459,9 +1500,20 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
                   onPlayPause: _togglePlayback,
                   bottomPadding: bottomPadding,
                   expanded: _showPlayer,
-                  onExpandedChanged: (expanded) => setState(() {
-                    _showPlayer = expanded;
-                  }),
+                  onExpandedChanged: (expanded) {
+                    if (expanded) {
+                      _openCurrentPlayer();
+                      return;
+                    }
+                    if (_isMobilePlaybackSurface &&
+                        _playbackMode == PlaybackMode.video) {
+                      unawaited(_collapseMobileVideoToAudio());
+                      return;
+                    }
+                    setState(() {
+                      _showPlayer = false;
+                    });
+                  },
                   playerBuilder: (onClose) => PlayerScreen(
                     track: currentTrack,
                     queue: _playerQueue,
@@ -1472,7 +1524,14 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
                     onSelectTrack: (index) => _selectPlayerTrack(index),
                     onPrevious: _playPrevious,
                     onNext: _playNext,
-                    onClose: onClose,
+                    onClose: () {
+                      if (_isMobilePlaybackSurface &&
+                          _playbackMode == PlaybackMode.video) {
+                        unawaited(_collapseMobileVideoToAudio());
+                        return;
+                      }
+                      onClose();
+                    },
                     onSwitchPlaybackMode: _switchPlaybackMode,
                     playbackOrderMode: _playbackOrderMode,
                     onCyclePlaybackOrderMode: _cyclePlaybackOrderMode,
