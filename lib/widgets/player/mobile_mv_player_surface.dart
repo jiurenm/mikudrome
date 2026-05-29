@@ -81,10 +81,10 @@ class _MobileMvPlayerSurfaceState extends State<MobileMvPlayerSurface> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: const ValueKey('mobile-mv-player-surface'),
       backgroundColor: Colors.black,
       body: SafeArea(
         child: Container(
-          key: const ValueKey('mobile-mv-player-surface'),
           width: double.infinity,
           height: double.infinity,
           color: Colors.black,

@@ -7,6 +7,8 @@ Widget _buildSurface({
   String? error,
   bool isInitializing = false,
   VoidCallback? onOpenQueue,
+  VoidCallback? onRetryVideo,
+  VoidCallback? onSwitchToAudio,
 }) {
   return MaterialApp(
     home: MobileMvPlayerSurface(
@@ -30,8 +32,8 @@ Widget _buildSurface({
       favoriteClient: ApiClient(),
       accentColor: Colors.cyanAccent,
       onCollapse: () {},
-      onRetryVideo: () {},
-      onSwitchToAudio: () {},
+      onRetryVideo: onRetryVideo ?? () {},
+      onSwitchToAudio: onSwitchToAudio ?? () {},
       onTogglePlayback: () {},
       onSeek: (_) {},
       onPrevious: () {},
@@ -64,6 +66,12 @@ void main() {
       find.byKey(const ValueKey('mobile-mv-player-surface')),
       findsOneWidget,
     );
+    expect(
+      tester.widget<Scaffold>(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+      ),
+      isA<Scaffold>(),
+    );
     expect(find.byKey(const ValueKey('mobile-mv-video-frame')), findsOneWidget);
     expect(find.byKey(const ValueKey('mobile-mv-test-video')), findsOneWidget);
     expect(find.text('Immersive MV'), findsOneWidget);
@@ -89,11 +97,26 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(430, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(_buildSurface(error: 'video failed'));
+    var retryTapped = false;
+    var switchTapped = false;
+
+    await tester.pumpWidget(
+      _buildSurface(
+        error: 'video failed',
+        onRetryVideo: () => retryTapped = true,
+        onSwitchToAudio: () => switchTapped = true,
+      ),
+    );
 
     expect(find.text('video failed'), findsOneWidget);
     expect(find.text('重试 MV'), findsOneWidget);
     expect(find.text('切到音频'), findsOneWidget);
     expect(find.byKey(const ValueKey('mobile-mv-test-video')), findsNothing);
+
+    await tester.tap(find.text('重试 MV'));
+    await tester.tap(find.text('切到音频'));
+
+    expect(retryTapped, isTrue);
+    expect(switchTapped, isTrue);
   });
 }
