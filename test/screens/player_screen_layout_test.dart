@@ -520,6 +520,7 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(430, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
+    var mediaSize = const Size(430, 900);
 
     final platformCalls = <MethodCall>[];
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -541,6 +542,117 @@ void main() {
       title: 'Fullscreen MV',
       audioPath: '/tmp/78.flac',
       videoPath: '/tmp/78.mp4',
+    );
+
+    Widget buildPlayer() {
+      return MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(size: mediaSize),
+          child: PlayerScreen(
+            track: track,
+            queue: const [track],
+            currentIndex: 0,
+            contextLabel: 'MV Test',
+            playbackMode: PlaybackMode.video,
+            onSelectTrack: (_) {},
+            onPrevious: () {},
+            onNext: () {},
+            onClose: () {},
+            onSwitchPlaybackMode: (_) {},
+            playbackOrderMode: PlaybackOrderMode.sequential,
+            onCyclePlaybackOrderMode: () {},
+            onPlaybackStateChanged:
+                ({
+                  required bool isPlaying,
+                  required double progress,
+                  required String elapsedLabel,
+                  required String durationLabel,
+                }) {},
+            initializeControllerOnStart: false,
+            renderVideo: false,
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildPlayer());
+    await tester.pump();
+
+    expect(find.byTooltip('全屏'), findsOneWidget);
+    await tester.tap(find.byTooltip('全屏'));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.fullscreen_exit), findsOneWidget);
+    expect(
+      platformCalls
+          .where(
+            (call) => call.method == 'SystemChrome.setPreferredOrientations',
+          )
+          .map((call) => call.arguments),
+      contains(
+        equals([
+          'DeviceOrientation.landscapeLeft',
+          'DeviceOrientation.landscapeRight',
+        ]),
+      ),
+    );
+
+    mediaSize = const Size(900, 430);
+    await tester.binding.setSurfaceSize(mediaSize);
+    await tester.pumpWidget(buildPlayer());
+    await tester.pump();
+
+    final exitControl = tester.widget<IconButton>(
+      find
+          .ancestor(
+            of: find.byIcon(Icons.fullscreen_exit),
+            matching: find.byType(IconButton),
+          )
+          .first,
+    );
+    exitControl.onPressed!();
+    await tester.pump();
+
+    expect(
+      platformCalls
+          .where(
+            (call) => call.method == 'SystemChrome.setPreferredOrientations',
+          )
+          .map((call) => call.arguments),
+      contains(
+        equals(
+          DeviceOrientation.values.map((value) => value.toString()).toList(),
+        ),
+      ),
+    );
+  });
+
+  testWidgets('mobile MV fullscreen restores orientation on dispose', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final platformCalls = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        platformCalls.add(call);
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    const track = Track(
+      id: 79,
+      title: 'Disposable MV',
+      audioPath: '/tmp/79.flac',
+      videoPath: '/tmp/79.mp4',
     );
 
     await tester.pumpWidget(
@@ -575,34 +687,10 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byTooltip('全屏'), findsOneWidget);
     await tester.tap(find.byTooltip('全屏'));
     await tester.pump();
 
-    expect(find.byIcon(Icons.fullscreen_exit), findsOneWidget);
-    expect(
-      platformCalls
-          .where(
-            (call) => call.method == 'SystemChrome.setPreferredOrientations',
-          )
-          .map((call) => call.arguments),
-      contains(
-        equals([
-          'DeviceOrientation.landscapeLeft',
-          'DeviceOrientation.landscapeRight',
-        ]),
-      ),
-    );
-
-    final exitControl = tester.widget<IconButton>(
-      find
-          .ancestor(
-            of: find.byIcon(Icons.fullscreen_exit),
-            matching: find.byType(IconButton),
-          )
-          .first,
-    );
-    exitControl.onPressed!();
+    await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
 
     expect(

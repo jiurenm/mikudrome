@@ -128,6 +128,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String? _error;
   late bool _showQueue;
   bool _isFullscreen = false;
+  bool _fullscreenOrientationLockActive = false;
   bool _showFullscreenChrome = true;
   bool _showLyrics = true;
   bool _showMobileQueue = false;
@@ -682,10 +683,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
     _controller?.dispose();
     _webAudioPlayer.removeListener(_handleWebAudioPlayerChanged);
-    if (_isFullscreen) {
+    if (_fullscreenOrientationLockActive) {
       unawaited(
         SystemChrome.setPreferredOrientations(DeviceOrientation.values),
       );
+      _fullscreenOrientationLockActive = false;
     }
     super.dispose();
   }
@@ -820,6 +822,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (!_isVideoMode) return;
     final shouldResume = _controller?.value.isPlaying ?? false;
     if (isMobile(context)) {
+      _fullscreenOrientationLockActive = true;
       unawaited(
         SystemChrome.setPreferredOrientations([
           DeviceOrientation.landscapeLeft,
@@ -838,10 +841,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void _exitFullscreen() {
     final shouldResume = _controller?.value.isPlaying ?? false;
     _fullscreenChromeTimer?.cancel();
-    if (isMobile(context)) {
+    if (_fullscreenOrientationLockActive) {
       unawaited(
         SystemChrome.setPreferredOrientations(DeviceOrientation.values),
       );
+      _fullscreenOrientationLockActive = false;
     }
     setState(() {
       _isFullscreen = false;
