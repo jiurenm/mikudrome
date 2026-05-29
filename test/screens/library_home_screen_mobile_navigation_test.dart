@@ -485,6 +485,49 @@ void main() {
     }, createHttpClient: (_) => _LibraryFakeHttpClient());
   });
 
+  testWidgets('same-track MV reopen invalidates delayed collapse', (
+    tester,
+  ) async {
+    final service = _FirstPlayQueueDelayedMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+      await _openAlbumMvFromDiscoverHome(tester);
+
+      await tester.drag(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        const Offset(0, 700),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(service.playQueueAttempts, 1);
+
+      final mvBadge = tester.widget<InkWell>(
+        find.byKey(const ValueKey('album-track-row-mv-101')),
+      );
+      mvBadge.onTap!();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+
+      service.completeFirstPlayQueue();
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+      expect(find.byType(MobileMiniPlayer), findsNothing);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+  });
+
   testWidgets('system back returns from a mobile destination to My Music', (
     tester,
   ) async {

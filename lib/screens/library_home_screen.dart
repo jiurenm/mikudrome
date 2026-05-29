@@ -786,6 +786,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     );
   }
 
+  void _invalidateMobileVideoCollapseRequest() {
+    _mobileVideoCollapseRequest += 1;
+  }
+
   Future<void> _syncMobileAudioQueuePreservingProgress() async {
     if (!_isMobilePlaybackSurface) return;
     if (_playbackMode != PlaybackMode.audio) {
@@ -936,6 +940,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     PlaybackStartIntent intent = PlaybackStartIntent.audio,
   }) {
     if (queue.isEmpty) return;
+    _invalidateMobileVideoCollapseRequest();
     final selectedTrack = queue[index.clamp(0, queue.length - 1)];
     final effectiveIntent = _isMobilePlaybackSurface
         ? intent
@@ -973,6 +978,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
 
   void _selectPlayerTrack(int index, {bool showPlayer = true}) {
     if (index < 0 || index >= _playerQueue.length) return;
+    _invalidateMobileVideoCollapseRequest();
     final nextTrack = _playerQueue[index];
     setState(() {
       _playerIndex = index;
@@ -990,6 +996,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
 
   void _addTrackToCurrentQueue(Track track) {
     if (_playerQueue.any((item) => item.id == track.id)) return;
+    _invalidateMobileVideoCollapseRequest();
     setState(() {
       _playerQueue = [..._playerQueue, track];
       _orderedPlayerQueue = null;
@@ -999,6 +1006,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   }
 
   void _cyclePlaybackOrderMode() {
+    _invalidateMobileVideoCollapseRequest();
     late final PlaybackOrderMode nextMode;
     setState(() {
       nextMode = switch (_playbackOrderMode) {
@@ -1026,6 +1034,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     if (_shuffleEnabled) {
       final ordered = _orderedPlayerQueue;
       if (ordered == null || ordered.isEmpty) return;
+      _invalidateMobileVideoCollapseRequest();
       final restoredIndex = ordered.indexWhere(
         (track) => track.id == currentTrack.id,
       );
@@ -1040,6 +1049,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       return;
     }
 
+    _invalidateMobileVideoCollapseRequest();
     final rest =
         _playerQueue.where((track) => track.id != currentTrack.id).toList()
           ..shuffle(Random());
@@ -1062,6 +1072,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       delta: -1,
     );
     if (nextIndex == null) return;
+    _invalidateMobileVideoCollapseRequest();
     final nextTrack = _playerQueue[nextIndex];
     setState(() {
       _playerIndex = nextIndex;
@@ -1085,6 +1096,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       delta: 1,
     );
     if (nextIndex == null) return;
+    _invalidateMobileVideoCollapseRequest();
     final nextTrack = _playerQueue[nextIndex];
     setState(() {
       _playerIndex = nextIndex;
@@ -1167,6 +1179,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     final currentTrack = _currentTrack;
     if (currentTrack == null) return;
     if (mode == PlaybackMode.video && !currentTrack.hasVideo) return;
+    _invalidateMobileVideoCollapseRequest();
     setState(() {
       _playbackMode = mode;
       _isPlaying = true;
@@ -1184,6 +1197,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   void _openCurrentPlayer() {
     final currentTrack = _currentTrack;
     if (currentTrack == null) return;
+    _invalidateMobileVideoCollapseRequest();
     setState(() {
       _restoredNotStarted = false;
       _showPlayer = true;
@@ -1201,6 +1215,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   }
 
   void _closePlayer() {
+    _invalidateMobileVideoCollapseRequest();
     setState(() {
       _showPlayer = false;
     });
