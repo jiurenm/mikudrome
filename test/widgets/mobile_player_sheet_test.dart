@@ -86,6 +86,110 @@ void main() {
     expect(TickerMode.valuesOf(context).enabled, isFalse);
   });
 
+  testWidgets('expanded player close callback collapses the sheet', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final expandedChanges = <bool>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Stack(
+          children: [
+            const Positioned.fill(child: ColoredBox(color: Colors.black)),
+            MobilePlayerSheet(
+              track: const Track(
+                id: 1,
+                title: 'Track',
+                audioPath: 'track.flac',
+                videoPath: '',
+              ),
+              coverUrl: '',
+              isPlaying: false,
+              progress: 0,
+              onPlayPause: () {},
+              bottomPadding: 80,
+              expanded: true,
+              onExpandedChanged: expandedChanges.add,
+              playerBuilder: (onClose) => TextButton(
+                onPressed: onClose,
+                child: const Text('collapse player'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('collapse player'));
+    await tester.pump();
+
+    expect(expandedChanges, [false]);
+  });
+
+  testWidgets('reasserted expanded state keeps the player visible', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    var expanded = true;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            return Stack(
+              children: [
+                const Positioned.fill(child: ColoredBox(color: Colors.black)),
+                MobilePlayerSheet(
+                  track: const Track(
+                    id: 1,
+                    title: 'Track',
+                    audioPath: 'track.flac',
+                    videoPath: '',
+                  ),
+                  coverUrl: '',
+                  isPlaying: false,
+                  progress: 0,
+                  onPlayPause: () {},
+                  bottomPadding: 80,
+                  expanded: expanded,
+                  onExpandedChanged: (value) {
+                    if (!value) {
+                      setState(() {
+                        expanded = true;
+                      });
+                    }
+                  },
+                  playerBuilder: (onClose) => Column(
+                    children: [
+                      TextButton(
+                        onPressed: onClose,
+                        child: const Text('try collapse'),
+                      ),
+                      const Text('player body'),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('try collapse'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('player body'), findsOneWidget);
+  });
+
   testWidgets('partial expansion clips a full-height player without overflow', (
     tester,
   ) async {

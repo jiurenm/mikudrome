@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:video_player/video_player.dart';
 
 import '../api/api.dart';
@@ -341,9 +342,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   void _handleMobileBack() {
     if (!isMobile(context)) return;
     if (_showPlayer) {
-      setState(() {
-        _showPlayer = false;
-      });
+      _collapseCurrentMobilePlayer();
       return;
     }
     if (_mobileHistory.isEmpty) return;
@@ -1200,6 +1199,14 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     });
   }
 
+  void _collapseCurrentMobilePlayer() {
+    if (_isMobilePlaybackSurface && _playbackMode == PlaybackMode.video) {
+      unawaited(_collapseMobileVideoToAudio());
+      return;
+    }
+    _closePlayer();
+  }
+
   Future<void> _collapseMobileVideoToAudio() async {
     final currentTrack = _currentTrack;
     if (currentTrack == null) {
@@ -1213,16 +1220,27 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
                 .round(),
           )
         : Duration.zero;
+    try {
+      await _playMobileAudioQueue(
+        queue: _playerQueue,
+        index: _playerIndex,
+        initialPosition: initialPosition,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _playbackMode = PlaybackMode.video;
+        _showPlayer = true;
+        _preferVideoOnExpand = currentTrack.hasVideo;
+      });
+      return;
+    }
+    if (!mounted) return;
     setState(() {
       _playbackMode = PlaybackMode.audio;
       _showPlayer = false;
       _preferVideoOnExpand = currentTrack.hasVideo;
     });
-    await _playMobileAudioQueue(
-      queue: _playerQueue,
-      index: _playerIndex,
-      initialPosition: initialPosition,
-    );
   }
 
   double _lastSavedProgress = 0;
@@ -1257,11 +1275,23 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
 
   void _onVideoControllerChanged(VideoPlayerController? c) {
     if (!mounted) return;
-    setState(() => _videoController = c);
-    if (c != null &&
-        _isMobilePlaybackSurface &&
-        _playbackMode == PlaybackMode.video) {
-      unawaited(_mobileAudioPlaybackService.stop());
+    void applyControllerChange() {
+      if (!mounted) return;
+      setState(() => _videoController = c);
+      if (c != null &&
+          _isMobilePlaybackSurface &&
+          _playbackMode == PlaybackMode.video) {
+        unawaited(_mobileAudioPlaybackService.stop());
+      }
+    }
+
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        applyControllerChange();
+      });
+    } else {
+      applyControllerChange();
     }
   }
 
@@ -1505,14 +1535,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
                       _openCurrentPlayer();
                       return;
                     }
-                    if (_isMobilePlaybackSurface &&
-                        _playbackMode == PlaybackMode.video) {
-                      unawaited(_collapseMobileVideoToAudio());
-                      return;
-                    }
-                    setState(() {
-                      _showPlayer = false;
-                    });
+                    _collapseCurrentMobilePlayer();
                   },
                   playerBuilder: (onClose) => PlayerScreen(
                     track: currentTrack,
@@ -1527,7 +1550,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
                     onClose: () {
                       if (_isMobilePlaybackSurface &&
                           _playbackMode == PlaybackMode.video) {
-                        unawaited(_collapseMobileVideoToAudio());
+                        _collapseCurrentMobilePlayer();
                         return;
                       }
                       onClose();
