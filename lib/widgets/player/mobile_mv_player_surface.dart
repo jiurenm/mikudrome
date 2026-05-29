@@ -26,6 +26,7 @@ class MobileMvPlayerSurface extends StatefulWidget {
     required this.accentColor,
     required this.onCollapse,
     required this.onRetryVideo,
+    this.canSwitchToAudio = true,
     required this.onSwitchToAudio,
     required this.onTogglePlayback,
     required this.onSeek,
@@ -54,6 +55,7 @@ class MobileMvPlayerSurface extends StatefulWidget {
   final Color accentColor;
   final VoidCallback onCollapse;
   final VoidCallback onRetryVideo;
+  final bool canSwitchToAudio;
   final VoidCallback onSwitchToAudio;
   final VoidCallback onTogglePlayback;
   final ValueChanged<double> onSeek;
@@ -254,11 +256,12 @@ class _MobileMvPlayerSurfaceState extends State<MobileMvPlayerSurface> {
                         onPressed: widget.onRetryVideo,
                         child: const Text('重试 MV'),
                       ),
-                      OutlinedButton(
-                        style: buttonStyle,
-                        onPressed: widget.onSwitchToAudio,
-                        child: const Text('切到音频'),
-                      ),
+                      if (widget.canSwitchToAudio)
+                        OutlinedButton(
+                          style: buttonStyle,
+                          onPressed: widget.onSwitchToAudio,
+                          child: const Text('切到音频'),
+                        ),
                     ],
                   ),
                 ],

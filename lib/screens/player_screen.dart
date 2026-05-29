@@ -1227,6 +1227,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       accentColor: accentColor,
       onCollapse: widget.onClose,
       onRetryVideo: _retryVideoPlayback,
+      canSwitchToAudio: _track.hasAudio,
       onSwitchToAudio: () => widget.onSwitchPlaybackMode(PlaybackMode.audio),
       onTogglePlayback: () => unawaited(_togglePlayback()),
       onSeek: (value) => unawaited(_seekTo(value)),

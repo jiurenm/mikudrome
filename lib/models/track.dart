@@ -95,6 +95,8 @@ class Track {
       comment: json['comment'] as String? ?? '',
       albumArtist: json['album_artist'] as String? ?? '',
       isFavorite: json['is_favorite'] as bool? ?? false,
+      videoStreamOverrideUrl: json['video_stream_override_url'] as String?,
+      coverOverrideUrl: json['cover_override_url'] as String?,
     );
   }
 

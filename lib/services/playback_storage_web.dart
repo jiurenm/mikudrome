@@ -120,6 +120,8 @@ class PlaybackStorage {
     'source': t.source,
     'lyrics': t.lyrics,
     'comment': t.comment,
+    'video_stream_override_url': t.videoStreamOverrideUrl,
+    'cover_override_url': t.coverOverrideUrl,
   };
 }
 

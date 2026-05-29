@@ -719,7 +719,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
 
   bool get _canUseMobileAudioPlayback {
     if (!mounted) return false;
-    return isMobile(context) && _playbackMode == PlaybackMode.audio;
+    return isMobile(context) &&
+        _playbackMode == PlaybackMode.audio &&
+        _currentTrack?.hasAudio == true;
   }
 
   bool get _isMobilePlaybackSurface {
@@ -1183,6 +1185,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     final currentTrack = _currentTrack;
     if (currentTrack == null) return;
     if (mode == PlaybackMode.video && !currentTrack.hasVideo) return;
+    if (mode == PlaybackMode.audio && !currentTrack.hasAudio) return;
     _invalidateMobileVideoCollapseRequest();
     setState(() {
       _playbackMode = mode;
@@ -1244,6 +1247,15 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     final currentTrack = _currentTrack;
     if (currentTrack == null) {
       _closePlayer();
+      return;
+    }
+    if (!currentTrack.hasAudio) {
+      _invalidateMobileVideoCollapseRequest();
+      setState(() {
+        _playbackMode = PlaybackMode.video;
+        _showPlayer = true;
+        _preferVideoOnExpand = currentTrack.hasVideo;
+      });
       return;
     }
     final request = ++_mobileVideoCollapseRequest;

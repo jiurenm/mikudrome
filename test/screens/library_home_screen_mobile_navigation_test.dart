@@ -383,6 +383,48 @@ void main() {
     expect(service.playedIndexes.single, 0);
   });
 
+  testWidgets('standalone MV collapse stays open without audio fallback', (
+    tester,
+  ) async {
+    final service = _RecordingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+
+      await tester.drag(
+        find.byType(CustomScrollView).first,
+        const Offset(0, -600),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, '更多 >').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('愛言葉V'));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byTooltip('收起').first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final sheet = tester.widget<MobilePlayerSheet>(
+        find.byType(MobilePlayerSheet),
+      );
+      expect(sheet.expanded, isTrue);
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(service.playedQueues, isEmpty);
+  });
+
   testWidgets('failed mobile audio startup keeps MV player open on collapse', (
     tester,
   ) async {
