@@ -70,19 +70,19 @@ class AlbumActionBar extends StatelessWidget {
           OutlinedButton(
             onPressed: tracks.isEmpty ? null : onShuffle,
             style: ButtonStyle(
-              side: MaterialStateProperty.resolveWith<BorderSide>((states) {
-                if (states.contains(MaterialState.hovered)) {
+              side: WidgetStateProperty.resolveWith<BorderSide>((states) {
+                if (states.contains(WidgetState.hovered)) {
                   return const BorderSide(color: AppTheme.mikuGreen);
                 }
                 return const BorderSide(color: AppTheme.textMuted);
               }),
-              shape: MaterialStateProperty.all<RoundedRectangleBorder>(
+              shape: WidgetStateProperty.all<RoundedRectangleBorder>(
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               ),
-              padding: MaterialStateProperty.all<EdgeInsetsGeometry>(
+              padding: WidgetStateProperty.all<EdgeInsetsGeometry>(
                 const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
               ),
-              foregroundColor: MaterialStateProperty.all<Color>(
+              foregroundColor: WidgetStateProperty.all<Color>(
                 AppTheme.textPrimary,
               ),
             ),
@@ -100,16 +100,14 @@ class AlbumActionBar extends StatelessWidget {
                     );
                   },
             style: IconButton.styleFrom(iconSize: 28).copyWith(
-              overlayColor: MaterialStateProperty.resolveWith<Color?>((states) {
-                if (states.contains(MaterialState.hovered)) {
+              overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                if (states.contains(WidgetState.hovered)) {
                   return AppTheme.mikuGreen.withValues(alpha: 0.12);
                 }
                 return null;
               }),
-              foregroundColor: MaterialStateProperty.resolveWith<Color>((
-                states,
-              ) {
-                if (states.contains(MaterialState.hovered)) {
+              foregroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+                if (states.contains(WidgetState.hovered)) {
                   return AppTheme.mikuGreen;
                 }
                 return AppTheme.textMuted;

@@ -29,8 +29,13 @@ void main() {
 
     for (final (name, expectedColor) in configuredVocalColors) {
       test('returns configured color for $name', () {
-        final track =
-            Track(id: 1, title: 'T', audioPath: 'a', videoPath: '', vocal: name);
+        final track = Track(
+          id: 1,
+          title: 'T',
+          audioPath: 'a',
+          videoPath: '',
+          vocal: name,
+        );
         expect(VocalColors.resolveColor(track), expectedColor);
       });
     }
@@ -42,60 +47,96 @@ void main() {
 
     test('returns mapped color for known vocal', () {
       const track = Track(
-          id: 1, title: 'T', audioPath: 'a', videoPath: '', vocal: '巡音ルカ');
+        id: 1,
+        title: 'T',
+        audioPath: 'a',
+        videoPath: '',
+        vocal: '巡音ルカ',
+      );
       expect(VocalColors.resolveColor(track), const Color(0xFFFAAFBE));
     });
 
     test('matches vocal case-insensitively', () {
       const track = Track(
-          id: 1, title: 'T', audioPath: 'a', videoPath: '', vocal: 'kaito');
+        id: 1,
+        title: 'T',
+        audioPath: 'a',
+        videoPath: '',
+        vocal: 'kaito',
+      );
       expect(VocalColors.resolveColor(track), const Color(0xFF0000FF));
     });
 
     test('returns default for unknown vocal', () {
       const track = Track(
-          id: 1, title: 'T', audioPath: 'a', videoPath: '',
-          vocal: 'Unknown Singer');
+        id: 1,
+        title: 'T',
+        audioPath: 'a',
+        videoPath: '',
+        vocal: 'Unknown Singer',
+      );
       expect(VocalColors.resolveColor(track), const Color(0xFF39C5BB));
     });
 
     test('mixes colors for multiple known vocals (RGB average)', () {
       const track = Track(
-          id: 1, title: 'T', audioPath: 'a', videoPath: '',
-          vocal: '初音ミク,巡音ルカ');
+        id: 1,
+        title: 'T',
+        audioPath: 'a',
+        videoPath: '',
+        vocal: '初音ミク,巡音ルカ',
+      );
       final color = VocalColors.resolveColor(track);
       // miku #39C5BB=(57,197,187), luka #FAAFBE=(250,175,190)
       // avg = (153, 186, 188)
-      expect(color.red, 153);
-      expect(color.green, 186);
-      expect(color.blue, 188);
+      expect((color.r * 255.0).round().clamp(0, 255), 153);
+      expect((color.g * 255.0).round().clamp(0, 255), 186);
+      expect((color.b * 255.0).round().clamp(0, 255), 188);
     });
 
     test('ignores unknown vocals in mix', () {
       const track = Track(
-          id: 1, title: 'T', audioPath: 'a', videoPath: '',
-          vocal: '初音ミク,Unknown');
+        id: 1,
+        title: 'T',
+        audioPath: 'a',
+        videoPath: '',
+        vocal: '初音ミク,Unknown',
+      );
       expect(VocalColors.resolveColor(track), const Color(0xFF39C5BB));
     });
 
     test('group mapping takes priority over vocal', () {
       const track = Track(
-          id: 1, title: 'T', audioPath: 'a', videoPath: '',
-          albumArtist: '25時、ナイトコードで。', vocal: '初音ミク');
+        id: 1,
+        title: 'T',
+        audioPath: 'a',
+        videoPath: '',
+        albumArtist: '25時、ナイトコードで。',
+        vocal: '初音ミク',
+      );
       expect(VocalColors.resolveColor(track), const Color(0xFF884499));
     });
 
     test('group matching is case-insensitive', () {
       const track = Track(
-          id: 1, title: 'T', audioPath: 'a', videoPath: '',
-          albumArtist: 'leo/need');
+        id: 1,
+        title: 'T',
+        audioPath: 'a',
+        videoPath: '',
+        albumArtist: 'leo/need',
+      );
       expect(VocalColors.resolveColor(track), const Color(0xFF4455DD));
     });
 
     test('falls through to vocal when albumArtist not in group map', () {
       const track = Track(
-          id: 1, title: 'T', audioPath: 'a', videoPath: '',
-          albumArtist: 'Some Producer', vocal: 'MEIKO');
+        id: 1,
+        title: 'T',
+        audioPath: 'a',
+        videoPath: '',
+        albumArtist: 'Some Producer',
+        vocal: 'MEIKO',
+      );
       expect(VocalColors.resolveColor(track), const Color(0xFFD80000));
     });
   });

@@ -27,6 +27,151 @@ void main() {
     });
   });
 
+  group('mobile playback intent', () {
+    test('normal mobile row taps stay audio-first even when track has MV', () {
+      expect(
+        resolvePlaybackModeForIntent(
+          track: _trackWithVideo,
+          isMobileSurface: true,
+          intent: PlaybackStartIntent.audio,
+          preferVideoOnExpand: false,
+          playerIsOpen: true,
+        ),
+        PlaybackMode.audio,
+      );
+    });
+
+    test('mobile MV affordance starts video when the track has MV', () {
+      expect(
+        resolvePlaybackModeForIntent(
+          track: _trackWithVideo,
+          isMobileSurface: true,
+          intent: PlaybackStartIntent.video,
+          preferVideoOnExpand: false,
+          playerIsOpen: true,
+        ),
+        PlaybackMode.video,
+      );
+    });
+
+    test('video intent degrades to audio when the track has no MV', () {
+      const audioOnly = Track(
+        id: 2,
+        title: 'Audio only',
+        audioPath: '/audio/2.flac',
+        videoPath: '',
+      );
+
+      expect(
+        resolvePlaybackModeForIntent(
+          track: audioOnly,
+          isMobileSurface: true,
+          intent: PlaybackStartIntent.video,
+          preferVideoOnExpand: true,
+          playerIsOpen: true,
+        ),
+        PlaybackMode.audio,
+      );
+    });
+
+    test(
+      'expanded mixed queue returns to MV when video intent is preserved',
+      () {
+        expect(
+          resolvePlaybackModeForIntent(
+            track: _trackWithVideo,
+            isMobileSurface: true,
+            intent: PlaybackStartIntent.preserve,
+            preferVideoOnExpand: true,
+            playerIsOpen: true,
+          ),
+          PlaybackMode.video,
+        );
+      },
+    );
+
+    test('collapsed mixed queue remains audio-first until reopened', () {
+      expect(
+        resolvePlaybackModeForIntent(
+          track: _trackWithVideo,
+          isMobileSurface: true,
+          intent: PlaybackStartIntent.preserve,
+          preferVideoOnExpand: true,
+          playerIsOpen: false,
+        ),
+        PlaybackMode.audio,
+      );
+    });
+
+    test('reopen restores MV only when the player is opening visibly', () {
+      expect(
+        resolvePlaybackModeForIntent(
+          track: _trackWithVideo,
+          isMobileSurface: true,
+          intent: PlaybackStartIntent.preserve,
+          preferVideoOnExpand: true,
+          playerIsOpen: true,
+        ),
+        PlaybackMode.video,
+      );
+    });
+
+    test('reopen does not force MV after audio-first entry', () {
+      expect(
+        resolvePlaybackModeForIntent(
+          track: _trackWithVideo,
+          isMobileSurface: true,
+          intent: PlaybackStartIntent.preserve,
+          preferVideoOnExpand: false,
+          playerIsOpen: true,
+        ),
+        PlaybackMode.audio,
+      );
+    });
+  });
+
+  group('mixed queue video intent', () {
+    test(
+      'audio-only queue item forces audio but preserves future video intent',
+      () {
+        const audioOnly = Track(
+          id: 2,
+          title: 'Audio only',
+          audioPath: '/audio/2.flac',
+          videoPath: '',
+        );
+
+        expect(
+          resolvePlaybackModeForIntent(
+            track: audioOnly,
+            isMobileSurface: true,
+            intent: PlaybackStartIntent.preserve,
+            preferVideoOnExpand: true,
+            playerIsOpen: true,
+          ),
+          PlaybackMode.audio,
+        );
+      },
+    );
+
+    test(
+      'desktop preserve intent keeps the current audio mode for MV tracks',
+      () {
+        expect(
+          resolvePlaybackModeForIntent(
+            track: _trackWithVideo,
+            isMobileSurface: false,
+            intent: PlaybackStartIntent.preserve,
+            preferVideoOnExpand: false,
+            playerIsOpen: true,
+            currentPlaybackMode: PlaybackMode.audio,
+          ),
+          PlaybackMode.audio,
+        );
+      },
+    );
+  });
+
   group('didPlaybackReachEnd', () {
     test('treats completed state as ended even before position catches up', () {
       expect(

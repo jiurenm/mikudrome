@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../api/api.dart';
+import '../models/playback_modes.dart';
 import '../models/track.dart';
 import '../theme/app_theme.dart';
 import '../theme/vocal_theme.dart';
 import '../widgets/player/asset_slider_thumb_shape.dart';
-import '../screens/library_home_screen.dart';
 import 'favorite_button.dart';
 
 /// Persistent bottom bar: now playing + controls + progress + MV indicator.

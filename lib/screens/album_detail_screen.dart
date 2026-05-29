@@ -12,6 +12,7 @@ import '../widgets/add_to_playlist_sheet.dart';
 import '../widgets/album_detail/album_action_bar.dart';
 import '../widgets/album_detail/album_hero_section.dart';
 import '../widgets/album_detail/album_track_list.dart';
+import 'player_playback_policy.dart';
 
 void _showTopMessage(
   BuildContext context,
@@ -70,7 +71,7 @@ void _showTopMessage(
 }
 
 class AlbumDetailScreen extends StatefulWidget {
-  AlbumDetailScreen({
+  const AlbumDetailScreen({
     super.key,
     required this.album,
     this.baseUrl = '',
@@ -88,7 +89,13 @@ class AlbumDetailScreen extends StatefulWidget {
   String get _effectiveBaseUrl =>
       baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
   final ValueChanged<Producer>? onProducerTap;
-  final void Function(Track track, List<Track> queue, int index)? onPlayTrack;
+  final void Function(
+    Track track,
+    List<Track> queue,
+    int index, {
+    PlaybackStartIntent intent,
+  })?
+  onPlayTrack;
   final int? currentPlayingTrackId;
   final bool isPlaying;
   final ApiClient? client;
@@ -141,8 +148,13 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
     }
   }
 
-  void _playTrack(Track track, int index, {List<Track>? queue}) {
-    widget.onPlayTrack?.call(track, queue ?? _tracks, index);
+  void _playTrack(
+    Track track,
+    int index, {
+    List<Track>? queue,
+    PlaybackStartIntent intent = PlaybackStartIntent.audio,
+  }) {
+    widget.onPlayTrack?.call(track, queue ?? _tracks, index, intent: intent);
   }
 
   void _shufflePlay() {

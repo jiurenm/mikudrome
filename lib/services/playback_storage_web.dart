@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:web/web.dart' as web;
 
+import '../models/playback_modes.dart';
 import '../models/track.dart';
-import '../screens/library_home_screen.dart';
 
 /// Persists playback state to browser localStorage for session continuity.
 class PlaybackStorage {
@@ -120,6 +120,8 @@ class PlaybackStorage {
     'source': t.source,
     'lyrics': t.lyrics,
     'comment': t.comment,
+    'video_stream_override_url': t.videoStreamOverrideUrl,
+    'cover_override_url': t.coverOverrideUrl,
   };
 }
 

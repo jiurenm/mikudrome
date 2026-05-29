@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/models/album.dart';
 import 'package:mikudrome/models/producer.dart';
 import 'package:mikudrome/models/track.dart';
+import 'package:mikudrome/screens/player_playback_policy.dart';
 import 'package:mikudrome/screens/producer_detail_screen.dart';
 import 'package:mikudrome/widgets/producer_detail/producer_detail_data_cache.dart';
 import 'package:mikudrome/widgets/producer_detail/producer_track_list.dart';
@@ -264,9 +265,10 @@ void main() {
             producer: _producer,
             baseUrl: 'http://example.test',
             onBack: () => backCount++,
-            onPlayTrack: (track, queue, index) {
-              playedTitle = track.title;
-            },
+            onPlayTrack:
+                (track, queue, index, {intent = PlaybackStartIntent.audio}) {
+                  playedTitle = track.title;
+                },
           ),
         ),
       );
@@ -364,6 +366,36 @@ void main() {
     expect(find.text('本地MV'), findsOneWidget);
   });
 
+  testWidgets('producer featured MV card reports video intent', (tester) async {
+    PlaybackStartIntent? reportedIntent;
+
+    await HttpOverrides.runZoned(() async {
+      await tester.pumpWidget(
+        _harness(
+          size: const Size(390, 844),
+          child: ProducerDetailScreen(
+            producer: _producer,
+            baseUrl: 'http://example.test',
+            onBack: () {},
+            onPlayTrack:
+                (track, queue, index, {intent = PlaybackStartIntent.audio}) {
+                  reportedIntent = intent;
+                },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }, createHttpClient: (_) => _ProducerDetailFakeHttpClient());
+
+    await tester.tap(find.text('MV 1'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.ancestor(of: find.text('Track A'), matching: find.byType(InkWell)),
+    );
+
+    expect(reportedIntent, PlaybackStartIntent.video);
+  });
+
   testWidgets('desktop producer detail keeps desktop tab labels', (
     tester,
   ) async {
@@ -371,7 +403,7 @@ void main() {
       await tester.pumpWidget(
         _harness(
           size: const Size(1024, 768),
-          child: ProducerDetailScreen(
+          child: const ProducerDetailScreen(
             producer: _producer,
             baseUrl: 'http://example.test',
           ),
@@ -404,7 +436,7 @@ void main() {
               ),
             ],
             baseUrl: 'http://example.test',
-            onPlay: (_, __) {},
+            onPlay: (_, _, {intent = PlaybackStartIntent.audio}) {},
           ),
         ),
       ),
@@ -415,6 +447,39 @@ void main() {
       find.byKey(const ValueKey('producer-track-mobile-row-1')),
       findsNothing,
     );
+  });
+
+  testWidgets('producer MV badge reports MV callback without row play', (
+    tester,
+  ) async {
+    final reportedIntents = <PlaybackStartIntent>[];
+
+    await tester.pumpWidget(
+      _harness(
+        size: const Size(390, 844),
+        child: Scaffold(
+          body: ProducerTrackList(
+            tracks: const [
+              Track(
+                id: 1,
+                title: 'Track A',
+                audioPath: '/audio/a.flac',
+                videoPath: '/video/a.mp4',
+              ),
+            ],
+            baseUrl: 'http://example.test',
+            useMobileLayout: true,
+            onPlay: (track, index, {intent = PlaybackStartIntent.audio}) {
+              reportedIntents.add(intent);
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('producer-track-row-mv-1')));
+
+    expect(reportedIntents, [PlaybackStartIntent.video]);
   });
 
   testWidgets(

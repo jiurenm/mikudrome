@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../models/playback_modes.dart';
 import '../../models/track.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/responsive.dart';
@@ -24,7 +25,13 @@ class AlbumTrackList extends StatelessWidget {
   final Map<int, List<Track>> tracksByDisc;
   final String baseUrl;
   final VoidCallback onDownloadComplete;
-  final void Function(Track track, int index, {List<Track>? queue}) onPlayTrack;
+  final void Function(
+    Track track,
+    int index, {
+    List<Track>? queue,
+    PlaybackStartIntent intent,
+  })
+  onPlayTrack;
   final AlbumTopMessage showTopMessage;
   final int? currentPlayingTrackId;
   final bool isPlaying;
@@ -58,8 +65,20 @@ class AlbumTrackList extends StatelessWidget {
                     track: e.value,
                     baseUrl: baseUrl,
                     onDownloadComplete: onDownloadComplete,
-                    onPlay: () =>
-                        onPlayTrack(e.value, e.key, queue: discTracks),
+                    onPlay: () => onPlayTrack(
+                      e.value,
+                      e.key,
+                      queue: discTracks,
+                      intent: PlaybackStartIntent.audio,
+                    ),
+                    onPlayMv: e.value.hasVideo
+                        ? () => onPlayTrack(
+                            e.value,
+                            e.key,
+                            queue: discTracks,
+                            intent: PlaybackStartIntent.video,
+                          )
+                        : null,
                     showTopMessage: showTopMessage,
                     isCurrentlyPlaying: e.value.id == currentPlayingTrackId,
                     isPlaying: e.value.id == currentPlayingTrackId && isPlaying,
@@ -75,7 +94,18 @@ class AlbumTrackList extends StatelessWidget {
                 track: e.value,
                 baseUrl: baseUrl,
                 onDownloadComplete: onDownloadComplete,
-                onPlay: () => onPlayTrack(e.value, e.key),
+                onPlay: () => onPlayTrack(
+                  e.value,
+                  e.key,
+                  intent: PlaybackStartIntent.audio,
+                ),
+                onPlayMv: e.value.hasVideo
+                    ? () => onPlayTrack(
+                        e.value,
+                        e.key,
+                        intent: PlaybackStartIntent.video,
+                      )
+                    : null,
                 showTopMessage: showTopMessage,
                 isCurrentlyPlaying: e.value.id == currentPlayingTrackId,
                 isPlaying: e.value.id == currentPlayingTrackId && isPlaying,
@@ -110,7 +140,7 @@ class _TrackListHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 16),
-          SizedBox(
+          const SizedBox(
             width: 48,
             child: Align(
               alignment: Alignment.centerRight,

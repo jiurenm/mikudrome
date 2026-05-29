@@ -30,7 +30,9 @@ class Sidebar extends StatelessWidget {
       width: collapsed ? widthCollapsed : widthExpanded,
       decoration: BoxDecoration(
         color: AppTheme.mikuDark,
-        border: Border(right: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
+        border: Border(
+          right: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+        ),
       ),
       child: Stack(
         children: [
@@ -89,10 +91,7 @@ class Sidebar extends StatelessWidget {
               SizedBox(
                 width: 24,
                 height: 24,
-                child: SvgPicture.network(
-                  '/icon.svg',
-                  fit: BoxFit.contain,
-                ),
+                child: SvgPicture.network('/icon.svg', fit: BoxFit.contain),
               ),
               const SizedBox(width: 12),
               const Expanded(
@@ -120,8 +119,16 @@ class Sidebar extends StatelessWidget {
           _sectionLabel('Collections'),
           const SizedBox(height: 8),
           _navItem(ShellRoute.playlists, Icons.queue_music, 'Playlists'),
-          _navItem(ShellRoute.favorites, Icons.favorite_border, 'Favorite Tracks'),
-          _navItem(ShellRoute.localMv, Icons.movie_outlined, 'Local MV Gallery'),
+          _navItem(
+            ShellRoute.favorites,
+            Icons.favorite_border,
+            'Favorite Tracks',
+          ),
+          _navItem(
+            ShellRoute.localMv,
+            Icons.movie_outlined,
+            'Local MV Gallery',
+          ),
           _navItem(ShellRoute.more, Icons.more_horiz, 'More'),
         ],
       ),
@@ -136,9 +143,7 @@ class Sidebar extends StatelessWidget {
         color: AppTheme.textMuted,
         size: 22,
       ),
-      style: IconButton.styleFrom(
-        foregroundColor: AppTheme.textMuted,
-      ),
+      style: IconButton.styleFrom(foregroundColor: AppTheme.textMuted),
       tooltip: expanded ? 'Expand sidebar' : 'Collapse sidebar',
     );
   }
@@ -149,7 +154,7 @@ class Sidebar extends StatelessWidget {
       padding: const EdgeInsets.only(left: 8, bottom: 8),
       child: Text(
         label.toUpperCase(),
-        style: TextStyle(
+        style: const TextStyle(
           fontSize: 10,
           letterSpacing: 2,
           color: AppTheme.textMuted,
@@ -193,13 +198,13 @@ class Sidebar extends StatelessWidget {
         color: active
             ? AppTheme.mikuGreen.withValues(alpha: 0.05)
             : Colors.transparent,
-        borderRadius: BorderRadius.only(
+        borderRadius: const BorderRadius.only(
           topRight: Radius.circular(4),
           bottomRight: Radius.circular(4),
         ),
         child: InkWell(
           onTap: () => onNavigate?.call(route),
-          borderRadius: BorderRadius.only(
+          borderRadius: const BorderRadius.only(
             topRight: Radius.circular(4),
             bottomRight: Radius.circular(4),
           ),
@@ -207,9 +212,11 @@ class Sidebar extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
             decoration: BoxDecoration(
               border: active
-                  ? const Border(right: BorderSide(color: AppTheme.mikuGreen, width: 3))
+                  ? const Border(
+                      right: BorderSide(color: AppTheme.mikuGreen, width: 3),
+                    )
                   : null,
-              borderRadius: BorderRadius.only(
+              borderRadius: const BorderRadius.only(
                 topRight: Radius.circular(4),
                 bottomRight: Radius.circular(4),
               ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../models/playback_modes.dart';
 import '../../models/track.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/responsive.dart';
@@ -15,7 +16,8 @@ class ProducerTrackList extends StatelessWidget {
 
   final List<Track> tracks;
   final String baseUrl;
-  final void Function(Track track, int index) onPlay;
+  final void Function(Track track, int index, {PlaybackStartIntent intent})
+  onPlay;
   final bool useMobileLayout;
 
   @override
@@ -49,7 +51,15 @@ class ProducerTrackList extends StatelessWidget {
                 key: ValueKey('producer-track-mobile-row-${e.value.id}'),
                 index: e.key + 1,
                 track: e.value,
-                onPlay: () => onPlay(e.value, e.key),
+                onPlay: () =>
+                    onPlay(e.value, e.key, intent: PlaybackStartIntent.audio),
+                onPlayMv: e.value.hasVideo
+                    ? () => onPlay(
+                        e.value,
+                        e.key,
+                        intent: PlaybackStartIntent.video,
+                      )
+                    : null,
               ),
             ),
         ],
@@ -83,7 +93,15 @@ class ProducerTrackList extends StatelessWidget {
               index: e.key + 1,
               track: e.value,
               baseUrl: baseUrl,
-              onPlay: () => onPlay(e.value, e.key),
+              onPlay: () =>
+                  onPlay(e.value, e.key, intent: PlaybackStartIntent.audio),
+              onPlayMv: e.value.hasVideo
+                  ? () => onPlay(
+                      e.value,
+                      e.key,
+                      intent: PlaybackStartIntent.video,
+                    )
+                  : null,
             ),
           ),
         ],
@@ -98,11 +116,13 @@ class _MobileProducerTrackRow extends StatelessWidget {
     required this.index,
     required this.track,
     required this.onPlay,
+    this.onPlayMv,
   });
 
   final int index;
   final Track track;
   final VoidCallback onPlay;
+  final VoidCallback? onPlayMv;
 
   @override
   Widget build(BuildContext context) {
@@ -198,6 +218,7 @@ class _MobileProducerTrackRow extends StatelessWidget {
                       children: [
                         if (track.hasVideo)
                           _TrackBadge(
+                            key: ValueKey('producer-track-row-mv-${track.id}'),
                             icon: Icons.movie,
                             label: 'MV',
                             foregroundColor: AppTheme.mikuGreen,
@@ -207,6 +228,7 @@ class _MobileProducerTrackRow extends StatelessWidget {
                             borderColor: AppTheme.mikuGreen.withValues(
                               alpha: 0.2,
                             ),
+                            onTap: onPlayMv,
                           ),
                         if (track.format.isNotEmpty)
                           _TrackBadge(
@@ -230,11 +252,13 @@ class _MobileProducerTrackRow extends StatelessWidget {
 
 class _TrackBadge extends StatelessWidget {
   const _TrackBadge({
+    super.key,
     this.icon,
     required this.label,
     required this.foregroundColor,
     required this.backgroundColor,
     required this.borderColor,
+    this.onTap,
   });
 
   final IconData? icon;
@@ -242,10 +266,11 @@ class _TrackBadge extends StatelessWidget {
   final Color foregroundColor;
   final Color backgroundColor;
   final Color borderColor;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final badge = Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: backgroundColor,
@@ -276,6 +301,12 @@ class _TrackBadge extends StatelessWidget {
         ],
       ),
     );
+    if (onTap == null) return badge;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: badge,
+    );
   }
 }
 
@@ -304,7 +335,7 @@ class _ProducerTrackListHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 16),
-          SizedBox(
+          const SizedBox(
             width: 48,
             child: Align(
               alignment: Alignment.centerRight,
@@ -334,12 +365,14 @@ class ProducerTrackRow extends StatefulWidget {
     required this.track,
     required this.baseUrl,
     required this.onPlay,
+    this.onPlayMv,
   });
 
   final int index;
   final Track track;
   final String baseUrl;
   final VoidCallback onPlay;
+  final VoidCallback? onPlayMv;
 
   @override
   State<ProducerTrackRow> createState() => _ProducerTrackRowState();
@@ -399,38 +432,18 @@ class _ProducerTrackRowState extends State<ProducerTrackRow> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       if (track.hasVideo)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
+                        _TrackBadge(
+                          key: ValueKey('producer-track-row-mv-${track.id}'),
+                          icon: Icons.movie,
+                          label: 'LOCAL MV',
+                          foregroundColor: AppTheme.mikuGreen,
+                          backgroundColor: AppTheme.mikuGreen.withValues(
+                            alpha: 0.1,
                           ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.mikuGreen.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                              color: AppTheme.mikuGreen.withValues(alpha: 0.2),
-                            ),
+                          borderColor: AppTheme.mikuGreen.withValues(
+                            alpha: 0.2,
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.movie,
-                                size: 10,
-                                color: AppTheme.mikuGreen,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                'LOCAL MV',
-                                style: Theme.of(context).textTheme.labelSmall
-                                    ?.copyWith(
-                                      color: AppTheme.mikuGreen,
-                                      fontSize: 8,
-                                      fontWeight: FontWeight.w400,
-                                    ),
-                              ),
-                            ],
-                          ),
+                          onTap: widget.onPlayMv,
                         ),
                       if (track.hasVideo && track.format.isNotEmpty)
                         const SizedBox(width: 12),
@@ -468,11 +481,11 @@ class _ProducerTrackRowState extends State<ProducerTrackRow> {
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ).copyWith(
                                 overlayColor:
-                                    MaterialStateProperty.resolveWith<Color?>((
+                                    WidgetStateProperty.resolveWith<Color?>((
                                       states,
                                     ) {
                                       if (states.contains(
-                                        MaterialState.hovered,
+                                        WidgetState.hovered,
                                       )) {
                                         return AppTheme.textPrimary.withValues(
                                           alpha: 0.08,
@@ -481,11 +494,11 @@ class _ProducerTrackRowState extends State<ProducerTrackRow> {
                                       return null;
                                     }),
                                 foregroundColor:
-                                    MaterialStateProperty.resolveWith<Color>((
+                                    WidgetStateProperty.resolveWith<Color>((
                                       states,
                                     ) {
                                       if (states.contains(
-                                        MaterialState.hovered,
+                                        WidgetState.hovered,
                                       )) {
                                         return AppTheme.textPrimary;
                                       }
@@ -506,7 +519,7 @@ class _ProducerTrackRowState extends State<ProducerTrackRow> {
                       track.durationFormatted,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppTheme.textMuted,
-                        fontFeatures: [FontFeature.tabularFigures()],
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
                   ),

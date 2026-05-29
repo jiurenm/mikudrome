@@ -52,12 +52,11 @@ class _MobilePlayerSheetState extends State<MobilePlayerSheet>
   void didUpdateWidget(MobilePlayerSheet oldWidget) {
     super.didUpdateWidget(oldWidget);
     // React to external expanded state changes (e.g. user taps play on a track)
-    if (widget.expanded != oldWidget.expanded) {
-      if (widget.expanded) {
-        _controller.forward();
-      } else {
-        _controller.reverse();
-      }
+    // and to a parent reasserting the same state after a local drag/collapse.
+    if (widget.expanded && !_controller.isCompleted) {
+      _controller.forward();
+    } else if (!widget.expanded && !_controller.isDismissed) {
+      _controller.reverse();
     }
   }
 
@@ -160,10 +159,7 @@ class _MobilePlayerSheetState extends State<MobilePlayerSheet>
 }
 
 class _ExpandedPlayerViewport extends StatelessWidget {
-  const _ExpandedPlayerViewport({
-    required this.height,
-    required this.child,
-  });
+  const _ExpandedPlayerViewport({required this.height, required this.child});
 
   final double height;
   final Widget child;

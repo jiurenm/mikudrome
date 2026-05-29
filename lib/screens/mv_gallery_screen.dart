@@ -96,11 +96,10 @@ class _MvGalleryScreenState extends State<MvGalleryScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Column(
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxWidth < 620;
+                    final title = Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
@@ -118,24 +117,35 @@ class _MvGalleryScreenState extends State<MvGalleryScreen> {
                               ?.copyWith(color: AppTheme.textMuted),
                         ),
                       ],
-                    ),
-                    SizedBox(
-                      width: 264,
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: const InputDecoration(
-                          hintText: 'Search title, artist...',
-                          prefixIcon: Icon(
-                            Icons.search,
-                            color: AppTheme.textMuted,
-                            size: 18,
-                          ),
+                    );
+                    final search = TextField(
+                      controller: _searchController,
+                      decoration: const InputDecoration(
+                        hintText: 'Search title, artist...',
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color: AppTheme.textMuted,
+                          size: 18,
                         ),
-                        style: const TextStyle(fontSize: 14),
-                        onChanged: (_) => setState(() {}),
                       ),
-                    ),
-                  ],
+                      style: const TextStyle(fontSize: 14),
+                      onChanged: (_) => setState(() {}),
+                    );
+                    if (compact) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [title, const SizedBox(height: 16), search],
+                      );
+                    }
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        title,
+                        SizedBox(width: 264, child: search),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),

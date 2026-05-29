@@ -37,6 +37,37 @@ void main() {
     expect(saved.contextLabel, 'Album / Test');
   });
 
+  test('preserves standalone MV stream override urls', () {
+    const queue = <Track>[
+      Track(
+        id: -9,
+        title: 'Standalone MV',
+        audioPath: '',
+        videoPath: 'standalone',
+        videoStreamOverrideUrl: 'http://example.test/api/videos/9/stream',
+        coverOverrideUrl: 'http://example.test/api/videos/9/thumb',
+      ),
+    ];
+
+    PlaybackStorage.save(
+      queue: queue,
+      index: 0,
+      progress: 0.25,
+      mode: PlaybackMode.video,
+      orderMode: PlaybackOrderMode.sequential,
+      contextLabel: 'MV Gallery / Standalone MV',
+    );
+
+    final saved = PlaybackStorage.load();
+    expect(saved, isNotNull);
+    expect(
+      saved!.queue.single.videoStreamOverrideUrl,
+      queue.single.videoStreamOverrideUrl,
+    );
+    expect(saved.queue.single.coverOverrideUrl, queue.single.coverOverrideUrl);
+    expect(saved.mode, PlaybackMode.video);
+  });
+
   test('clamps invalid saved index and progress', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'mikudrome_queue':

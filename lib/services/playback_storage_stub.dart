@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/playback_modes.dart';
 import '../models/track.dart';
-import '../screens/library_home_screen.dart';
 
 /// Non-web playback storage implementation backed by shared preferences.
 class PlaybackStorage {
@@ -115,6 +115,8 @@ class PlaybackStorage {
     'source': t.source,
     'lyrics': t.lyrics,
     'comment': t.comment,
+    'video_stream_override_url': t.videoStreamOverrideUrl,
+    'cover_override_url': t.coverOverrideUrl,
   };
 }
 

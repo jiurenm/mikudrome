@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 import '../api/api.dart';
+import '../models/playback_modes.dart';
 import '../models/timed_lyric_line.dart';
 import '../models/track.dart';
 import '../services/lrc_parser.dart';
@@ -20,8 +22,8 @@ import '../theme/vocal_theme.dart';
 import '../utils/responsive.dart';
 import '../widgets/favorite_button.dart';
 import '../widgets/player/asset_slider_thumb_shape.dart';
+import '../widgets/player/mobile_mv_player_surface.dart';
 import '../widgets/player_screen_parts.dart';
-import 'library_home_screen.dart';
 import 'player_playback_policy.dart';
 
 typedef PlayerTogglePlayback = Future<void> Function();
@@ -126,6 +128,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String? _error;
   late bool _showQueue;
   bool _isFullscreen = false;
+  bool _fullscreenOrientationLockActive = false;
   bool _showFullscreenChrome = true;
   bool _showLyrics = true;
   bool _showMobileQueue = false;
@@ -355,6 +358,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _initializePlayback() async {
+    _pendingSeekProgress = widget.initialProgress;
     _completionGate.reset();
     final previous = _controller;
     _controller = null;
@@ -679,6 +683,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
     _controller?.dispose();
     _webAudioPlayer.removeListener(_handleWebAudioPlayerChanged);
+    if (_fullscreenOrientationLockActive) {
+      unawaited(
+        SystemChrome.setPreferredOrientations(DeviceOrientation.values),
+      );
+      _fullscreenOrientationLockActive = false;
+    }
     super.dispose();
   }
 
@@ -803,9 +813,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _emitPlaybackState();
   }
 
+  void _retryVideoPlayback() {
+    if (!_isVideoMode) return;
+    _initializePlayback();
+  }
+
   void _enterFullscreen() {
     if (!_isVideoMode) return;
     final shouldResume = _controller?.value.isPlaying ?? false;
+    if (isMobile(context)) {
+      _fullscreenOrientationLockActive = true;
+      unawaited(
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]),
+      );
+    }
     setState(() {
       _isFullscreen = true;
       _showFullscreenChrome = true;
@@ -817,6 +841,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void _exitFullscreen() {
     final shouldResume = _controller?.value.isPlaying ?? false;
     _fullscreenChromeTimer?.cancel();
+    if (_fullscreenOrientationLockActive) {
+      unawaited(
+        SystemChrome.setPreferredOrientations(DeviceOrientation.values),
+      );
+      _fullscreenOrientationLockActive = false;
+    }
     setState(() {
       _isFullscreen = false;
       _showFullscreenChrome = true;
@@ -1171,7 +1201,52 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  Widget _buildMobileVideoLayout(BuildContext context, Color accentColor) {
+    final duration = _duration;
+    final position = _position > duration ? duration : _position;
+    final progress = duration.inMilliseconds == 0
+        ? 0.0
+        : position.inMilliseconds / duration.inMilliseconds;
+
+    return MobileMvPlayerSurface(
+      title: _track.title,
+      subtitle: _queueSubtitle,
+      contextLabel: widget.contextLabel,
+      video: _buildVideoArea(context),
+      isInitializing: _isInitializing,
+      error: _error,
+      isPlaying: _isPlaying,
+      progress: progress.clamp(0.0, 1.0),
+      elapsedLabel: _formatDuration(position),
+      durationLabel: _formatDuration(duration),
+      canSeek: duration > Duration.zero,
+      hasPrevious: _hasPrevious,
+      hasNext: _hasNext,
+      trackId: _track.id,
+      favoriteClient: _api,
+      accentColor: accentColor,
+      onCollapse: widget.onClose,
+      onRetryVideo: _retryVideoPlayback,
+      canSwitchToAudio: _track.hasAudio,
+      onSwitchToAudio: () => widget.onSwitchPlaybackMode(PlaybackMode.audio),
+      onTogglePlayback: () => unawaited(_togglePlayback()),
+      onSeek: (value) => unawaited(_seekTo(value)),
+      onPrevious: widget.onPrevious,
+      onNext: widget.onNext,
+      playbackOrderButton: _buildPlaybackOrderButton(
+        baseColor: Colors.white70,
+        accentColor: accentColor,
+      ),
+      onOpenQueue: _toggleQueue,
+      onEnterFullscreen: _enterFullscreen,
+    );
+  }
+
   Widget _buildMobileLayout(BuildContext context, Color accentColor) {
+    if (_isVideoMode) {
+      return _buildMobileVideoLayout(context, accentColor);
+    }
+
     final duration = _duration;
     final position = _position > duration ? duration : _position;
     final progress = duration.inMilliseconds == 0

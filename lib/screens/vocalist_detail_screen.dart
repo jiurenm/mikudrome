@@ -15,6 +15,7 @@ import '../widgets/producer_detail/producer_track_list.dart';
 import '../widgets/vocalist_detail/vocalist_hero_section.dart';
 import '../widgets/vocalist_detail/vocalist_tab_bar.dart';
 import 'album_detail_screen.dart';
+import 'player_playback_policy.dart';
 
 class VocalistDetailScreen extends StatefulWidget {
   const VocalistDetailScreen({
@@ -28,7 +29,13 @@ class VocalistDetailScreen extends StatefulWidget {
   final Vocalist vocalist;
   final VoidCallback? onBack;
   final ValueChanged<Album>? onAlbumTap;
-  final void Function(Track track, List<Track> queue, int index)? onPlayTrack;
+  final void Function(
+    Track track,
+    List<Track> queue,
+    int index, {
+    PlaybackStartIntent intent,
+  })?
+  onPlayTrack;
 
   @override
   State<VocalistDetailScreen> createState() => _VocalistDetailScreenState();
@@ -115,8 +122,13 @@ class _VocalistDetailScreenState extends State<VocalistDetailScreen> {
     return _loadData(showLoading: false);
   }
 
-  void _playTrack(Track track, int index, {List<Track>? queue}) {
-    widget.onPlayTrack?.call(track, queue ?? _tracks, index);
+  void _playTrack(
+    Track track,
+    int index, {
+    List<Track>? queue,
+    PlaybackStartIntent intent = PlaybackStartIntent.audio,
+  }) {
+    widget.onPlayTrack?.call(track, queue ?? _tracks, index, intent: intent);
   }
 
   void _playAll() {
@@ -215,7 +227,9 @@ class _VocalistDetailScreenState extends State<VocalistDetailScreen> {
                   ProducerTrackList(
                     tracks: _tracks,
                     baseUrl: ApiConfig.defaultBaseUrl,
-                    onPlay: (track, index) => _playTrack(track, index),
+                    onPlay:
+                        (track, index, {intent = PlaybackStartIntent.audio}) =>
+                            _playTrack(track, index, intent: intent),
                   ),
                 ]),
               ),
@@ -319,14 +333,19 @@ class _VocalistDetailScreenState extends State<VocalistDetailScreen> {
               tracks: _tracks,
               baseUrl: ApiConfig.defaultBaseUrl,
               useMobileLayout: true,
-              onPlay: (track, index) => _playTrack(track, index),
+              onPlay: (track, index, {intent = PlaybackStartIntent.audio}) =>
+                  _playTrack(track, index, intent: intent),
             )
           else
             FeaturedMvsGrid(
               tracks: _tracksWithMv,
               baseUrl: ApiConfig.defaultBaseUrl,
-              onPlay: (track, index) =>
-                  _playTrack(track, index, queue: _tracksWithMv),
+              onPlay: (track, index) => _playTrack(
+                track,
+                index,
+                queue: _tracksWithMv,
+                intent: PlaybackStartIntent.video,
+              ),
             ),
         ]),
       ),

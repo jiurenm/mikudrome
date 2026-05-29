@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:video_player/video_player.dart';
 
 import '../api/api.dart';
 import '../config/app_config_controller.dart';
+import '../models/playback_modes.dart';
 import '../models/track.dart';
 import '../models/video.dart';
 import '../services/mobile_audio_playback.dart'
@@ -44,9 +46,7 @@ import 'playlist_detail_screen.dart';
 import 'favorites_screen.dart';
 import 'server_setup_screen.dart';
 
-enum PlaybackMode { video, audio }
-
-enum PlaybackOrderMode { sequential, listLoop, singleLoop }
+export '../models/playback_modes.dart';
 
 @visibleForTesting
 PlaybackMode defaultPlaybackModeForTrack(
@@ -139,6 +139,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   int _playerIndex = 0;
   bool _shuffleEnabled = false;
   bool _showPlayer = false;
+  bool _preferVideoOnExpand = false;
   bool _isPlaying = false;
   double _playbackProgress = 0;
   String _elapsedLabel = '--:--';
@@ -156,6 +157,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   bool _restoredNotStarted = false;
   double? _resumeProgress;
   VideoPlayerController? _videoController;
+  int _mobileVideoCollapseRequest = 0;
+  int? _pendingMobileVideoCollapseAudioRequest;
+  Track? _pendingMobileVideoCollapseAudioTrack;
+  int? _pendingMobileVideoCollapseAudioIndex;
 
   @override
   void initState() {
@@ -341,9 +346,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   void _handleMobileBack() {
     if (!isMobile(context)) return;
     if (_showPlayer) {
-      setState(() {
-        _showPlayer = false;
-      });
+      _collapseCurrentMobilePlayer();
       return;
     }
     if (_mobileHistory.isEmpty) return;
@@ -709,11 +712,6 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     }
   }
 
-  PlaybackMode _defaultModeForTrack(Track track) => defaultPlaybackModeForTrack(
-    track,
-    isMobileSurface: _isMobilePlaybackSurface,
-  );
-
   bool get _canUseSharedWebAudio =>
       _playbackMode == PlaybackMode.audio &&
       !_canUseMobileAudioPlayback &&
@@ -721,7 +719,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
 
   bool get _canUseMobileAudioPlayback {
     if (!mounted) return false;
-    return isMobile(context) && _playbackMode == PlaybackMode.audio;
+    return isMobile(context) &&
+        _playbackMode == PlaybackMode.audio &&
+        _currentTrack?.hasAudio == true;
   }
 
   bool get _isMobilePlaybackSurface {
@@ -788,6 +788,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     );
   }
 
+  void _invalidateMobileVideoCollapseRequest() {
+    _mobileVideoCollapseRequest += 1;
+  }
+
   Future<void> _syncMobileAudioQueuePreservingProgress() async {
     if (!_isMobilePlaybackSurface) return;
     if (_playbackMode != PlaybackMode.audio) {
@@ -813,6 +817,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
 
   void _handleMobileAudioState(MobileAudioPlaybackState state) {
     if (!mounted || !isMobile(context) || _playbackMode != PlaybackMode.audio) {
+      return;
+    }
+    if (_isStaleMobileVideoCollapseAudioState(state)) {
       return;
     }
 
@@ -921,10 +928,14 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   }
 
   PlaybackMode _nextModeForTrack(Track track) {
-    if (_playbackMode == PlaybackMode.video && !track.hasVideo) {
-      return PlaybackMode.audio;
-    }
-    return track.hasVideo ? _playbackMode : PlaybackMode.audio;
+    return resolvePlaybackModeForIntent(
+      track: track,
+      isMobileSurface: _isMobilePlaybackSurface,
+      intent: PlaybackStartIntent.preserve,
+      preferVideoOnExpand: _preferVideoOnExpand,
+      playerIsOpen: _showPlayer,
+      currentPlaybackMode: _playbackMode,
+    );
   }
 
   void _openPlayerForQueue({
@@ -932,16 +943,32 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     required List<Track> queue,
     required int index,
     required String contextLabel,
+    PlaybackStartIntent intent = PlaybackStartIntent.audio,
   }) {
     if (queue.isEmpty) return;
+    _invalidateMobileVideoCollapseRequest();
     final selectedTrack = queue[index.clamp(0, queue.length - 1)];
+    final effectiveIntent = _isMobilePlaybackSurface
+        ? intent
+        : selectedTrack.hasVideo
+        ? PlaybackStartIntent.video
+        : PlaybackStartIntent.audio;
     setState(() {
       _playerQueue = List<Track>.from(queue);
       _orderedPlayerQueue = null;
       _playerIndex = index.clamp(0, queue.length - 1);
       _shuffleEnabled = false;
       _playerContextLabel = contextLabel;
-      _playbackMode = _defaultModeForTrack(selectedTrack);
+      _playbackMode = resolvePlaybackModeForIntent(
+        track: selectedTrack,
+        isMobileSurface: _isMobilePlaybackSurface,
+        intent: effectiveIntent,
+        preferVideoOnExpand: _preferVideoOnExpand,
+        playerIsOpen: true,
+      );
+      _preferVideoOnExpand =
+          effectiveIntent == PlaybackStartIntent.video &&
+          selectedTrack.hasVideo;
       _showPlayer = true;
       _isPlaying = true;
       _restoredNotStarted = false;
@@ -957,6 +984,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
 
   void _selectPlayerTrack(int index, {bool showPlayer = true}) {
     if (index < 0 || index >= _playerQueue.length) return;
+    _invalidateMobileVideoCollapseRequest();
     final nextTrack = _playerQueue[index];
     setState(() {
       _playerIndex = index;
@@ -974,6 +1002,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
 
   void _addTrackToCurrentQueue(Track track) {
     if (_playerQueue.any((item) => item.id == track.id)) return;
+    _invalidateMobileVideoCollapseRequest();
     setState(() {
       _playerQueue = [..._playerQueue, track];
       _orderedPlayerQueue = null;
@@ -983,6 +1012,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   }
 
   void _cyclePlaybackOrderMode() {
+    _invalidateMobileVideoCollapseRequest();
     late final PlaybackOrderMode nextMode;
     setState(() {
       nextMode = switch (_playbackOrderMode) {
@@ -1010,6 +1040,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     if (_shuffleEnabled) {
       final ordered = _orderedPlayerQueue;
       if (ordered == null || ordered.isEmpty) return;
+      _invalidateMobileVideoCollapseRequest();
       final restoredIndex = ordered.indexWhere(
         (track) => track.id == currentTrack.id,
       );
@@ -1024,6 +1055,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       return;
     }
 
+    _invalidateMobileVideoCollapseRequest();
     final rest =
         _playerQueue.where((track) => track.id != currentTrack.id).toList()
           ..shuffle(Random());
@@ -1046,6 +1078,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       delta: -1,
     );
     if (nextIndex == null) return;
+    _invalidateMobileVideoCollapseRequest();
     final nextTrack = _playerQueue[nextIndex];
     setState(() {
       _playerIndex = nextIndex;
@@ -1069,6 +1102,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       delta: 1,
     );
     if (nextIndex == null) return;
+    _invalidateMobileVideoCollapseRequest();
     final nextTrack = _playerQueue[nextIndex];
     setState(() {
       _playerIndex = nextIndex;
@@ -1151,8 +1185,14 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     final currentTrack = _currentTrack;
     if (currentTrack == null) return;
     if (mode == PlaybackMode.video && !currentTrack.hasVideo) return;
+    if (mode == PlaybackMode.audio && !currentTrack.hasAudio) return;
+    _invalidateMobileVideoCollapseRequest();
     setState(() {
       _playbackMode = mode;
+      if (_isMobilePlaybackSurface) {
+        _preferVideoOnExpand =
+            mode == PlaybackMode.video && currentTrack.hasVideo;
+      }
       _isPlaying = true;
     });
     if (_isMobilePlaybackSurface) {
@@ -1166,17 +1206,153 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   }
 
   void _openCurrentPlayer() {
-    if (_currentTrack == null) return;
+    final currentTrack = _currentTrack;
+    if (currentTrack == null) return;
+    _invalidateMobileVideoCollapseRequest();
     setState(() {
       _restoredNotStarted = false;
       _showPlayer = true;
+      _playbackMode = resolvePlaybackModeForIntent(
+        track: currentTrack,
+        isMobileSurface: _isMobilePlaybackSurface,
+        intent: PlaybackStartIntent.preserve,
+        preferVideoOnExpand: _preferVideoOnExpand,
+        playerIsOpen: true,
+      );
     });
+    if (_isMobilePlaybackSurface && _playbackMode == PlaybackMode.video) {
+      _resumeProgress = _playbackProgress;
+    }
   }
 
   void _closePlayer() {
+    _invalidateMobileVideoCollapseRequest();
     setState(() {
       _showPlayer = false;
     });
+  }
+
+  void _collapseCurrentMobilePlayer() {
+    if (_isMobilePlaybackSurface && _playbackMode == PlaybackMode.video) {
+      setState(() {
+        _showPlayer = true;
+      });
+      unawaited(_collapseMobileVideoToAudio());
+      return;
+    }
+    _closePlayer();
+  }
+
+  Future<void> _collapseMobileVideoToAudio() async {
+    final currentTrack = _currentTrack;
+    if (currentTrack == null) {
+      _closePlayer();
+      return;
+    }
+    if (!currentTrack.hasAudio) {
+      _invalidateMobileVideoCollapseRequest();
+      setState(() {
+        _playbackMode = PlaybackMode.video;
+        _showPlayer = true;
+        _preferVideoOnExpand = currentTrack.hasVideo;
+      });
+      return;
+    }
+    final request = ++_mobileVideoCollapseRequest;
+    final index = _playerIndex;
+    final progress = _playbackProgress.clamp(0.0, 1.0).toDouble();
+    final initialPosition = currentTrack.durationSeconds > 0
+        ? Duration(
+            milliseconds: (currentTrack.durationSeconds * 1000 * progress)
+                .round(),
+          )
+        : Duration.zero;
+    _pendingMobileVideoCollapseAudioRequest = request;
+    _pendingMobileVideoCollapseAudioTrack = currentTrack;
+    _pendingMobileVideoCollapseAudioIndex = index;
+    try {
+      await _playMobileAudioQueue(
+        queue: _playerQueue,
+        index: _playerIndex,
+        initialPosition: initialPosition,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      _clearPendingMobileVideoCollapseAudio(request);
+      if (!_isCurrentMobileVideoCollapseRequest(
+        request: request,
+        track: currentTrack,
+        index: index,
+      )) {
+        return;
+      }
+      setState(() {
+        _playbackMode = PlaybackMode.video;
+        _showPlayer = true;
+        _preferVideoOnExpand = currentTrack.hasVideo;
+      });
+      return;
+    }
+    if (!mounted) return;
+    if (!_isCurrentMobileVideoCollapseRequest(
+      request: request,
+      track: currentTrack,
+      index: index,
+    )) {
+      _clearPendingMobileVideoCollapseAudio(request);
+      await _repairMobileAudioAfterStaleCollapse();
+      return;
+    }
+    _clearPendingMobileVideoCollapseAudio(request);
+    setState(() {
+      _playbackMode = PlaybackMode.audio;
+      _showPlayer = false;
+      _preferVideoOnExpand = currentTrack.hasVideo;
+    });
+  }
+
+  bool _isStaleMobileVideoCollapseAudioState(MobileAudioPlaybackState state) {
+    final request = _pendingMobileVideoCollapseAudioRequest;
+    final track = _pendingMobileVideoCollapseAudioTrack;
+    final index = _pendingMobileVideoCollapseAudioIndex;
+    final stateTrack = state.track;
+    if (request == null ||
+        track == null ||
+        index == null ||
+        stateTrack?.id != track.id ||
+        state.index != index) {
+      return false;
+    }
+    return !_isCurrentMobileVideoCollapseRequest(
+      request: request,
+      track: track,
+      index: index,
+    );
+  }
+
+  void _clearPendingMobileVideoCollapseAudio(int request) {
+    if (_pendingMobileVideoCollapseAudioRequest != request) return;
+    _pendingMobileVideoCollapseAudioRequest = null;
+    _pendingMobileVideoCollapseAudioTrack = null;
+    _pendingMobileVideoCollapseAudioIndex = null;
+  }
+
+  Future<void> _repairMobileAudioAfterStaleCollapse() async {
+    try {
+      await _routeMobileAudioPlaybackForCurrentMode();
+    } catch (_) {}
+  }
+
+  bool _isCurrentMobileVideoCollapseRequest({
+    required int request,
+    required Track track,
+    required int index,
+  }) {
+    return request == _mobileVideoCollapseRequest &&
+        _isMobilePlaybackSurface &&
+        _playbackMode == PlaybackMode.video &&
+        _playerIndex == index &&
+        _currentTrack?.id == track.id;
   }
 
   double _lastSavedProgress = 0;
@@ -1211,7 +1387,30 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
 
   void _onVideoControllerChanged(VideoPlayerController? c) {
     if (!mounted) return;
-    setState(() => _videoController = c);
+    void applyControllerChange() {
+      if (!mounted) return;
+      setState(() => _videoController = c);
+      if (c != null &&
+          _isMobilePlaybackSurface &&
+          _playbackMode == PlaybackMode.video) {
+        unawaited(_stopMobileAudioAfterVideoAttach());
+      }
+    }
+
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        applyControllerChange();
+      });
+    } else {
+      applyControllerChange();
+    }
+  }
+
+  Future<void> _stopMobileAudioAfterVideoAttach() async {
+    try {
+      await _mobileAudioPlaybackService.stop();
+    } catch (_) {}
   }
 
   String _albumContextLabel(Album album) => 'Album / ${album.title}';
@@ -1233,6 +1432,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
         queue: [track],
         index: 0,
         contextLabel: 'MV Gallery / ${video.artist}',
+        intent: PlaybackStartIntent.video,
       );
     } else {
       // Standalone MV: create a synthetic Track with video stream override.
@@ -1283,6 +1483,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
         index: 0,
         contextLabel:
             'MV Gallery / ${composer.isNotEmpty ? composer : video.title}',
+        intent: PlaybackStartIntent.video,
       );
     }
   }
@@ -1306,12 +1507,15 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
             _showPlayer = false;
           });
         },
-        onPlayTrack: (track, queue, index) => _openPlayerForQueue(
-          track: track,
-          queue: queue,
-          index: index,
-          contextLabel: _albumContextLabel(_selectedAlbum!),
-        ),
+        onPlayTrack:
+            (track, queue, index, {intent = PlaybackStartIntent.audio}) =>
+                _openPlayerForQueue(
+                  track: track,
+                  queue: queue,
+                  index: index,
+                  contextLabel: _albumContextLabel(_selectedAlbum!),
+                  intent: intent,
+                ),
         currentPlayingTrackId: _currentTrack?.id,
         isPlaying: _isPlaying,
       );
@@ -1328,14 +1532,17 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
             _showPlayer = false;
           });
         },
-        onPlayTrack: (track, queue, index) => _openPlayerForQueue(
-          track: track,
-          queue: queue,
-          index: index,
-          contextLabel: queue.every((item) => item.hasVideo)
-              ? _mvContextLabel(_selectedProducer!)
-              : _producerContextLabel(_selectedProducer!),
-        ),
+        onPlayTrack:
+            (track, queue, index, {intent = PlaybackStartIntent.audio}) =>
+                _openPlayerForQueue(
+                  track: track,
+                  queue: queue,
+                  index: index,
+                  contextLabel: queue.every((item) => item.hasVideo)
+                      ? _mvContextLabel(_selectedProducer!)
+                      : _producerContextLabel(_selectedProducer!),
+                  intent: intent,
+                ),
       );
     } else if (_selectedVocalist != null) {
       mainContent = VocalistDetailScreen(
@@ -1350,12 +1557,15 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
             _showPlayer = false;
           });
         },
-        onPlayTrack: (track, queue, index) => _openPlayerForQueue(
-          track: track,
-          queue: queue,
-          index: index,
-          contextLabel: _vocalistContextLabel(_selectedVocalist!),
-        ),
+        onPlayTrack:
+            (track, queue, index, {intent = PlaybackStartIntent.audio}) =>
+                _openPlayerForQueue(
+                  track: track,
+                  queue: queue,
+                  index: index,
+                  contextLabel: _vocalistContextLabel(_selectedVocalist!),
+                  intent: intent,
+                ),
       );
     } else if (_selectedPlaylistId != null) {
       mainContent = PlaylistDetailScreen(
@@ -1438,9 +1648,13 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
                   onPlayPause: _togglePlayback,
                   bottomPadding: bottomPadding,
                   expanded: _showPlayer,
-                  onExpandedChanged: (expanded) => setState(() {
-                    _showPlayer = expanded;
-                  }),
+                  onExpandedChanged: (expanded) {
+                    if (expanded) {
+                      _openCurrentPlayer();
+                      return;
+                    }
+                    _collapseCurrentMobilePlayer();
+                  },
                   playerBuilder: (onClose) => PlayerScreen(
                     track: currentTrack,
                     queue: _playerQueue,
@@ -1451,7 +1665,14 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
                     onSelectTrack: (index) => _selectPlayerTrack(index),
                     onPrevious: _playPrevious,
                     onNext: _playNext,
-                    onClose: onClose,
+                    onClose: () {
+                      if (_isMobilePlaybackSurface &&
+                          _playbackMode == PlaybackMode.video) {
+                        _collapseCurrentMobilePlayer();
+                        return;
+                      }
+                      onClose();
+                    },
                     onSwitchPlaybackMode: _switchPlaybackMode,
                     playbackOrderMode: _playbackOrderMode,
                     onCyclePlaybackOrderMode: _cyclePlaybackOrderMode,

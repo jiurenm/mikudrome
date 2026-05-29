@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/screens/library_home_screen.dart';
+import 'package:mikudrome/screens/player_screen.dart';
 import 'package:mikudrome/services/mobile_audio_playback.dart';
 import 'package:mikudrome/services/playback_storage.dart';
 import 'package:mikudrome/widgets/mobile_mini_player.dart';
+import 'package:mikudrome/widgets/mobile_player_sheet.dart';
+import 'package:mikudrome/widgets/player/mobile_mv_player_surface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -345,6 +348,378 @@ void main() {
     },
   );
 
+  testWidgets('mobile back collapses MV into mobile audio playback', (
+    tester,
+  ) async {
+    final service = _RecordingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+      await _openAlbumMvFromDiscoverHome(tester);
+
+      final handled = await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(handled, isTrue);
+      final sheet = tester.widget<MobilePlayerSheet>(
+        find.byType(MobilePlayerSheet),
+      );
+      expect(sheet.expanded, isFalse);
+      expect(
+        find.byType(MobileMiniPlayer, skipOffstage: false),
+        findsOneWidget,
+      );
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(service.playedQueues, hasLength(1));
+    expect(service.playedQueues.single.map((track) => track.id), [
+      101,
+      102,
+      103,
+    ]);
+    expect(service.playedIndexes.single, 0);
+  });
+
+  testWidgets('standalone MV collapse stays open without audio fallback', (
+    tester,
+  ) async {
+    final service = _RecordingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+
+      await tester.drag(
+        find.byType(CustomScrollView).first,
+        const Offset(0, -600),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, '更多 >').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('愛言葉V'));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byTooltip('收起').first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final sheet = tester.widget<MobilePlayerSheet>(
+        find.byType(MobilePlayerSheet),
+      );
+      expect(sheet.expanded, isTrue);
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(service.playedQueues, isEmpty);
+  });
+
+  testWidgets('failed mobile audio startup keeps MV player open on collapse', (
+    tester,
+  ) async {
+    final service = _FailingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+      await _openAlbumMvFromDiscoverHome(tester);
+
+      await tester.tap(find.byTooltip('收起').first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(service.playQueueAttempts, 1);
+  });
+
+  testWidgets('drag collapse keeps MV open until mobile audio starts', (
+    tester,
+  ) async {
+    final service = _DelayedMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+      await _openAlbumMvFromDiscoverHome(tester);
+
+      await tester.drag(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        const Offset(0, 700),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(service.playQueueAttempts, 1);
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+
+      service.completePlayQueue();
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsNothing,
+      );
+      expect(find.byType(MobileMiniPlayer), findsOneWidget);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+  });
+
+  testWidgets('stale MV collapse completion repairs current audio queue', (
+    tester,
+  ) async {
+    final service = _FirstPlayQueueDelayedMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+      await _openAlbumMvFromDiscoverHome(tester);
+
+      await tester.drag(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        const Offset(0, 700),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(service.playQueueAttempts, 1);
+
+      final nextButton = find.descendant(
+        of: find.byKey(const ValueKey('mobile-mv-player-surface')),
+        matching: find.byIcon(Icons.skip_next),
+      );
+      final nextControl = tester.widget<IconButton>(
+        find.ancestor(of: nextButton, matching: find.byType(IconButton)).first,
+      );
+      nextControl.onPressed!();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(service.playQueueAttempts, 2);
+      expect(service.currentState.index, 1);
+
+      service.completeFirstPlayQueue();
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      expect(service.playQueueAttempts, 3);
+      expect(service.currentState.index, 1);
+      expect(service.playedIndexes.last, 1);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+  });
+
+  testWidgets('same-track MV reopen invalidates delayed collapse', (
+    tester,
+  ) async {
+    final service = _FirstPlayQueueDelayedMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+      await _openAlbumMvFromDiscoverHome(tester);
+
+      await tester.drag(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        const Offset(0, 700),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(service.playQueueAttempts, 1);
+
+      final mvBadge = tester.widget<InkWell>(
+        find.byKey(const ValueKey('album-track-row-mv-101')),
+      );
+      mvBadge.onTap!();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+
+      service.completeFirstPlayQueue();
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+      expect(find.byType(MobileMiniPlayer), findsNothing);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+  });
+
+  testWidgets('mixed queue returns from audio-only item to next MV', (
+    tester,
+  ) async {
+    final service = _RecordingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+      await _openAlbumMvFromDiscoverHome(tester);
+
+      _invokeScopedIconButton(
+        tester,
+        scope: find.byKey(const ValueKey('mobile-mv-player-surface')),
+        icon: Icons.skip_next,
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-player-immersive')),
+        findsOneWidget,
+      );
+      expect(find.text('Ghost Track 2'), findsWidgets);
+      expect(service.currentState.index, 1);
+
+      _invokeScopedIconButton(
+        tester,
+        scope: find.byKey(const ValueKey('mobile-player-immersive')),
+        icon: Icons.skip_next,
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+      expect(find.text('Ghost Track 3'), findsWidgets);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+  });
+
+  testWidgets('explicit switch to audio keeps later MV queue items audio', (
+    tester,
+  ) async {
+    final service = _RecordingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+      await _openAlbumMvFromDiscoverHome(tester);
+
+      final surface = tester.widget<MobileMvPlayerSurface>(
+        find.byType(MobileMvPlayerSurface),
+      );
+      surface.onSwitchToAudio();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey('mobile-player-immersive')),
+        findsOneWidget,
+      );
+
+      _invokeScopedIconButton(
+        tester,
+        scope: find.byKey(const ValueKey('mobile-player-immersive')),
+        icon: Icons.skip_next,
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      _invokeScopedIconButton(
+        tester,
+        scope: find.byKey(const ValueKey('mobile-player-immersive')),
+        icon: Icons.skip_next,
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-player-immersive')),
+        findsOneWidget,
+      );
+      expect(find.text('Ghost Track 3'), findsWidgets);
+      expect(service.currentState.index, 2);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+  });
+
+  testWidgets('explicit switch to MV keeps later MV queue items video', (
+    tester,
+  ) async {
+    final service = _RecordingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('GHOST').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ghost Track'));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey('mobile-player-immersive')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsNothing,
+      );
+
+      final player = tester.widget<PlayerScreen>(find.byType(PlayerScreen));
+      player.onSwitchPlaybackMode(PlaybackMode.video);
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+
+      _invokeScopedIconButton(
+        tester,
+        scope: find.byKey(const ValueKey('mobile-mv-player-surface')),
+        icon: Icons.skip_next,
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      _invokeScopedIconButton(
+        tester,
+        scope: find.byKey(const ValueKey('mobile-player-immersive')),
+        icon: Icons.skip_next,
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+      expect(find.text('Ghost Track 3'), findsWidgets);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+  });
+
   testWidgets('system back returns from a mobile destination to My Music', (
     tester,
   ) async {
@@ -548,6 +923,7 @@ class _LibraryFakeHttpClientResponse extends Stream<List<int>>
             'id': 101,
             'title': 'Ghost Track',
             'audio_path': 'ghost.flac',
+            'video_path': 'ghost.mp4',
             'album_id': 1,
             'track_number': 1,
             'duration_seconds': 219,
@@ -570,6 +946,7 @@ class _LibraryFakeHttpClientResponse extends Stream<List<int>>
             'id': 103,
             'title': 'Ghost Track 3',
             'audio_path': 'ghost-3.flac',
+            'video_path': 'ghost-3.mp4',
             'album_id': 1,
             'track_number': 3,
             'duration_seconds': 222,
@@ -828,6 +1205,114 @@ class _RecordingMobileAudioPlaybackService
   }
 }
 
+class _FailingMobileAudioPlaybackService
+    extends _RecordingMobileAudioPlaybackService {
+  int playQueueAttempts = 0;
+
+  @override
+  Future<void> playQueue({
+    required List<Track> queue,
+    required int index,
+    required AudioUrlForTrack audioUrlForTrack,
+    CoverUrlForTrack? coverUrlForTrack,
+    MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
+    Duration initialPosition = Duration.zero,
+    TrackFavoriteStatus? isTrackFavorited,
+    TrackFavoriteToggle? toggleTrackFavorite,
+  }) async {
+    playQueueAttempts += 1;
+    throw StateError('audio startup failed');
+  }
+}
+
+class _DelayedMobileAudioPlaybackService
+    extends _RecordingMobileAudioPlaybackService {
+  final Completer<void> _playQueueCompleter = Completer<void>();
+  int playQueueAttempts = 0;
+
+  void completePlayQueue() {
+    if (!_playQueueCompleter.isCompleted) {
+      _playQueueCompleter.complete();
+    }
+  }
+
+  @override
+  Future<void> playQueue({
+    required List<Track> queue,
+    required int index,
+    required AudioUrlForTrack audioUrlForTrack,
+    CoverUrlForTrack? coverUrlForTrack,
+    MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
+    Duration initialPosition = Duration.zero,
+    TrackFavoriteStatus? isTrackFavorited,
+    TrackFavoriteToggle? toggleTrackFavorite,
+  }) async {
+    playQueueAttempts += 1;
+    await _playQueueCompleter.future;
+    await super.playQueue(
+      queue: queue,
+      index: index,
+      audioUrlForTrack: audioUrlForTrack,
+      coverUrlForTrack: coverUrlForTrack,
+      orderMode: orderMode,
+      initialPosition: initialPosition,
+      isTrackFavorited: isTrackFavorited,
+      toggleTrackFavorite: toggleTrackFavorite,
+    );
+  }
+
+  @override
+  Future<void> dispose() async {
+    completePlayQueue();
+    await super.dispose();
+  }
+}
+
+class _FirstPlayQueueDelayedMobileAudioPlaybackService
+    extends _RecordingMobileAudioPlaybackService {
+  final Completer<void> _firstPlayQueueCompleter = Completer<void>();
+  int playQueueAttempts = 0;
+
+  void completeFirstPlayQueue() {
+    if (!_firstPlayQueueCompleter.isCompleted) {
+      _firstPlayQueueCompleter.complete();
+    }
+  }
+
+  @override
+  Future<void> playQueue({
+    required List<Track> queue,
+    required int index,
+    required AudioUrlForTrack audioUrlForTrack,
+    CoverUrlForTrack? coverUrlForTrack,
+    MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
+    Duration initialPosition = Duration.zero,
+    TrackFavoriteStatus? isTrackFavorited,
+    TrackFavoriteToggle? toggleTrackFavorite,
+  }) async {
+    playQueueAttempts += 1;
+    if (playQueueAttempts == 1) {
+      await _firstPlayQueueCompleter.future;
+    }
+    await super.playQueue(
+      queue: queue,
+      index: index,
+      audioUrlForTrack: audioUrlForTrack,
+      coverUrlForTrack: coverUrlForTrack,
+      orderMode: orderMode,
+      initialPosition: initialPosition,
+      isTrackFavorited: isTrackFavorited,
+      toggleTrackFavorite: toggleTrackFavorite,
+    );
+  }
+
+  @override
+  Future<void> dispose() async {
+    completeFirstPlayQueue();
+    await super.dispose();
+  }
+}
+
 Future<void> _seedPlaybackState({required double progress}) async {
   SharedPreferences.setMockInitialValues(<String, Object>{
     'mikudrome_queue': jsonEncode([
@@ -857,6 +1342,31 @@ Future<void> _seedPlaybackState({required double progress}) async {
     'mikudrome_context': 'Playlist / Resume',
   });
   await PlaybackStorage.ensureInitialized();
+}
+
+Future<void> _openAlbumMvFromDiscoverHome(WidgetTester tester) async {
+  await tester.tap(find.text('GHOST').last);
+  await tester.pumpAndSettle();
+
+  await tester.tap(find.byKey(const ValueKey('album-track-row-mv-101')));
+  await tester.pump(const Duration(milliseconds: 500));
+
+  expect(
+    find.byKey(const ValueKey('mobile-mv-player-surface')),
+    findsOneWidget,
+  );
+}
+
+void _invokeScopedIconButton(
+  WidgetTester tester, {
+  required Finder scope,
+  required IconData icon,
+}) {
+  final iconFinder = find.descendant(of: scope, matching: find.byIcon(icon));
+  final control = tester.widget<IconButton>(
+    find.ancestor(of: iconFinder, matching: find.byType(IconButton)).first,
+  );
+  control.onPressed!();
 }
 
 Future<void> _pumpMobileLibrary(

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/models/vocalist.dart';
+import 'package:mikudrome/screens/player_playback_policy.dart';
 import 'package:mikudrome/screens/vocalist_detail_screen.dart';
 import 'package:mikudrome/theme/app_theme.dart';
 import 'package:mikudrome/widgets/vocalist_detail/vocalist_hero_section.dart';
@@ -197,11 +198,12 @@ void main() {
                 albumCount: 4,
               ),
               onBack: () {},
-              onPlayTrack: (track, queue, index) {
-                playedTrack = track;
-                playedQueue = queue;
-                playedIndex = index;
-              },
+              onPlayTrack:
+                  (track, queue, index, {intent = PlaybackStartIntent.audio}) {
+                    playedTrack = track;
+                    playedQueue = queue;
+                    playedIndex = index;
+                  },
             ),
           ),
         );
@@ -236,11 +238,12 @@ void main() {
                 albumCount: 4,
               ),
               onBack: () {},
-              onPlayTrack: (track, queue, index) {
-                playedTrack = track;
-                playedQueue = queue;
-                playedIndex = index;
-              },
+              onPlayTrack:
+                  (track, queue, index, {intent = PlaybackStartIntent.audio}) {
+                    playedTrack = track;
+                    playedQueue = queue;
+                    playedIndex = index;
+                  },
             ),
           ),
         );
@@ -342,6 +345,40 @@ void main() {
       expect(find.text('Tell Your World'), findsOneWidget);
       expect(find.text('Unknown Mother-Goose'), findsNothing);
       expect(find.text('本地MV'), findsOneWidget);
+    });
+
+    testWidgets('vocalist featured MV card reports video intent', (
+      tester,
+    ) async {
+      PlaybackStartIntent? reportedIntent;
+
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(
+          _harness(
+            size: const Size(390, 844),
+            child: VocalistDetailScreen(
+              vocalist: const Vocalist(name: '初音ミク'),
+              onBack: () {},
+              onPlayTrack:
+                  (track, queue, index, {intent = PlaybackStartIntent.audio}) {
+                    reportedIntent = intent;
+                  },
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => _VocalistDetailFakeHttpClient());
+
+      await tester.tap(find.text('MV 1'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.ancestor(
+          of: find.text('Tell Your World'),
+          matching: find.byType(InkWell),
+        ),
+      );
+
+      expect(reportedIntent, PlaybackStartIntent.video);
     });
 
     testWidgets('mobile tabs render localized empty states', (tester) async {
@@ -580,11 +617,12 @@ void main() {
             size: const Size(1024, 768),
             child: VocalistDetailScreen(
               vocalist: const Vocalist(name: '初音ミク'),
-              onPlayTrack: (track, queue, index) {
-                playedTrack = track;
-                playedQueue = queue;
-                playedIndex = index;
-              },
+              onPlayTrack:
+                  (track, queue, index, {intent = PlaybackStartIntent.audio}) {
+                    playedTrack = track;
+                    playedQueue = queue;
+                    playedIndex = index;
+                  },
             ),
           ),
         );

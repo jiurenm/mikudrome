@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/screens/library_home_screen.dart';
 import 'package:mikudrome/screens/player_screen.dart';
 import 'package:mikudrome/services/playlist_repository.dart';
+// ignore: depend_on_referenced_packages
+import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -337,6 +340,370 @@ void main() {
     expect(
       find.byKey(const ValueKey('mobile-player-queue-peek')),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('mobile reopen forwards the latest initial progress to video', (
+    tester,
+  ) async {
+    final previousPlatform = VideoPlayerPlatform.instance;
+    final platform = _FakeVideoPlayerPlatform();
+    VideoPlayerPlatform.instance = platform;
+    addTearDown(() => VideoPlayerPlatform.instance = previousPlatform);
+
+    const track = Track(
+      id: 77,
+      title: 'Immersive MV',
+      audioPath: '/tmp/77.flac',
+      videoPath: '/tmp/77.mp4',
+      vocal: 'Miku',
+      lyrics: '[00:00.00]lyrics should not be shown',
+    );
+
+    var playbackMode = PlaybackMode.video;
+    var useExternalAudioPlayback = false;
+    double? initialProgress;
+    double? externalProgress;
+    var externalIsPlaying = false;
+    late StateSetter setState;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(size: Size(430, 900)),
+          child: StatefulBuilder(
+            builder: (context, stateSetter) {
+              setState = stateSetter;
+              return PlayerScreen(
+                track: track,
+                queue: const [track],
+                currentIndex: 0,
+                contextLabel: 'MV Test',
+                playbackMode: playbackMode,
+                onSelectTrack: (_) {},
+                onPrevious: () {},
+                onNext: () {},
+                onClose: () {},
+                onSwitchPlaybackMode: (_) {},
+                playbackOrderMode: PlaybackOrderMode.sequential,
+                onCyclePlaybackOrderMode: () {},
+                onPlaybackStateChanged:
+                    ({
+                      required bool isPlaying,
+                      required double progress,
+                      required String elapsedLabel,
+                      required String durationLabel,
+                    }) {},
+                initializeControllerOnStart: true,
+                initialProgress: initialProgress,
+                renderVideo: false,
+                useExternalAudioPlayback: useExternalAudioPlayback,
+                externalIsPlaying: externalIsPlaying,
+                externalProgress: externalProgress,
+                onExternalPlay: () async {},
+                onExternalPause: () async {},
+                onExternalSeekToFraction: (_) async {},
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    for (var i = 0; i < 40; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      if (!tester.binding.hasScheduledFrame) {
+        break;
+      }
+    }
+
+    setState(() {
+      playbackMode = PlaybackMode.audio;
+      useExternalAudioPlayback = true;
+      externalIsPlaying = true;
+      externalProgress = 0.42;
+      initialProgress = null;
+    });
+    for (var i = 0; i < 40; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      if (!tester.binding.hasScheduledFrame) {
+        break;
+      }
+    }
+
+    setState(() {
+      playbackMode = PlaybackMode.video;
+      useExternalAudioPlayback = false;
+      externalIsPlaying = false;
+      externalProgress = null;
+      initialProgress = 0.42;
+    });
+    for (var i = 0; i < 40; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      if (!tester.binding.hasScheduledFrame) {
+        break;
+      }
+    }
+
+    expect(platform.seekPositions, [const Duration(milliseconds: 420)]);
+  });
+
+  testWidgets(
+    'mobile video mode uses immersive MV surface without lyrics tabs',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      const track = Track(
+        id: 77,
+        title: 'Immersive MV',
+        audioPath: '/tmp/77.flac',
+        videoPath: '/tmp/77.mp4',
+        vocal: 'Miku',
+        lyrics: '[00:00.00]lyrics should not be shown',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(size: Size(430, 900)),
+            child: PlayerScreen(
+              track: track,
+              queue: const [track],
+              currentIndex: 0,
+              contextLabel: 'MV Test',
+              playbackMode: PlaybackMode.video,
+              onSelectTrack: (_) {},
+              onPrevious: () {},
+              onNext: () {},
+              onClose: () {},
+              onSwitchPlaybackMode: (_) {},
+              playbackOrderMode: PlaybackOrderMode.sequential,
+              onCyclePlaybackOrderMode: () {},
+              onPlaybackStateChanged:
+                  ({
+                    required bool isPlaying,
+                    required double progress,
+                    required String elapsedLabel,
+                    required String durationLabel,
+                  }) {},
+              initializeControllerOnStart: false,
+              renderVideo: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-mv-video-frame')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-player-artwork-frame')),
+        findsNothing,
+      );
+      expect(find.text('歌词'), findsNothing);
+      expect(find.text('lyrics should not be shown'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('mobile-mv-queue-button')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('mobile MV fullscreen locks and restores orientation', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    var mediaSize = const Size(430, 900);
+
+    final platformCalls = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        platformCalls.add(call);
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    const track = Track(
+      id: 78,
+      title: 'Fullscreen MV',
+      audioPath: '/tmp/78.flac',
+      videoPath: '/tmp/78.mp4',
+    );
+
+    Widget buildPlayer() {
+      return MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(size: mediaSize),
+          child: PlayerScreen(
+            track: track,
+            queue: const [track],
+            currentIndex: 0,
+            contextLabel: 'MV Test',
+            playbackMode: PlaybackMode.video,
+            onSelectTrack: (_) {},
+            onPrevious: () {},
+            onNext: () {},
+            onClose: () {},
+            onSwitchPlaybackMode: (_) {},
+            playbackOrderMode: PlaybackOrderMode.sequential,
+            onCyclePlaybackOrderMode: () {},
+            onPlaybackStateChanged:
+                ({
+                  required bool isPlaying,
+                  required double progress,
+                  required String elapsedLabel,
+                  required String durationLabel,
+                }) {},
+            initializeControllerOnStart: false,
+            renderVideo: false,
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildPlayer());
+    await tester.pump();
+
+    expect(find.byTooltip('全屏'), findsOneWidget);
+    await tester.tap(find.byTooltip('全屏'));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.fullscreen_exit), findsOneWidget);
+    expect(
+      platformCalls
+          .where(
+            (call) => call.method == 'SystemChrome.setPreferredOrientations',
+          )
+          .map((call) => call.arguments),
+      contains(
+        equals([
+          'DeviceOrientation.landscapeLeft',
+          'DeviceOrientation.landscapeRight',
+        ]),
+      ),
+    );
+
+    mediaSize = const Size(900, 430);
+    await tester.binding.setSurfaceSize(mediaSize);
+    await tester.pumpWidget(buildPlayer());
+    await tester.pump();
+
+    final exitControl = tester.widget<IconButton>(
+      find
+          .ancestor(
+            of: find.byIcon(Icons.fullscreen_exit),
+            matching: find.byType(IconButton),
+          )
+          .first,
+    );
+    exitControl.onPressed!();
+    await tester.pump();
+
+    expect(
+      platformCalls
+          .where(
+            (call) => call.method == 'SystemChrome.setPreferredOrientations',
+          )
+          .map((call) => call.arguments),
+      contains(
+        equals(
+          DeviceOrientation.values.map((value) => value.toString()).toList(),
+        ),
+      ),
+    );
+  });
+
+  testWidgets('mobile MV fullscreen restores orientation on dispose', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final platformCalls = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        platformCalls.add(call);
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    const track = Track(
+      id: 79,
+      title: 'Disposable MV',
+      audioPath: '/tmp/79.flac',
+      videoPath: '/tmp/79.mp4',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(size: Size(430, 900)),
+          child: PlayerScreen(
+            track: track,
+            queue: const [track],
+            currentIndex: 0,
+            contextLabel: 'MV Test',
+            playbackMode: PlaybackMode.video,
+            onSelectTrack: (_) {},
+            onPrevious: () {},
+            onNext: () {},
+            onClose: () {},
+            onSwitchPlaybackMode: (_) {},
+            playbackOrderMode: PlaybackOrderMode.sequential,
+            onCyclePlaybackOrderMode: () {},
+            onPlaybackStateChanged:
+                ({
+                  required bool isPlaying,
+                  required double progress,
+                  required String elapsedLabel,
+                  required String durationLabel,
+                }) {},
+            initializeControllerOnStart: false,
+            renderVideo: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('全屏'));
+    await tester.pump();
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
+    expect(
+      platformCalls
+          .where(
+            (call) => call.method == 'SystemChrome.setPreferredOrientations',
+          )
+          .map((call) => call.arguments),
+      contains(
+        equals(
+          DeviceOrientation.values.map((value) => value.toString()).toList(),
+        ),
+      ),
     );
   });
 
@@ -846,4 +1213,79 @@ class _FavoriteRecordingHttpHeaders implements HttpHeaders {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeVideoPlayerPlatform extends VideoPlayerPlatform {
+  final List<Duration> seekPositions = [];
+  final Map<int, StreamController<VideoEvent>> _streams = {};
+  final Map<int, Duration> _positions = {};
+  var _nextPlayerId = 0;
+
+  @override
+  Future<void> init() async {}
+
+  @override
+  Future<int?> createWithOptions(VideoCreationOptions options) async {
+    final playerId = _nextPlayerId++;
+    final stream = StreamController<VideoEvent>();
+    _streams[playerId] = stream;
+    stream.add(
+      VideoEvent(
+        eventType: VideoEventType.initialized,
+        size: const Size(100, 100),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+    return playerId;
+  }
+
+  @override
+  Stream<VideoEvent> videoEventsFor(int playerId) => _streams[playerId]!.stream;
+
+  @override
+  Future<void> play(int playerId) async {}
+
+  @override
+  Future<void> pause(int playerId) async {}
+
+  @override
+  Future<void> seekTo(int playerId, Duration position) async {
+    seekPositions.add(position);
+    _positions[playerId] = position;
+  }
+
+  @override
+  Future<void> dispose(int playerId) async {
+    await _streams.remove(playerId)?.close();
+  }
+
+  @override
+  Future<void> setLooping(int playerId, bool looping) async {}
+
+  @override
+  Future<void> setVolume(int playerId, double volume) async {}
+
+  @override
+  Future<void> setPlaybackSpeed(int playerId, double speed) async {}
+
+  @override
+  Future<Duration> getPosition(int playerId) async =>
+      _positions[playerId] ?? Duration.zero;
+
+  @override
+  Widget buildViewWithOptions(VideoViewOptions options) {
+    return const ColoredBox(color: Colors.black);
+  }
+
+  @override
+  Future<void> setMixWithOthers(bool mixWithOthers) async {}
+
+  @override
+  Future<void> setAllowBackgroundPlayback(bool allowBackgroundPlayback) async {}
+
+  @override
+  Future<void> setWebOptions(
+    int playerId,
+    VideoPlayerWebOptions options,
+  ) async {}
 }

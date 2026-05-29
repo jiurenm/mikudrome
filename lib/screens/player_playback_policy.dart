@@ -1,4 +1,36 @@
-import 'library_home_screen.dart';
+import '../models/playback_modes.dart';
+import '../models/track.dart';
+
+export '../models/playback_modes.dart' show PlaybackStartIntent;
+
+PlaybackMode resolvePlaybackModeForIntent({
+  required Track track,
+  required bool isMobileSurface,
+  required PlaybackStartIntent intent,
+  required bool preferVideoOnExpand,
+  required bool playerIsOpen,
+  PlaybackMode? currentPlaybackMode,
+}) {
+  if (!isMobileSurface) {
+    if (intent == PlaybackStartIntent.preserve && currentPlaybackMode != null) {
+      return track.hasVideo ? currentPlaybackMode : PlaybackMode.audio;
+    }
+    return track.hasVideo ? PlaybackMode.video : PlaybackMode.audio;
+  }
+
+  if (intent == PlaybackStartIntent.video) {
+    return track.hasVideo ? PlaybackMode.video : PlaybackMode.audio;
+  }
+
+  if (intent == PlaybackStartIntent.preserve &&
+      preferVideoOnExpand &&
+      playerIsOpen &&
+      track.hasVideo) {
+    return PlaybackMode.video;
+  }
+
+  return PlaybackMode.audio;
+}
 
 enum PlaybackCompletionCommand { none, restartTrack, playNext }
 

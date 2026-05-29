@@ -4,8 +4,10 @@ import 'package:mikudrome/api/api.dart';
 import 'package:mikudrome/models/album.dart';
 import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/screens/album_detail_screen.dart';
+import 'package:mikudrome/screens/player_playback_policy.dart';
 import 'package:mikudrome/widgets/album_detail/album_action_bar.dart';
 import 'package:mikudrome/widgets/album_detail/album_hero_section.dart';
+import 'package:mikudrome/widgets/album_detail/album_track_list.dart';
 
 const _album = Album(
   id: '39',
@@ -27,10 +29,27 @@ const _tracks = [
   ),
 ];
 
+const _tracksWithMv = [
+  Track(
+    id: 1,
+    title: 'Track With MV',
+    audioPath: '/audio/1.flac',
+    videoPath: '/video/1.mp4',
+    durationSeconds: 0,
+  ),
+];
+
 class _FakeAlbumClient extends ApiClient {
   @override
   Future<({Album album, List<Track> tracks})?> getAlbum(String id) async {
     return (album: _album, tracks: _tracks);
+  }
+}
+
+class _FakeAlbumMvClient extends ApiClient {
+  @override
+  Future<({Album album, List<Track> tracks})?> getAlbum(String id) async {
+    return (album: _album, tracks: _tracksWithMv);
   }
 }
 
@@ -118,6 +137,88 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Add to Playlist'), findsOneWidget);
+  });
+
+  testWidgets('album row tap reports the default audio intent', (tester) async {
+    PlaybackStartIntent? reportedIntent;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(size: Size(390, 844)),
+          child: AlbumDetailScreen(
+            album: _album,
+            client: _FakeAlbumMvClient(),
+            onPlayTrack:
+                (track, queue, index, {intent = PlaybackStartIntent.audio}) {
+                  reportedIntent = intent;
+                },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Track With MV'));
+
+    expect(reportedIntent, PlaybackStartIntent.audio);
+  });
+
+  testWidgets('album MV badge reports video intent', (tester) async {
+    final reportedIntents = <PlaybackStartIntent>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(size: Size(390, 844)),
+          child: AlbumDetailScreen(
+            album: _album,
+            client: _FakeAlbumMvClient(),
+            onPlayTrack:
+                (track, queue, index, {intent = PlaybackStartIntent.audio}) {
+                  reportedIntents.add(intent);
+                },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('album-track-row-mv-1')));
+
+    expect(reportedIntents, [PlaybackStartIntent.video]);
+  });
+
+  testWidgets('album track list forwards MV badge as named video intent', (
+    tester,
+  ) async {
+    final reportedIntents = <PlaybackStartIntent>[];
+
+    await tester.pumpWidget(
+      _harness(
+        size: const Size(390, 844),
+        child: CustomScrollView(
+          slivers: [
+            AlbumTrackList(
+              tracks: _tracksWithMv,
+              isMultiDisc: false,
+              tracksByDisc: const {},
+              baseUrl: 'http://example.test',
+              onDownloadComplete: () {},
+              onPlayTrack:
+                  (track, index, {queue, intent = PlaybackStartIntent.audio}) {
+                    reportedIntents.add(intent);
+                  },
+              showTopMessage: (_, {required isError}) {},
+            ),
+          ],
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('album-track-row-mv-1')));
+
+    expect(reportedIntents, [PlaybackStartIntent.video]);
   });
 
   testWidgets('desktop album actions keep the existing desktop play label', (
