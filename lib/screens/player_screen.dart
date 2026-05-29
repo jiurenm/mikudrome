@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 import '../api/api.dart';
@@ -681,6 +682,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
     _controller?.dispose();
     _webAudioPlayer.removeListener(_handleWebAudioPlayerChanged);
+    if (_isFullscreen) {
+      unawaited(
+        SystemChrome.setPreferredOrientations(DeviceOrientation.values),
+      );
+    }
     super.dispose();
   }
 
@@ -813,6 +819,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void _enterFullscreen() {
     if (!_isVideoMode) return;
     final shouldResume = _controller?.value.isPlaying ?? false;
+    if (isMobile(context)) {
+      unawaited(
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]),
+      );
+    }
     setState(() {
       _isFullscreen = true;
       _showFullscreenChrome = true;
@@ -824,6 +838,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void _exitFullscreen() {
     final shouldResume = _controller?.value.isPlaying ?? false;
     _fullscreenChromeTimer?.cancel();
+    if (isMobile(context)) {
+      unawaited(
+        SystemChrome.setPreferredOrientations(DeviceOrientation.values),
+      );
+    }
     setState(() {
       _isFullscreen = false;
       _showFullscreenChrome = true;

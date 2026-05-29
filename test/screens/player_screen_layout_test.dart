@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/screens/library_home_screen.dart';
@@ -513,6 +514,110 @@ void main() {
       );
     },
   );
+
+  testWidgets('mobile MV fullscreen locks and restores orientation', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final platformCalls = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        platformCalls.add(call);
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    const track = Track(
+      id: 78,
+      title: 'Fullscreen MV',
+      audioPath: '/tmp/78.flac',
+      videoPath: '/tmp/78.mp4',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(size: Size(430, 900)),
+          child: PlayerScreen(
+            track: track,
+            queue: const [track],
+            currentIndex: 0,
+            contextLabel: 'MV Test',
+            playbackMode: PlaybackMode.video,
+            onSelectTrack: (_) {},
+            onPrevious: () {},
+            onNext: () {},
+            onClose: () {},
+            onSwitchPlaybackMode: (_) {},
+            playbackOrderMode: PlaybackOrderMode.sequential,
+            onCyclePlaybackOrderMode: () {},
+            onPlaybackStateChanged:
+                ({
+                  required bool isPlaying,
+                  required double progress,
+                  required String elapsedLabel,
+                  required String durationLabel,
+                }) {},
+            initializeControllerOnStart: false,
+            renderVideo: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byTooltip('全屏'), findsOneWidget);
+    await tester.tap(find.byTooltip('全屏'));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.fullscreen_exit), findsOneWidget);
+    expect(
+      platformCalls
+          .where(
+            (call) => call.method == 'SystemChrome.setPreferredOrientations',
+          )
+          .map((call) => call.arguments),
+      contains(
+        equals([
+          'DeviceOrientation.landscapeLeft',
+          'DeviceOrientation.landscapeRight',
+        ]),
+      ),
+    );
+
+    final exitControl = tester.widget<IconButton>(
+      find
+          .ancestor(
+            of: find.byIcon(Icons.fullscreen_exit),
+            matching: find.byType(IconButton),
+          )
+          .first,
+    );
+    exitControl.onPressed!();
+    await tester.pump();
+
+    expect(
+      platformCalls
+          .where(
+            (call) => call.method == 'SystemChrome.setPreferredOrientations',
+          )
+          .map((call) => call.arguments),
+      contains(
+        equals(
+          DeviceOrientation.values.map((value) => value.toString()).toList(),
+        ),
+      ),
+    );
+  });
 
   testWidgets('mobile title favorite button toggles favorite state', (
     tester,
@@ -1091,5 +1196,8 @@ class _FakeVideoPlayerPlatform extends VideoPlayerPlatform {
   Future<void> setAllowBackgroundPlayback(bool allowBackgroundPlayback) async {}
 
   @override
-  Future<void> setWebOptions(int playerId, VideoPlayerWebOptions options) async {}
+  Future<void> setWebOptions(
+    int playerId,
+    VideoPlayerWebOptions options,
+  ) async {}
 }
