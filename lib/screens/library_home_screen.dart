@@ -158,6 +158,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   double? _resumeProgress;
   VideoPlayerController? _videoController;
   int _mobileVideoCollapseRequest = 0;
+  int? _pendingMobileVideoCollapseAudioRequest;
+  Track? _pendingMobileVideoCollapseAudioTrack;
+  int? _pendingMobileVideoCollapseAudioIndex;
 
   @override
   void initState() {
@@ -810,6 +813,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     if (!mounted || !isMobile(context) || _playbackMode != PlaybackMode.audio) {
       return;
     }
+    if (_isStaleMobileVideoCollapseAudioState(state)) {
+      return;
+    }
 
     final previousTrackId = _currentTrack?.id;
     final track = state.track;
@@ -1226,6 +1232,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
                 .round(),
           )
         : Duration.zero;
+    _pendingMobileVideoCollapseAudioRequest = request;
+    _pendingMobileVideoCollapseAudioTrack = currentTrack;
+    _pendingMobileVideoCollapseAudioIndex = index;
     try {
       await _playMobileAudioQueue(
         queue: _playerQueue,
@@ -1234,6 +1243,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       );
     } catch (_) {
       if (!mounted) return;
+      _clearPendingMobileVideoCollapseAudio(request);
       if (!_isCurrentMobileVideoCollapseRequest(
         request: request,
         track: currentTrack,
@@ -1254,13 +1264,48 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       track: currentTrack,
       index: index,
     )) {
+      _clearPendingMobileVideoCollapseAudio(request);
+      await _repairMobileAudioAfterStaleCollapse();
       return;
     }
+    _clearPendingMobileVideoCollapseAudio(request);
     setState(() {
       _playbackMode = PlaybackMode.audio;
       _showPlayer = false;
       _preferVideoOnExpand = currentTrack.hasVideo;
     });
+  }
+
+  bool _isStaleMobileVideoCollapseAudioState(MobileAudioPlaybackState state) {
+    final request = _pendingMobileVideoCollapseAudioRequest;
+    final track = _pendingMobileVideoCollapseAudioTrack;
+    final index = _pendingMobileVideoCollapseAudioIndex;
+    final stateTrack = state.track;
+    if (request == null ||
+        track == null ||
+        index == null ||
+        stateTrack?.id != track.id ||
+        state.index != index) {
+      return false;
+    }
+    return !_isCurrentMobileVideoCollapseRequest(
+      request: request,
+      track: track,
+      index: index,
+    );
+  }
+
+  void _clearPendingMobileVideoCollapseAudio(int request) {
+    if (_pendingMobileVideoCollapseAudioRequest != request) return;
+    _pendingMobileVideoCollapseAudioRequest = null;
+    _pendingMobileVideoCollapseAudioTrack = null;
+    _pendingMobileVideoCollapseAudioIndex = null;
+  }
+
+  Future<void> _repairMobileAudioAfterStaleCollapse() async {
+    try {
+      await _routeMobileAudioPlaybackForCurrentMode();
+    } catch (_) {}
   }
 
   bool _isCurrentMobileVideoCollapseRequest({

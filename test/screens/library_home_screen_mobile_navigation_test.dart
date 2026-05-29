@@ -442,6 +442,49 @@ void main() {
     }, createHttpClient: (_) => _LibraryFakeHttpClient());
   });
 
+  testWidgets('stale MV collapse completion repairs current audio queue', (
+    tester,
+  ) async {
+    final service = _FirstPlayQueueDelayedMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+      await _openAlbumMvFromDiscoverHome(tester);
+
+      await tester.drag(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        const Offset(0, 700),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(service.playQueueAttempts, 1);
+
+      final nextButton = find.descendant(
+        of: find.byKey(const ValueKey('mobile-mv-player-surface')),
+        matching: find.byIcon(Icons.skip_next),
+      );
+      final nextControl = tester.widget<IconButton>(
+        find.ancestor(of: nextButton, matching: find.byType(IconButton)).first,
+      );
+      nextControl.onPressed!();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(service.playQueueAttempts, 2);
+      expect(service.currentState.index, 1);
+
+      service.completeFirstPlayQueue();
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      expect(service.playQueueAttempts, 3);
+      expect(service.currentState.index, 1);
+      expect(service.playedIndexes.last, 1);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+  });
+
   testWidgets('system back returns from a mobile destination to My Music', (
     tester,
   ) async {
@@ -985,6 +1028,51 @@ class _DelayedMobileAudioPlaybackService
   @override
   Future<void> dispose() async {
     completePlayQueue();
+    await super.dispose();
+  }
+}
+
+class _FirstPlayQueueDelayedMobileAudioPlaybackService
+    extends _RecordingMobileAudioPlaybackService {
+  final Completer<void> _firstPlayQueueCompleter = Completer<void>();
+  int playQueueAttempts = 0;
+
+  void completeFirstPlayQueue() {
+    if (!_firstPlayQueueCompleter.isCompleted) {
+      _firstPlayQueueCompleter.complete();
+    }
+  }
+
+  @override
+  Future<void> playQueue({
+    required List<Track> queue,
+    required int index,
+    required AudioUrlForTrack audioUrlForTrack,
+    CoverUrlForTrack? coverUrlForTrack,
+    MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
+    Duration initialPosition = Duration.zero,
+    TrackFavoriteStatus? isTrackFavorited,
+    TrackFavoriteToggle? toggleTrackFavorite,
+  }) async {
+    playQueueAttempts += 1;
+    if (playQueueAttempts == 1) {
+      await _firstPlayQueueCompleter.future;
+    }
+    await super.playQueue(
+      queue: queue,
+      index: index,
+      audioUrlForTrack: audioUrlForTrack,
+      coverUrlForTrack: coverUrlForTrack,
+      orderMode: orderMode,
+      initialPosition: initialPosition,
+      isTrackFavorited: isTrackFavorited,
+      toggleTrackFavorite: toggleTrackFavorite,
+    );
+  }
+
+  @override
+  Future<void> dispose() async {
+    completeFirstPlayQueue();
     await super.dispose();
   }
 }
