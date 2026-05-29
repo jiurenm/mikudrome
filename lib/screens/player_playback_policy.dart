@@ -9,8 +9,12 @@ PlaybackMode resolvePlaybackModeForIntent({
   required PlaybackStartIntent intent,
   required bool preferVideoOnExpand,
   required bool playerIsOpen,
+  PlaybackMode? currentPlaybackMode,
 }) {
   if (!isMobileSurface) {
+    if (intent == PlaybackStartIntent.preserve && currentPlaybackMode != null) {
+      return track.hasVideo ? currentPlaybackMode : PlaybackMode.audio;
+    }
     return track.hasVideo ? PlaybackMode.video : PlaybackMode.audio;
   }
 

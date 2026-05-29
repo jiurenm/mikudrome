@@ -153,6 +153,23 @@ void main() {
         );
       },
     );
+
+    test(
+      'desktop preserve intent keeps the current audio mode for MV tracks',
+      () {
+        expect(
+          resolvePlaybackModeForIntent(
+            track: _trackWithVideo,
+            isMobileSurface: false,
+            intent: PlaybackStartIntent.preserve,
+            preferVideoOnExpand: false,
+            playerIsOpen: true,
+            currentPlaybackMode: PlaybackMode.audio,
+          ),
+          PlaybackMode.audio,
+        );
+      },
+    );
   });
 
   group('didPlaybackReachEnd', () {

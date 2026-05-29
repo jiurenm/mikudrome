@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/screens/library_home_screen.dart';
+import 'package:mikudrome/screens/player_screen.dart';
 import 'package:mikudrome/services/mobile_audio_playback.dart';
 import 'package:mikudrome/services/playback_storage.dart';
 import 'package:mikudrome/widgets/mobile_mini_player.dart';
 import 'package:mikudrome/widgets/mobile_player_sheet.dart';
+import 'package:mikudrome/widgets/player/mobile_mv_player_surface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -556,6 +558,110 @@ void main() {
       );
       expect(find.text('Ghost Track 2'), findsWidgets);
       expect(service.currentState.index, 1);
+
+      _invokeScopedIconButton(
+        tester,
+        scope: find.byKey(const ValueKey('mobile-player-immersive')),
+        icon: Icons.skip_next,
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+      expect(find.text('Ghost Track 3'), findsWidgets);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+  });
+
+  testWidgets('explicit switch to audio keeps later MV queue items audio', (
+    tester,
+  ) async {
+    final service = _RecordingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+      await _openAlbumMvFromDiscoverHome(tester);
+
+      final surface = tester.widget<MobileMvPlayerSurface>(
+        find.byType(MobileMvPlayerSurface),
+      );
+      surface.onSwitchToAudio();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey('mobile-player-immersive')),
+        findsOneWidget,
+      );
+
+      _invokeScopedIconButton(
+        tester,
+        scope: find.byKey(const ValueKey('mobile-player-immersive')),
+        icon: Icons.skip_next,
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      _invokeScopedIconButton(
+        tester,
+        scope: find.byKey(const ValueKey('mobile-player-immersive')),
+        icon: Icons.skip_next,
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-player-immersive')),
+        findsOneWidget,
+      );
+      expect(find.text('Ghost Track 3'), findsWidgets);
+      expect(service.currentState.index, 2);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+  });
+
+  testWidgets('explicit switch to MV keeps later MV queue items video', (
+    tester,
+  ) async {
+    final service = _RecordingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('GHOST').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ghost Track'));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey('mobile-player-immersive')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsNothing,
+      );
+
+      final player = tester.widget<PlayerScreen>(find.byType(PlayerScreen));
+      player.onSwitchPlaybackMode(PlaybackMode.video);
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+
+      _invokeScopedIconButton(
+        tester,
+        scope: find.byKey(const ValueKey('mobile-mv-player-surface')),
+        icon: Icons.skip_next,
+      );
+      await tester.pump(const Duration(milliseconds: 500));
 
       _invokeScopedIconButton(
         tester,

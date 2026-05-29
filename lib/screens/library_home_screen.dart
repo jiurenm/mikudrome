@@ -932,6 +932,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       intent: PlaybackStartIntent.preserve,
       preferVideoOnExpand: _preferVideoOnExpand,
       playerIsOpen: _showPlayer,
+      currentPlaybackMode: _playbackMode,
     );
   }
 
@@ -1185,6 +1186,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     _invalidateMobileVideoCollapseRequest();
     setState(() {
       _playbackMode = mode;
+      if (_isMobilePlaybackSurface) {
+        _preferVideoOnExpand =
+            mode == PlaybackMode.video && currentTrack.hasVideo;
+      }
       _isPlaying = true;
     });
     if (_isMobilePlaybackSurface) {
