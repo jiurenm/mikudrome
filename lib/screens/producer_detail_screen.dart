@@ -18,7 +18,7 @@ import 'album_detail_screen.dart';
 import 'player_playback_policy.dart';
 
 class ProducerDetailScreen extends StatefulWidget {
-  ProducerDetailScreen({
+  const ProducerDetailScreen({
     super.key,
     required this.producer,
     this.baseUrl = '',

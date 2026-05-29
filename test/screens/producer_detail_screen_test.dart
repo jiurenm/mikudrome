@@ -449,6 +449,38 @@ void main() {
     );
   });
 
+  testWidgets('producer MV badge reports MV callback without row play', (
+    tester,
+  ) async {
+    final callbacks = <String>[];
+
+    await tester.pumpWidget(
+      _harness(
+        size: const Size(390, 844),
+        child: Scaffold(
+          body: ProducerTrackList(
+            tracks: const [
+              Track(
+                id: 1,
+                title: 'Track A',
+                audioPath: '/audio/a.flac',
+                videoPath: '/video/a.mp4',
+              ),
+            ],
+            baseUrl: 'http://example.test',
+            useMobileLayout: true,
+            onPlay: (_, __) => callbacks.add('audio'),
+            onPlayMv: (_, __) => callbacks.add('video'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('producer-track-row-mv-1')));
+
+    expect(callbacks, ['video']);
+  });
+
   testWidgets(
     'producer detail pull-to-refresh updates visible data and cache',
     (tester) async {

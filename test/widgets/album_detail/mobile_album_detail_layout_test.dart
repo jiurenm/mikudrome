@@ -164,7 +164,7 @@ void main() {
   });
 
   testWidgets('album MV badge reports video intent', (tester) async {
-    PlaybackStartIntent? reportedIntent;
+    final reportedIntents = <PlaybackStartIntent>[];
 
     await tester.pumpWidget(
       MaterialApp(
@@ -175,7 +175,7 @@ void main() {
             client: _FakeAlbumMvClient(),
             onPlayTrack:
                 (track, queue, index, {intent = PlaybackStartIntent.audio}) {
-                  reportedIntent = intent;
+                  reportedIntents.add(intent);
                 },
           ),
         ),
@@ -185,7 +185,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('album-track-row-mv-1')));
 
-    expect(reportedIntent, PlaybackStartIntent.video);
+    expect(reportedIntents, [PlaybackStartIntent.video]);
   });
 
   testWidgets('desktop album actions keep the existing desktop play label', (

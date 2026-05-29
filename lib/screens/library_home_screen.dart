@@ -6,6 +6,7 @@ import 'package:video_player/video_player.dart';
 
 import '../api/api.dart';
 import '../config/app_config_controller.dart';
+import '../models/playback_modes.dart';
 import '../models/track.dart';
 import '../models/video.dart';
 import '../services/mobile_audio_playback.dart'
@@ -44,9 +45,7 @@ import 'playlist_detail_screen.dart';
 import 'favorites_screen.dart';
 import 'server_setup_screen.dart';
 
-enum PlaybackMode { video, audio }
-
-enum PlaybackOrderMode { sequential, listLoop, singleLoop }
+export '../models/playback_modes.dart';
 
 @visibleForTesting
 PlaybackMode defaultPlaybackModeForTrack(

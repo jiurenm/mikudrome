@@ -71,7 +71,7 @@ void _showTopMessage(
 }
 
 class AlbumDetailScreen extends StatefulWidget {
-  AlbumDetailScreen({
+  const AlbumDetailScreen({
     super.key,
     required this.album,
     this.baseUrl = '',
