@@ -436,7 +436,7 @@ void main() {
               ),
             ],
             baseUrl: 'http://example.test',
-            onPlay: (_, __) {},
+            onPlay: (_, _, {intent = PlaybackStartIntent.audio}) {},
           ),
         ),
       ),
@@ -452,7 +452,7 @@ void main() {
   testWidgets('producer MV badge reports MV callback without row play', (
     tester,
   ) async {
-    final callbacks = <String>[];
+    final reportedIntents = <PlaybackStartIntent>[];
 
     await tester.pumpWidget(
       _harness(
@@ -469,8 +469,9 @@ void main() {
             ],
             baseUrl: 'http://example.test',
             useMobileLayout: true,
-            onPlay: (_, __) => callbacks.add('audio'),
-            onPlayMv: (_, __) => callbacks.add('video'),
+            onPlay: (track, index, {intent = PlaybackStartIntent.audio}) {
+              reportedIntents.add(intent);
+            },
           ),
         ),
       ),
@@ -478,7 +479,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('producer-track-row-mv-1')));
 
-    expect(callbacks, ['video']);
+    expect(reportedIntents, [PlaybackStartIntent.video]);
   });
 
   testWidgets(

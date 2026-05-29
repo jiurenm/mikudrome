@@ -7,6 +7,7 @@ import 'package:mikudrome/screens/album_detail_screen.dart';
 import 'package:mikudrome/screens/player_playback_policy.dart';
 import 'package:mikudrome/widgets/album_detail/album_action_bar.dart';
 import 'package:mikudrome/widgets/album_detail/album_hero_section.dart';
+import 'package:mikudrome/widgets/album_detail/album_track_list.dart';
 
 const _album = Album(
   id: '39',
@@ -182,6 +183,38 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('album-track-row-mv-1')));
+
+    expect(reportedIntents, [PlaybackStartIntent.video]);
+  });
+
+  testWidgets('album track list forwards MV badge as named video intent', (
+    tester,
+  ) async {
+    final reportedIntents = <PlaybackStartIntent>[];
+
+    await tester.pumpWidget(
+      _harness(
+        size: const Size(390, 844),
+        child: CustomScrollView(
+          slivers: [
+            AlbumTrackList(
+              tracks: _tracksWithMv,
+              isMultiDisc: false,
+              tracksByDisc: const {},
+              baseUrl: 'http://example.test',
+              onDownloadComplete: () {},
+              onPlayTrack:
+                  (track, index, {queue, intent = PlaybackStartIntent.audio}) {
+                    reportedIntents.add(intent);
+                  },
+              showTopMessage: (_, {required isError}) {},
+            ),
+          ],
+        ),
+      ),
+    );
 
     await tester.tap(find.byKey(const ValueKey('album-track-row-mv-1')));
 

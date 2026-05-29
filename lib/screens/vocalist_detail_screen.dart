@@ -227,12 +227,9 @@ class _VocalistDetailScreenState extends State<VocalistDetailScreen> {
                   ProducerTrackList(
                     tracks: _tracks,
                     baseUrl: ApiConfig.defaultBaseUrl,
-                    onPlay: (track, index) => _playTrack(track, index),
-                    onPlayMv: (track, index) => _playTrack(
-                      track,
-                      index,
-                      intent: PlaybackStartIntent.video,
-                    ),
+                    onPlay:
+                        (track, index, {intent = PlaybackStartIntent.audio}) =>
+                            _playTrack(track, index, intent: intent),
                   ),
                 ]),
               ),
@@ -336,9 +333,8 @@ class _VocalistDetailScreenState extends State<VocalistDetailScreen> {
               tracks: _tracks,
               baseUrl: ApiConfig.defaultBaseUrl,
               useMobileLayout: true,
-              onPlay: (track, index) => _playTrack(track, index),
-              onPlayMv: (track, index) =>
-                  _playTrack(track, index, intent: PlaybackStartIntent.video),
+              onPlay: (track, index, {intent = PlaybackStartIntent.audio}) =>
+                  _playTrack(track, index, intent: intent),
             )
           else
             FeaturedMvsGrid(

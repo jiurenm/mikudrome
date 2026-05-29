@@ -1,7 +1,7 @@
 import '../models/playback_modes.dart';
 import '../models/track.dart';
 
-enum PlaybackStartIntent { audio, video, preserve }
+export '../models/playback_modes.dart' show PlaybackStartIntent;
 
 PlaybackMode resolvePlaybackModeForIntent({
   required Track track,

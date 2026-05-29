@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../models/playback_modes.dart';
 import '../../models/track.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/responsive.dart';
@@ -10,14 +11,13 @@ class ProducerTrackList extends StatelessWidget {
     required this.tracks,
     required this.baseUrl,
     required this.onPlay,
-    this.onPlayMv,
     this.useMobileLayout = false,
   });
 
   final List<Track> tracks;
   final String baseUrl;
-  final void Function(Track track, int index) onPlay;
-  final void Function(Track track, int index)? onPlayMv;
+  final void Function(Track track, int index, {PlaybackStartIntent intent})
+  onPlay;
   final bool useMobileLayout;
 
   @override
@@ -51,10 +51,15 @@ class ProducerTrackList extends StatelessWidget {
                 key: ValueKey('producer-track-mobile-row-${e.value.id}'),
                 index: e.key + 1,
                 track: e.value,
-                onPlay: () => onPlay(e.value, e.key),
-                onPlayMv: onPlayMv == null
-                    ? null
-                    : () => onPlayMv!(e.value, e.key),
+                onPlay: () =>
+                    onPlay(e.value, e.key, intent: PlaybackStartIntent.audio),
+                onPlayMv: e.value.hasVideo
+                    ? () => onPlay(
+                        e.value,
+                        e.key,
+                        intent: PlaybackStartIntent.video,
+                      )
+                    : null,
               ),
             ),
         ],
@@ -88,10 +93,15 @@ class ProducerTrackList extends StatelessWidget {
               index: e.key + 1,
               track: e.value,
               baseUrl: baseUrl,
-              onPlay: () => onPlay(e.value, e.key),
-              onPlayMv: onPlayMv == null
-                  ? null
-                  : () => onPlayMv!(e.value, e.key),
+              onPlay: () =>
+                  onPlay(e.value, e.key, intent: PlaybackStartIntent.audio),
+              onPlayMv: e.value.hasVideo
+                  ? () => onPlay(
+                      e.value,
+                      e.key,
+                      intent: PlaybackStartIntent.video,
+                    )
+                  : null,
             ),
           ),
         ],

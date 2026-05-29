@@ -291,13 +291,16 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                                   tracks: _tracks,
                                   baseUrl: widget._effectiveBaseUrl,
                                   useMobileLayout: true,
-                                  onPlay: (track, index) =>
-                                      _playTrack(track, index),
-                                  onPlayMv: (track, index) => _playTrack(
-                                    track,
-                                    index,
-                                    intent: PlaybackStartIntent.video,
-                                  ),
+                                  onPlay:
+                                      (
+                                        track,
+                                        index, {
+                                        intent = PlaybackStartIntent.audio,
+                                      }) => _playTrack(
+                                        track,
+                                        index,
+                                        intent: intent,
+                                      ),
                                 ),
                               ]),
                             )

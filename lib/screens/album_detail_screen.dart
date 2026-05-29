@@ -254,12 +254,6 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                     baseUrl: widget._effectiveBaseUrl,
                     onDownloadComplete: _loadAlbum,
                     onPlayTrack: _playTrack,
-                    onPlayMvTrack: (track, index, {queue}) => _playTrack(
-                      track,
-                      index,
-                      queue: queue,
-                      intent: PlaybackStartIntent.video,
-                    ),
                     showTopMessage: (message, {required isError}) =>
                         _showTopMessage(context, message, isError: isError),
                     currentPlayingTrackId: widget.currentPlayingTrackId,
