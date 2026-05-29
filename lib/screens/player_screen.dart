@@ -356,6 +356,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _initializePlayback() async {
+    _pendingSeekProgress = widget.initialProgress;
     _completionGate.reset();
     final previous = _controller;
     _controller = null;
