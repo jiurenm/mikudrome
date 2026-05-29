@@ -146,12 +146,7 @@ class _MobileMvPlayerSurfaceState extends State<MobileMvPlayerSurface> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              IconButton(
-                onPressed: widget.onEnterFullscreen,
-                icon: const Icon(Icons.fullscreen, size: 28),
-                color: Colors.white,
-                tooltip: '全屏',
-              ),
+              const SizedBox(width: 48, height: 48),
             ],
           ),
         ),

@@ -80,6 +80,7 @@ void main() {
       find.byKey(const ValueKey('mobile-mv-queue-button')),
       findsOneWidget,
     );
+    expect(find.byTooltip('全屏'), findsOneWidget);
 
     final aspectRatio = tester.widget<AspectRatio>(
       find.byKey(const ValueKey('mobile-mv-video-frame')),
