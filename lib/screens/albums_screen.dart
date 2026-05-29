@@ -10,7 +10,7 @@ import 'album_detail_screen.dart';
 /// Main library: album grid from API (media/Artist/Album), with search.
 /// When [onAlbumTap] is set, opens album in-shell; otherwise pushes a new route.
 class AlbumsScreen extends StatefulWidget {
-  AlbumsScreen({
+  const AlbumsScreen({
     super.key,
     this.baseUrl = '',
     this.onAlbumTap,

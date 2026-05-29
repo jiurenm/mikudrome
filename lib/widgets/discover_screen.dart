@@ -82,7 +82,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
   Widget _defaultContent() {
     return switch (_currentSection) {
-      DiscoverSection.albums => AlbumsScreen(),
+      DiscoverSection.albums => const AlbumsScreen(),
       DiscoverSection.producers => const ProducersScreen(),
       DiscoverSection.vocalists => const VocalistsScreen(),
       DiscoverSection.mv => const MvGalleryScreen(),

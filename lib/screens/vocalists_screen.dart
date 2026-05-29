@@ -84,7 +84,7 @@ class _VocalistsScreenState extends State<VocalistsScreen> {
         onVocalistTap: (vocalist) => widget.onVocalistTap?.call(vocalist),
       );
     }
-    final edgePad = 40.0;
+    const edgePad = 40.0;
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
@@ -126,7 +126,7 @@ class _VocalistsScreenState extends State<VocalistsScreen> {
           ),
         ),
         SliverPadding(
-          padding: EdgeInsets.fromLTRB(edgePad, 0, edgePad, edgePad),
+          padding: const EdgeInsets.fromLTRB(edgePad, 0, edgePad, edgePad),
           sliver: SliverGrid(
             gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: mobile ? 160 : 220,

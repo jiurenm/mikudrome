@@ -140,7 +140,7 @@ class _TrackListHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 16),
-          SizedBox(
+          const SizedBox(
             width: 48,
             child: Align(
               alignment: Alignment.centerRight,

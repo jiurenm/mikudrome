@@ -403,7 +403,7 @@ void main() {
       await tester.pumpWidget(
         _harness(
           size: const Size(1024, 768),
-          child: ProducerDetailScreen(
+          child: const ProducerDetailScreen(
             producer: _producer,
             baseUrl: 'http://example.test',
           ),

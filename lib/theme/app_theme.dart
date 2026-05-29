@@ -16,7 +16,7 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.dark,
       scaffoldBackgroundColor: mikuDark,
-      colorScheme: ColorScheme.dark(
+      colorScheme: const ColorScheme.dark(
         primary: mikuGreen,
         surface: mikuDark,
         onSurface: textPrimary,
@@ -43,7 +43,10 @@ class AppTheme {
           borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
         ),
         hintStyle: const TextStyle(color: textMuted, fontSize: 14),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
       ),
     );
   }
@@ -63,7 +66,11 @@ class AppTheme {
       bodyLarge: base.copyWith(fontSize: 16),
       bodyMedium: base.copyWith(fontSize: 14),
       bodySmall: base.copyWith(fontSize: 12),
-      labelSmall: base.copyWith(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.2),
+      labelSmall: base.copyWith(
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.2,
+      ),
     );
   }
 }

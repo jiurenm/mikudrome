@@ -335,7 +335,7 @@ class _ProducerTrackListHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 16),
-          SizedBox(
+          const SizedBox(
             width: 48,
             child: Align(
               alignment: Alignment.centerRight,
@@ -481,11 +481,11 @@ class _ProducerTrackRowState extends State<ProducerTrackRow> {
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ).copyWith(
                                 overlayColor:
-                                    MaterialStateProperty.resolveWith<Color?>((
+                                    WidgetStateProperty.resolveWith<Color?>((
                                       states,
                                     ) {
                                       if (states.contains(
-                                        MaterialState.hovered,
+                                        WidgetState.hovered,
                                       )) {
                                         return AppTheme.textPrimary.withValues(
                                           alpha: 0.08,
@@ -494,11 +494,11 @@ class _ProducerTrackRowState extends State<ProducerTrackRow> {
                                       return null;
                                     }),
                                 foregroundColor:
-                                    MaterialStateProperty.resolveWith<Color>((
+                                    WidgetStateProperty.resolveWith<Color>((
                                       states,
                                     ) {
                                       if (states.contains(
-                                        MaterialState.hovered,
+                                        WidgetState.hovered,
                                       )) {
                                         return AppTheme.textPrimary;
                                       }
@@ -519,7 +519,7 @@ class _ProducerTrackRowState extends State<ProducerTrackRow> {
                       track.durationFormatted,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppTheme.textMuted,
-                        fontFeatures: [FontFeature.tabularFigures()],
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
                   ),

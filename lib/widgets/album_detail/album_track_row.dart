@@ -252,23 +252,23 @@ class _AlbumTrackRowState extends State<AlbumTrackRow> {
                                       MaterialTapTargetSize.shrinkWrap,
                                 ).copyWith(
                                   overlayColor:
-                                      MaterialStateProperty.resolveWith<Color?>(
-                                        (states) {
-                                          if (states.contains(
-                                            MaterialState.hovered,
-                                          )) {
-                                            return AppTheme.textPrimary
-                                                .withValues(alpha: 0.08);
-                                          }
-                                          return null;
-                                        },
-                                      ),
-                                  foregroundColor:
-                                      MaterialStateProperty.resolveWith<Color>((
+                                      WidgetStateProperty.resolveWith<Color?>((
                                         states,
                                       ) {
                                         if (states.contains(
-                                          MaterialState.hovered,
+                                          WidgetState.hovered,
+                                        )) {
+                                          return AppTheme.textPrimary
+                                              .withValues(alpha: 0.08);
+                                        }
+                                        return null;
+                                      }),
+                                  foregroundColor:
+                                      WidgetStateProperty.resolveWith<Color>((
+                                        states,
+                                      ) {
+                                        if (states.contains(
+                                          WidgetState.hovered,
                                         )) {
                                           return AppTheme.textPrimary;
                                         }
@@ -291,7 +291,7 @@ class _AlbumTrackRowState extends State<AlbumTrackRow> {
                         track.durationFormatted,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AppTheme.textMuted,
-                          fontFeatures: [FontFeature.tabularFigures()],
+                          fontFeatures: const [FontFeature.tabularFigures()],
                         ),
                       ),
                     ],

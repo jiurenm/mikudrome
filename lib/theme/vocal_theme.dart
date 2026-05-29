@@ -68,9 +68,9 @@ class VocalColors {
 
     int r = 0, g = 0, b = 0;
     for (final c in colors) {
-      r += c.red;
-      g += c.green;
-      b += c.blue;
+      r += (c.r * 255.0).round().clamp(0, 255);
+      g += (c.g * 255.0).round().clamp(0, 255);
+      b += (c.b * 255.0).round().clamp(0, 255);
     }
     final n = colors.length;
     return Color.fromARGB(255, r ~/ n, g ~/ n, b ~/ n);
@@ -78,14 +78,20 @@ class VocalColors {
 }
 
 class VocalThemeProvider extends StatefulWidget {
-  const VocalThemeProvider({super.key, required this.track, required this.child});
+  const VocalThemeProvider({
+    super.key,
+    required this.track,
+    required this.child,
+  });
 
   final Track? track;
   final Widget child;
 
   static Color of(BuildContext context) {
-    return context.dependOnInheritedWidgetOfExactType<_VocalThemeData>()?.color
-        ?? VocalColors.defaultColor;
+    return context
+            .dependOnInheritedWidgetOfExactType<_VocalThemeData>()
+            ?.color ??
+        VocalColors.defaultColor;
   }
 
   @override
@@ -133,5 +139,6 @@ class _VocalThemeData extends InheritedWidget {
   final Color color;
 
   @override
-  bool updateShouldNotify(_VocalThemeData oldWidget) => color != oldWidget.color;
+  bool updateShouldNotify(_VocalThemeData oldWidget) =>
+      color != oldWidget.color;
 }
