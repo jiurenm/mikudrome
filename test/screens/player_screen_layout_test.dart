@@ -340,6 +340,74 @@ void main() {
     );
   });
 
+  testWidgets(
+    'mobile video mode uses immersive MV surface without lyrics tabs',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      const track = Track(
+        id: 77,
+        title: 'Immersive MV',
+        audioPath: '/tmp/77.flac',
+        videoPath: '/tmp/77.mp4',
+        vocal: 'Miku',
+        lyrics: '[00:00.00]lyrics should not be shown',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(size: Size(430, 900)),
+            child: PlayerScreen(
+              track: track,
+              queue: const [track],
+              currentIndex: 0,
+              contextLabel: 'MV Test',
+              playbackMode: PlaybackMode.video,
+              onSelectTrack: (_) {},
+              onPrevious: () {},
+              onNext: () {},
+              onClose: () {},
+              onSwitchPlaybackMode: (_) {},
+              playbackOrderMode: PlaybackOrderMode.sequential,
+              onCyclePlaybackOrderMode: () {},
+              onPlaybackStateChanged:
+                  ({
+                    required bool isPlaying,
+                    required double progress,
+                    required String elapsedLabel,
+                    required String durationLabel,
+                  }) {},
+              initializeControllerOnStart: false,
+              renderVideo: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-mv-video-frame')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-player-artwork-frame')),
+        findsNothing,
+      );
+      expect(find.text('歌词'), findsNothing);
+      expect(find.text('lyrics should not be shown'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('mobile-mv-queue-button')),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('mobile title favorite button toggles favorite state', (
     tester,
   ) async {
