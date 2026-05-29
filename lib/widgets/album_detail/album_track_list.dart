@@ -15,6 +15,7 @@ class AlbumTrackList extends StatelessWidget {
     required this.onDownloadComplete,
     required this.onPlayTrack,
     required this.showTopMessage,
+    this.onPlayMvTrack,
     this.currentPlayingTrackId,
     this.isPlaying = false,
   });
@@ -25,6 +26,8 @@ class AlbumTrackList extends StatelessWidget {
   final String baseUrl;
   final VoidCallback onDownloadComplete;
   final void Function(Track track, int index, {List<Track>? queue}) onPlayTrack;
+  final void Function(Track track, int index, {List<Track>? queue})?
+  onPlayMvTrack;
   final AlbumTopMessage showTopMessage;
   final int? currentPlayingTrackId;
   final bool isPlaying;
@@ -60,6 +63,10 @@ class AlbumTrackList extends StatelessWidget {
                     onDownloadComplete: onDownloadComplete,
                     onPlay: () =>
                         onPlayTrack(e.value, e.key, queue: discTracks),
+                    onPlayMv: onPlayMvTrack == null
+                        ? null
+                        : () =>
+                              onPlayMvTrack!(e.value, e.key, queue: discTracks),
                     showTopMessage: showTopMessage,
                     isCurrentlyPlaying: e.value.id == currentPlayingTrackId,
                     isPlaying: e.value.id == currentPlayingTrackId && isPlaying,
@@ -76,6 +83,9 @@ class AlbumTrackList extends StatelessWidget {
                 baseUrl: baseUrl,
                 onDownloadComplete: onDownloadComplete,
                 onPlay: () => onPlayTrack(e.value, e.key),
+                onPlayMv: onPlayMvTrack == null
+                    ? null
+                    : () => onPlayMvTrack!(e.value, e.key),
                 showTopMessage: showTopMessage,
                 isCurrentlyPlaying: e.value.id == currentPlayingTrackId,
                 isPlaying: e.value.id == currentPlayingTrackId && isPlaying,

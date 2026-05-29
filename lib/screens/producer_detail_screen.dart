@@ -15,6 +15,7 @@ import '../widgets/producer_detail/producer_hero_section.dart';
 import '../widgets/producer_detail/producer_tab_bar.dart';
 import '../widgets/producer_detail/producer_track_list.dart';
 import 'album_detail_screen.dart';
+import 'player_playback_policy.dart';
 
 class ProducerDetailScreen extends StatefulWidget {
   ProducerDetailScreen({
@@ -32,7 +33,13 @@ class ProducerDetailScreen extends StatefulWidget {
   String get _effectiveBaseUrl =>
       baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
   final ValueChanged<Album>? onAlbumTap;
-  final void Function(Track track, List<Track> queue, int index)? onPlayTrack;
+  final void Function(
+    Track track,
+    List<Track> queue,
+    int index, {
+    PlaybackStartIntent intent,
+  })?
+  onPlayTrack;
 
   @override
   State<ProducerDetailScreen> createState() => _ProducerDetailScreenState();
@@ -132,8 +139,13 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
   int get _displayTrackCount =>
       _tracks.isNotEmpty ? _tracks.length : _displayProducer.trackCount;
 
-  void _playTrack(Track track, int index, {List<Track>? queue}) {
-    widget.onPlayTrack?.call(track, queue ?? _tracks, index);
+  void _playTrack(
+    Track track,
+    int index, {
+    List<Track>? queue,
+    PlaybackStartIntent intent = PlaybackStartIntent.audio,
+  }) {
+    widget.onPlayTrack?.call(track, queue ?? _tracks, index, intent: intent);
   }
 
   void _playAll() {
@@ -281,6 +293,11 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                                   useMobileLayout: true,
                                   onPlay: (track, index) =>
                                       _playTrack(track, index),
+                                  onPlayMv: (track, index) => _playTrack(
+                                    track,
+                                    index,
+                                    intent: PlaybackStartIntent.video,
+                                  ),
                                 ),
                               ]),
                             )
@@ -298,6 +315,7 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                                     track,
                                     index,
                                     queue: _tracksWithMv,
+                                    intent: PlaybackStartIntent.video,
                                   ),
                                 ),
                               ]),

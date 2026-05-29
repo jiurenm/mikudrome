@@ -139,6 +139,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   int _playerIndex = 0;
   bool _shuffleEnabled = false;
   bool _showPlayer = false;
+  bool _preferVideoOnExpand = false;
   bool _isPlaying = false;
   double _playbackProgress = 0;
   String _elapsedLabel = '--:--';
@@ -709,11 +710,6 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     }
   }
 
-  PlaybackMode _defaultModeForTrack(Track track) => defaultPlaybackModeForTrack(
-    track,
-    isMobileSurface: _isMobilePlaybackSurface,
-  );
-
   bool get _canUseSharedWebAudio =>
       _playbackMode == PlaybackMode.audio &&
       !_canUseMobileAudioPlayback &&
@@ -932,16 +928,31 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     required List<Track> queue,
     required int index,
     required String contextLabel,
+    PlaybackStartIntent intent = PlaybackStartIntent.audio,
   }) {
     if (queue.isEmpty) return;
     final selectedTrack = queue[index.clamp(0, queue.length - 1)];
+    final effectiveIntent = _isMobilePlaybackSurface
+        ? intent
+        : selectedTrack.hasVideo
+        ? PlaybackStartIntent.video
+        : PlaybackStartIntent.audio;
     setState(() {
       _playerQueue = List<Track>.from(queue);
       _orderedPlayerQueue = null;
       _playerIndex = index.clamp(0, queue.length - 1);
       _shuffleEnabled = false;
       _playerContextLabel = contextLabel;
-      _playbackMode = _defaultModeForTrack(selectedTrack);
+      _playbackMode = resolvePlaybackModeForIntent(
+        track: selectedTrack,
+        isMobileSurface: _isMobilePlaybackSurface,
+        intent: effectiveIntent,
+        preferVideoOnExpand: _preferVideoOnExpand,
+        playerIsOpen: true,
+      );
+      _preferVideoOnExpand =
+          effectiveIntent == PlaybackStartIntent.video &&
+          selectedTrack.hasVideo;
       _showPlayer = true;
       _isPlaying = true;
       _restoredNotStarted = false;
@@ -1233,6 +1244,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
         queue: [track],
         index: 0,
         contextLabel: 'MV Gallery / ${video.artist}',
+        intent: PlaybackStartIntent.video,
       );
     } else {
       // Standalone MV: create a synthetic Track with video stream override.
@@ -1283,6 +1295,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
         index: 0,
         contextLabel:
             'MV Gallery / ${composer.isNotEmpty ? composer : video.title}',
+        intent: PlaybackStartIntent.video,
       );
     }
   }
@@ -1306,12 +1319,15 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
             _showPlayer = false;
           });
         },
-        onPlayTrack: (track, queue, index) => _openPlayerForQueue(
-          track: track,
-          queue: queue,
-          index: index,
-          contextLabel: _albumContextLabel(_selectedAlbum!),
-        ),
+        onPlayTrack:
+            (track, queue, index, {intent = PlaybackStartIntent.audio}) =>
+                _openPlayerForQueue(
+                  track: track,
+                  queue: queue,
+                  index: index,
+                  contextLabel: _albumContextLabel(_selectedAlbum!),
+                  intent: intent,
+                ),
         currentPlayingTrackId: _currentTrack?.id,
         isPlaying: _isPlaying,
       );
@@ -1328,14 +1344,17 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
             _showPlayer = false;
           });
         },
-        onPlayTrack: (track, queue, index) => _openPlayerForQueue(
-          track: track,
-          queue: queue,
-          index: index,
-          contextLabel: queue.every((item) => item.hasVideo)
-              ? _mvContextLabel(_selectedProducer!)
-              : _producerContextLabel(_selectedProducer!),
-        ),
+        onPlayTrack:
+            (track, queue, index, {intent = PlaybackStartIntent.audio}) =>
+                _openPlayerForQueue(
+                  track: track,
+                  queue: queue,
+                  index: index,
+                  contextLabel: queue.every((item) => item.hasVideo)
+                      ? _mvContextLabel(_selectedProducer!)
+                      : _producerContextLabel(_selectedProducer!),
+                  intent: intent,
+                ),
       );
     } else if (_selectedVocalist != null) {
       mainContent = VocalistDetailScreen(
@@ -1350,12 +1369,15 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
             _showPlayer = false;
           });
         },
-        onPlayTrack: (track, queue, index) => _openPlayerForQueue(
-          track: track,
-          queue: queue,
-          index: index,
-          contextLabel: _vocalistContextLabel(_selectedVocalist!),
-        ),
+        onPlayTrack:
+            (track, queue, index, {intent = PlaybackStartIntent.audio}) =>
+                _openPlayerForQueue(
+                  track: track,
+                  queue: queue,
+                  index: index,
+                  contextLabel: _vocalistContextLabel(_selectedVocalist!),
+                  intent: intent,
+                ),
       );
     } else if (_selectedPlaylistId != null) {
       mainContent = PlaylistDetailScreen(

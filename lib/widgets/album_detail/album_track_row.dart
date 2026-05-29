@@ -21,6 +21,7 @@ class AlbumTrackRow extends StatefulWidget {
     required this.onDownloadComplete,
     required this.onPlay,
     required this.showTopMessage,
+    this.onPlayMv,
     this.isCurrentlyPlaying = false,
     this.isPlaying = false,
   });
@@ -30,6 +31,7 @@ class AlbumTrackRow extends StatefulWidget {
   final String baseUrl;
   final VoidCallback onDownloadComplete;
   final VoidCallback onPlay;
+  final VoidCallback? onPlayMv;
   final AlbumTopMessage showTopMessage;
   final bool isCurrentlyPlaying;
   final bool isPlaying;
@@ -190,6 +192,13 @@ class _AlbumTrackRowState extends State<AlbumTrackRow> {
                                 fontSize: 12,
                               ),
                         ),
+                      if (mobile && track.hasVideo) ...[
+                        const SizedBox(height: 6),
+                        _LocalMvBadge(
+                          trackId: track.id,
+                          onTap: widget.onPlayMv,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -200,40 +209,9 @@ class _AlbumTrackRowState extends State<AlbumTrackRow> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         if (track.hasVideo)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppTheme.mikuGreen.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(
-                                color: AppTheme.mikuGreen.withValues(
-                                  alpha: 0.2,
-                                ),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.movie,
-                                  size: 10,
-                                  color: AppTheme.mikuGreen,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'LOCAL MV',
-                                  style: Theme.of(context).textTheme.labelSmall
-                                      ?.copyWith(
-                                        color: AppTheme.mikuGreen,
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.w400,
-                                      ),
-                                ),
-                              ],
-                            ),
+                          _LocalMvBadge(
+                            trackId: track.id,
+                            onTap: widget.onPlayMv,
                           ),
                         if (track.hasVideo && track.format.isNotEmpty)
                           const SizedBox(width: 12),
@@ -347,6 +325,45 @@ class _AlbumTrackRowState extends State<AlbumTrackRow> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LocalMvBadge extends StatelessWidget {
+  const _LocalMvBadge({required this.trackId, required this.onTap});
+
+  final int trackId;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      key: ValueKey('album-track-row-mv-$trackId'),
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppTheme.mikuGreen.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: AppTheme.mikuGreen.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.movie, size: 10, color: AppTheme.mikuGreen),
+            const SizedBox(width: 4),
+            Text(
+              'LOCAL MV',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: AppTheme.mikuGreen,
+                fontSize: 8,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
         ),
       ),
     );
