@@ -406,6 +406,42 @@ void main() {
     expect(service.playQueueAttempts, 1);
   });
 
+  testWidgets('drag collapse keeps MV open until mobile audio starts', (
+    tester,
+  ) async {
+    final service = _DelayedMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+      await _openAlbumMvFromDiscoverHome(tester);
+
+      await tester.drag(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        const Offset(0, 700),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(service.playQueueAttempts, 1);
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+
+      service.completePlayQueue();
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsNothing,
+      );
+      expect(find.byType(MobileMiniPlayer), findsOneWidget);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+  });
+
   testWidgets('system back returns from a mobile destination to My Music', (
     tester,
   ) async {
@@ -907,6 +943,49 @@ class _FailingMobileAudioPlaybackService
   }) async {
     playQueueAttempts += 1;
     throw StateError('audio startup failed');
+  }
+}
+
+class _DelayedMobileAudioPlaybackService
+    extends _RecordingMobileAudioPlaybackService {
+  final Completer<void> _playQueueCompleter = Completer<void>();
+  int playQueueAttempts = 0;
+
+  void completePlayQueue() {
+    if (!_playQueueCompleter.isCompleted) {
+      _playQueueCompleter.complete();
+    }
+  }
+
+  @override
+  Future<void> playQueue({
+    required List<Track> queue,
+    required int index,
+    required AudioUrlForTrack audioUrlForTrack,
+    CoverUrlForTrack? coverUrlForTrack,
+    MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
+    Duration initialPosition = Duration.zero,
+    TrackFavoriteStatus? isTrackFavorited,
+    TrackFavoriteToggle? toggleTrackFavorite,
+  }) async {
+    playQueueAttempts += 1;
+    await _playQueueCompleter.future;
+    await super.playQueue(
+      queue: queue,
+      index: index,
+      audioUrlForTrack: audioUrlForTrack,
+      coverUrlForTrack: coverUrlForTrack,
+      orderMode: orderMode,
+      initialPosition: initialPosition,
+      isTrackFavorited: isTrackFavorited,
+      toggleTrackFavorite: toggleTrackFavorite,
+    );
+  }
+
+  @override
+  Future<void> dispose() async {
+    completePlayQueue();
+    await super.dispose();
   }
 }
 

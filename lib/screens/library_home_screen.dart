@@ -157,6 +157,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   bool _restoredNotStarted = false;
   double? _resumeProgress;
   VideoPlayerController? _videoController;
+  int _mobileVideoCollapseRequest = 0;
 
   @override
   void initState() {
@@ -1201,6 +1202,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
 
   void _collapseCurrentMobilePlayer() {
     if (_isMobilePlaybackSurface && _playbackMode == PlaybackMode.video) {
+      setState(() {
+        _showPlayer = true;
+      });
       unawaited(_collapseMobileVideoToAudio());
       return;
     }
@@ -1213,6 +1217,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       _closePlayer();
       return;
     }
+    final request = ++_mobileVideoCollapseRequest;
+    final index = _playerIndex;
     final progress = _playbackProgress.clamp(0.0, 1.0).toDouble();
     final initialPosition = currentTrack.durationSeconds > 0
         ? Duration(
@@ -1228,6 +1234,13 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       );
     } catch (_) {
       if (!mounted) return;
+      if (!_isCurrentMobileVideoCollapseRequest(
+        request: request,
+        track: currentTrack,
+        index: index,
+      )) {
+        return;
+      }
       setState(() {
         _playbackMode = PlaybackMode.video;
         _showPlayer = true;
@@ -1236,11 +1249,30 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       return;
     }
     if (!mounted) return;
+    if (!_isCurrentMobileVideoCollapseRequest(
+      request: request,
+      track: currentTrack,
+      index: index,
+    )) {
+      return;
+    }
     setState(() {
       _playbackMode = PlaybackMode.audio;
       _showPlayer = false;
       _preferVideoOnExpand = currentTrack.hasVideo;
     });
+  }
+
+  bool _isCurrentMobileVideoCollapseRequest({
+    required int request,
+    required Track track,
+    required int index,
+  }) {
+    return request == _mobileVideoCollapseRequest &&
+        _isMobilePlaybackSurface &&
+        _playbackMode == PlaybackMode.video &&
+        _playerIndex == index &&
+        _currentTrack?.id == track.id;
   }
 
   double _lastSavedProgress = 0;
@@ -1281,7 +1313,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       if (c != null &&
           _isMobilePlaybackSurface &&
           _playbackMode == PlaybackMode.video) {
-        unawaited(_mobileAudioPlaybackService.stop());
+        unawaited(_stopMobileAudioAfterVideoAttach());
       }
     }
 
@@ -1293,6 +1325,12 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     } else {
       applyControllerChange();
     }
+  }
+
+  Future<void> _stopMobileAudioAfterVideoAttach() async {
+    try {
+      await _mobileAudioPlaybackService.stop();
+    } catch (_) {}
   }
 
   String _albumContextLabel(Album album) => 'Album / ${album.title}';
