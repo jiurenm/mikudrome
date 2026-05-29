@@ -38,7 +38,6 @@ Widget _buildSurface({
       onSeek: (_) {},
       onPrevious: () {},
       onNext: () {},
-      onCyclePlaybackOrderMode: () {},
       playbackOrderButton: IconButton(
         onPressed: () {},
         icon: const Icon(Icons.repeat, color: Colors.white),
@@ -118,5 +117,18 @@ void main() {
 
     expect(retryTapped, isTrue);
     expect(switchTapped, isTrue);
+  });
+
+  testWidgets('keeps error actions overflow-safe in narrow MV frames', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(_buildSurface(error: 'video failed'));
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('重试 MV'), findsOneWidget);
+    expect(find.text('切到音频'), findsOneWidget);
   });
 }

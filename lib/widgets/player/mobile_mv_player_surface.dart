@@ -31,7 +31,6 @@ class MobileMvPlayerSurface extends StatefulWidget {
     required this.onSeek,
     required this.onPrevious,
     required this.onNext,
-    required this.onCyclePlaybackOrderMode,
     required this.playbackOrderButton,
     required this.onOpenQueue,
     required this.onEnterFullscreen,
@@ -60,7 +59,6 @@ class MobileMvPlayerSurface extends StatefulWidget {
   final ValueChanged<double> onSeek;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
-  final VoidCallback onCyclePlaybackOrderMode;
   final Widget playbackOrderButton;
   final VoidCallback onOpenQueue;
   final VoidCallback onEnterFullscreen;
@@ -192,44 +190,89 @@ class _MobileMvPlayerSurfaceState extends State<MobileMvPlayerSurface> {
     }
 
     if (error != null) {
-      return Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, color: widget.accentColor, size: 34),
-            const SizedBox(height: 10),
-            Text(
-              error,
-              textAlign: TextAlign.center,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: Colors.white),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 10,
-              runSpacing: 8,
-              children: [
-                FilledButton.tonal(
-                  onPressed: widget.onRetryVideo,
-                  child: const Text('重试 MV'),
-                ),
-                OutlinedButton(
-                  onPressed: widget.onSwitchToAudio,
-                  child: const Text('切到音频'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
+      return _buildVideoError(context, error);
     }
 
     return widget.video;
+  }
+
+  Widget _buildVideoError(BuildContext context, String error) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact =
+            constraints.maxWidth < 320 || constraints.maxHeight < 180;
+        final padding = EdgeInsets.symmetric(
+          horizontal: isCompact ? 10 : 18,
+          vertical: isCompact ? 8 : 18,
+        );
+        final minContentHeight = constraints.hasBoundedHeight
+            ? (constraints.maxHeight - padding.vertical).clamp(
+                0.0,
+                constraints.maxHeight,
+              )
+            : 0.0;
+        final buttonStyle = ButtonStyle(
+          visualDensity: isCompact ? VisualDensity.compact : null,
+          tapTargetSize: isCompact
+              ? MaterialTapTargetSize.shrinkWrap
+              : MaterialTapTargetSize.padded,
+          padding: WidgetStatePropertyAll(
+            EdgeInsets.symmetric(
+              horizontal: isCompact ? 10 : 16,
+              vertical: isCompact ? 7 : 10,
+            ),
+          ),
+        );
+
+        return SingleChildScrollView(
+          padding: padding,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: minContentHeight),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    color: widget.accentColor,
+                    size: isCompact ? 24 : 34,
+                  ),
+                  SizedBox(height: isCompact ? 6 : 10),
+                  Text(
+                    error,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.white,
+                      fontSize: isCompact ? 13 : null,
+                    ),
+                    maxLines: isCompact ? 1 : 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  SizedBox(height: isCompact ? 8 : 14),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: isCompact ? 8 : 10,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton.tonal(
+                        style: buttonStyle,
+                        onPressed: widget.onRetryVideo,
+                        child: const Text('重试 MV'),
+                      ),
+                      OutlinedButton(
+                        style: buttonStyle,
+                        onPressed: widget.onSwitchToAudio,
+                        child: const Text('切到音频'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildChrome(BuildContext context) {
