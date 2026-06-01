@@ -339,4 +339,73 @@ void main() {
       },
     );
   });
+
+  group('PlaybackUiUpdateGate', () {
+    test(
+      'suppresses playing progress ticks until the visible label changes',
+      () {
+        final gate = PlaybackUiUpdateGate();
+
+        expect(
+          gate.shouldPublish(
+            isPlaying: true,
+            progress: 0,
+            elapsedLabel: '00:00',
+            durationLabel: '03:00',
+          ),
+          isTrue,
+        );
+        expect(
+          gate.shouldPublish(
+            isPlaying: true,
+            progress: 0.002,
+            elapsedLabel: '00:00',
+            durationLabel: '03:00',
+          ),
+          isFalse,
+        );
+        expect(
+          gate.shouldPublish(
+            isPlaying: true,
+            progress: 0.006,
+            elapsedLabel: '00:01',
+            durationLabel: '03:00',
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test('publishes pause and duration changes immediately', () {
+      final gate = PlaybackUiUpdateGate();
+
+      expect(
+        gate.shouldPublish(
+          isPlaying: true,
+          progress: 0.1,
+          elapsedLabel: '00:10',
+          durationLabel: '03:00',
+        ),
+        isTrue,
+      );
+      expect(
+        gate.shouldPublish(
+          isPlaying: false,
+          progress: 0.1,
+          elapsedLabel: '00:10',
+          durationLabel: '03:00',
+        ),
+        isTrue,
+      );
+      expect(
+        gate.shouldPublish(
+          isPlaying: false,
+          progress: 0.1,
+          elapsedLabel: '00:10',
+          durationLabel: '04:00',
+        ),
+        isTrue,
+      );
+    });
+  });
 }

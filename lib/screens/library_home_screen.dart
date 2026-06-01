@@ -149,6 +149,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   PlaybackOrderMode _playbackOrderMode = PlaybackOrderMode.sequential;
   PlayerTogglePlayback _playerTogglePlayback = _noopTogglePlayback;
   PlayerSeekToFraction _playerSeekToFraction = _noopSeekToFraction;
+  final PlaybackUiUpdateGate _playbackUiUpdateGate = PlaybackUiUpdateGate();
   late final WebAudioPlaybackController _webAudioPlaybackController;
   late final MobileAudioPlaybackService _mobileAudioPlaybackService;
   late final bool _ownsMobileAudioPlaybackService;
@@ -1364,6 +1365,14 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     required String durationLabel,
   }) {
     if (!mounted) return;
+    if (!_playbackUiUpdateGate.shouldPublish(
+      isPlaying: isPlaying,
+      progress: progress,
+      elapsedLabel: elapsedLabel,
+      durationLabel: durationLabel,
+    )) {
+      return;
+    }
     setState(() {
       _isPlaying = isPlaying;
       _playbackProgress = progress;

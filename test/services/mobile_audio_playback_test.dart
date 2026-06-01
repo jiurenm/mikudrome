@@ -381,6 +381,78 @@ void main() {
     },
   );
 
+  test('audio handler maps buffering to audio service state', () async {
+    final player = FakeJustAudioPlayer();
+    final handler = audio_service.MikudromeAudioHandler(player: player);
+
+    await handler.setMikudromeQueue(
+      tracks: [_track(1)],
+      audioUrls: const ['http://server/audio/1'],
+      initialIndex: 0,
+    );
+
+    player.setProcessingState(ProcessingState.buffering);
+
+    expect(
+      handler.playbackState.value.processingState,
+      AudioProcessingState.buffering,
+    );
+    expect(handler.playbackState.value.playing, isTrue);
+    expect(handler.playbackState.value.speed, 0.0);
+
+    await handler.dispose();
+  });
+
+  test('audio handler retries current item after playback error', () async {
+    final player = FakeJustAudioPlayer();
+    final handler = audio_service.MikudromeAudioHandler(player: player);
+
+    await handler.setMikudromeQueue(
+      tracks: [_track(1)],
+      audioUrls: const ['http://server/audio/1'],
+      initialIndex: 0,
+    );
+    player.setPosition(const Duration(seconds: 42));
+
+    player.emitError(PlayerException(1, 'connection lost', 0));
+    await pumpEventQueue();
+
+    expect(player.seekPositions, [const Duration(seconds: 42)]);
+    expect(player.playCalls, 2);
+
+    await handler.dispose();
+  });
+
+  test(
+    'audio handler throttles position-only app state updates within same second',
+    () async {
+      final player = FakeJustAudioPlayer();
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+      final states = <MobileAudioPlaybackState>[];
+      final sub = handler.mikudromeState.listen(states.add);
+
+      await handler.setMikudromeQueue(
+        tracks: [_track(1)],
+        audioUrls: const ['http://server/audio/1'],
+        initialIndex: 0,
+      );
+      final stateCountAfterStart = states.length;
+
+      player.setPosition(const Duration(milliseconds: 200));
+      player.setPosition(const Duration(milliseconds: 800));
+
+      expect(states.length, stateCountAfterStart);
+
+      player.setPosition(const Duration(seconds: 1));
+
+      expect(states.length, stateCountAfterStart + 1);
+      expect(states.last.position, const Duration(seconds: 1));
+
+      await sub.cancel();
+      await handler.dispose();
+    },
+  );
+
   test('audio handler publishes paused playback state immediately', () async {
     final player = LaggyPauseFakeJustAudioPlayer();
     final handler = audio_service.MikudromeAudioHandler(player: player);
@@ -1073,6 +1145,7 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
   );
   final _position = StreamController<Duration>.broadcast(sync: true);
   final _duration = StreamController<Duration?>.broadcast(sync: true);
+  final _errors = StreamController<PlayerException>.broadcast(sync: true);
 
   List<UriAudioSource> sources = [];
   int? initialIndex;
@@ -1110,6 +1183,9 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
 
   @override
   Stream<Duration?> get durationStream => _duration.stream;
+
+  @override
+  Stream<PlayerException> get errorStream => _errors.stream;
 
   @override
   Future<void> setAudioSources(
@@ -1181,6 +1257,7 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
     await _processingState.close();
     await _position.close();
     await _duration.close();
+    await _errors.close();
   }
 
   void setPlaying(bool value) {
@@ -1205,6 +1282,10 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
 
   void setProcessingState(ProcessingState value) {
     _processingState.add(value);
+  }
+
+  void emitError(PlayerException error) {
+    _errors.add(error);
   }
 }
 

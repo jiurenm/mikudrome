@@ -10,6 +10,20 @@ import 'mobile_audio_playback.dart';
 const _toggleFavoriteAction = 'toggleFavorite';
 const _favoriteIcon = 'drawable/ic_favorite';
 const _favoriteBorderIcon = 'drawable/ic_favorite_border';
+const _positionEmitInterval = Duration(seconds: 1);
+const _maxPlaybackRecoveryAttempts = 3;
+const _mobileAudioLoadConfiguration = AudioLoadConfiguration(
+  androidLoadControl: AndroidLoadControl(
+    minBufferDuration: Duration(seconds: 30),
+    maxBufferDuration: Duration(seconds: 90),
+    bufferForPlaybackDuration: Duration(seconds: 2),
+    bufferForPlaybackAfterRebufferDuration: Duration(seconds: 8),
+    backBufferDuration: Duration(seconds: 10),
+  ),
+  darwinLoadControl: DarwinLoadControl(
+    preferredForwardBufferDuration: Duration(seconds: 30),
+  ),
+);
 
 Future<MikudromeAudioHandler>? _audioServiceHandlerInit;
 
@@ -23,6 +37,7 @@ abstract class MobileAudioPlayerAdapter {
   Stream<ProcessingState> get processingStateStream;
   Stream<Duration> get positionStream;
   Stream<Duration?> get durationStream;
+  Stream<PlayerException> get errorStream;
   bool get playing;
   int? get currentIndex;
   Duration get position;
@@ -57,6 +72,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     );
     _subscriptions.add(_player.positionStream.listen(_handlePositionChanged));
     _subscriptions.add(_player.durationStream.listen(_handleDurationChanged));
+    _subscriptions.add(_player.errorStream.listen(_handlePlaybackError));
   }
 
   final MobileAudioPlayerAdapter _player;
@@ -68,7 +84,11 @@ class MikudromeAudioHandler extends BaseAudioHandler
   int? _currentIndex;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
+  Duration _lastEmittedPosition = Duration.zero;
   bool _isCompleted = false;
+  bool _playbackRequested = false;
+  bool _isRecoveringPlayback = false;
+  int _playbackRecoveryAttempts = 0;
   MobilePlaybackOrderMode _orderMode = MobilePlaybackOrderMode.sequential;
   Duration? _lastPausedSeekPosition;
   TrackFavoriteStatus? _isTrackFavorited;
@@ -96,9 +116,12 @@ class MikudromeAudioHandler extends BaseAudioHandler
       _tracks = const [];
       _audioUrls = const [];
       _currentIndex = null;
+      _lastEmittedPosition = Duration.zero;
       _lastPausedSeekPosition = null;
       _isTrackFavorited = null;
       _toggleTrackFavorite = null;
+      _playbackRequested = false;
+      _playbackRecoveryAttempts = 0;
       queue.add(const []);
       mediaItem.add(null);
       await _player.stop();
@@ -148,9 +171,11 @@ class MikudromeAudioHandler extends BaseAudioHandler
     mediaItem.add(items[clampedIndex]);
     _currentIndex = clampedIndex;
     _position = clampedPosition;
+    _lastEmittedPosition = clampedPosition;
     _duration = Duration(seconds: _tracks[clampedIndex].durationSeconds);
     _isCompleted = false;
     _lastPausedSeekPosition = null;
+    _playbackRecoveryAttempts = 0;
     _publishPlaybackState();
     _emitMikudromeState(
       index: clampedIndex,
@@ -192,6 +217,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     if (_disposed) return;
     _lastPausedSeekPosition = null;
     _isCompleted = false;
+    _playbackRequested = true;
 
     try {
       final playFuture = _player.play();
@@ -202,6 +228,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
       unawaited(
         playFuture.catchError((Object _) {
           if (!_disposed && _tracks.isNotEmpty) {
+            _playbackRequested = false;
             _publishPlaybackState(isPlaying: false);
             _emitMikudromeState(isPlaying: false);
           }
@@ -209,6 +236,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
       );
     } catch (_) {
       if (!_disposed && _tracks.isNotEmpty) {
+        _playbackRequested = false;
         _publishPlaybackState(isPlaying: false);
         _emitMikudromeState(isPlaying: false);
       }
@@ -225,6 +253,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     final previousPosition = _position;
     _lastPausedSeekPosition = _positionForPause();
     _position = _lastPausedSeekPosition!;
+    _playbackRequested = false;
     _publishPlaybackState(isPlaying: false);
     _emitMikudromeState(isPlaying: false);
 
@@ -293,6 +322,8 @@ class MikudromeAudioHandler extends BaseAudioHandler
     _duration = Duration.zero;
     _isCompleted = false;
     _lastPausedSeekPosition = null;
+    _playbackRequested = false;
+    _playbackRecoveryAttempts = 0;
     _isTrackFavorited = null;
     _toggleTrackFavorite = null;
     queue.add(const []);
@@ -365,11 +396,21 @@ class MikudromeAudioHandler extends BaseAudioHandler
   void _handleProcessingStateChanged(ProcessingState state) {
     if (state == ProcessingState.completed && _tracks.isNotEmpty) {
       _isCompleted = true;
+      _playbackRequested = false;
       _publishPlaybackState(
         isPlaying: false,
         processingState: AudioProcessingState.completed,
       );
       _emitMikudromeState(isPlaying: false, isCompleted: true);
+    } else if (state == ProcessingState.buffering && _tracks.isNotEmpty) {
+      _publishPlaybackState(
+        isPlaying: _playbackRequested && _lastPausedSeekPosition == null,
+        processingState: AudioProcessingState.buffering,
+      );
+      _emitMikudromeState(
+        isPlaying: _playbackRequested && _lastPausedSeekPosition == null,
+        isCompleted: false,
+      );
     } else if (state == ProcessingState.ready ||
         state == ProcessingState.loading) {
       _publishPlaybackState(
@@ -394,8 +435,63 @@ class MikudromeAudioHandler extends BaseAudioHandler
       return;
     }
     _position = position;
+    if (!_shouldEmitPosition(position)) {
+      return;
+    }
     _publishPlaybackState();
     _emitMikudromeState(position: position);
+  }
+
+  void _handlePlaybackError(PlayerException _) {
+    if (_disposed ||
+        _tracks.isEmpty ||
+        !_playbackRequested ||
+        _lastPausedSeekPosition != null ||
+        _isCompleted ||
+        _isRecoveringPlayback) {
+      return;
+    }
+
+    if (_playbackRecoveryAttempts >= _maxPlaybackRecoveryAttempts) {
+      _playbackRequested = false;
+      _publishPlaybackState(isPlaying: false);
+      _emitMikudromeState(isPlaying: false);
+      return;
+    }
+
+    _playbackRecoveryAttempts += 1;
+    final retryPosition = _positionForPause();
+    _publishPlaybackState(
+      isPlaying: true,
+      processingState: AudioProcessingState.buffering,
+    );
+    _emitMikudromeState(position: retryPosition, isPlaying: true);
+    unawaited(_recoverPlaybackAt(retryPosition));
+  }
+
+  Future<void> _recoverPlaybackAt(Duration position) async {
+    _isRecoveringPlayback = true;
+    try {
+      await _player.seek(position);
+      if (_disposed || !_playbackRequested || _tracks.isEmpty) return;
+      await _player.play();
+    } catch (_) {
+      if (!_disposed && _tracks.isNotEmpty) {
+        _playbackRequested = false;
+        _publishPlaybackState(isPlaying: false);
+        _emitMikudromeState(position: position, isPlaying: false);
+      }
+    } finally {
+      _isRecoveringPlayback = false;
+    }
+  }
+
+  bool _shouldEmitPosition(Duration position) {
+    if (position.inSeconds == _lastEmittedPosition.inSeconds) {
+      return false;
+    }
+    final delta = position - _lastEmittedPosition;
+    return !delta.isNegative || delta.abs() >= _positionEmitInterval;
   }
 
   void _handleDurationChanged(Duration? duration) {
@@ -479,6 +575,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     _position = effectivePosition;
     _duration = effectiveDuration;
     _isCompleted = effectiveCompleted;
+    _lastEmittedPosition = effectivePosition;
     _mikudromeStates.add(
       MobileAudioPlaybackState(
         queue: _tracks,
@@ -686,7 +783,9 @@ class JustAudioMobileAudioPlaybackService
 
 class JustAudioPlayerAdapter implements MobileAudioPlayerAdapter {
   JustAudioPlayerAdapter({AudioPlayer? player})
-    : _player = player ?? AudioPlayer();
+    : _player =
+          player ??
+          AudioPlayer(audioLoadConfiguration: _mobileAudioLoadConfiguration);
 
   final AudioPlayer _player;
 
@@ -705,6 +804,9 @@ class JustAudioPlayerAdapter implements MobileAudioPlayerAdapter {
 
   @override
   Stream<Duration?> get durationStream => _player.durationStream;
+
+  @override
+  Stream<PlayerException> get errorStream => _player.errorStream;
 
   @override
   bool get playing => _player.playing;

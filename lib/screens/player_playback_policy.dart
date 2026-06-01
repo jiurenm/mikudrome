@@ -57,6 +57,37 @@ final class PlaybackCompletionGate {
   }
 }
 
+final class PlaybackUiUpdateGate {
+  bool? _lastIsPlaying;
+  double? _lastProgress;
+  String? _lastElapsedLabel;
+  String? _lastDurationLabel;
+
+  bool shouldPublish({
+    required bool isPlaying,
+    required double progress,
+    required String elapsedLabel,
+    required String durationLabel,
+  }) {
+    final progressDelta = _lastProgress == null
+        ? double.infinity
+        : (progress - _lastProgress!).abs();
+    final shouldPublish =
+        _lastIsPlaying != isPlaying ||
+        _lastElapsedLabel != elapsedLabel ||
+        _lastDurationLabel != durationLabel ||
+        progressDelta >= 0.01;
+    if (!shouldPublish) {
+      return false;
+    }
+    _lastIsPlaying = isPlaying;
+    _lastProgress = progress;
+    _lastElapsedLabel = elapsedLabel;
+    _lastDurationLabel = durationLabel;
+    return true;
+  }
+}
+
 bool didPlaybackReachEnd({
   required bool isCompleted,
   required bool isPlaying,
