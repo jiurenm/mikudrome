@@ -403,6 +403,31 @@ void main() {
     await handler.dispose();
   });
 
+  test(
+    'audio handler switches current item to low quality while buffering',
+    () async {
+      final player = FakeJustAudioPlayer();
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+
+      await handler.setMikudromeQueue(
+        tracks: [_track(1)],
+        audioUrls: const ['http://server/api/stream/1/audio'],
+        initialIndex: 0,
+      );
+      player.setPosition(const Duration(seconds: 12));
+
+      player.setProcessingState(ProcessingState.buffering);
+      await pumpEventQueue();
+
+      expect(player.setAudioSourcesCalls, 2);
+      expect(player.sources.single.uri.toString(), contains('quality=low'));
+      expect(player.initialPosition, const Duration(seconds: 12));
+      expect(handler.mediaItem.value?.id, contains('quality=low'));
+
+      await handler.dispose();
+    },
+  );
+
   test('audio handler retries current item after playback error', () async {
     final player = FakeJustAudioPlayer();
     final handler = audio_service.MikudromeAudioHandler(player: player);
@@ -422,6 +447,37 @@ void main() {
 
     await handler.dispose();
   });
+
+  test(
+    'audio handler switches current item to low quality after error',
+    () async {
+      final player = FakeJustAudioPlayer();
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+      final states = <MobileAudioPlaybackState>[];
+      final sub = handler.mikudromeState.listen(states.add);
+
+      await handler.setMikudromeQueue(
+        tracks: [_track(1)],
+        audioUrls: const ['http://server/api/stream/1/audio'],
+        initialIndex: 0,
+      );
+      player.setPosition(const Duration(seconds: 42));
+
+      player.emitError(PlayerException(1, 'connection lost', 0));
+      await pumpEventQueue();
+
+      expect(player.setAudioSourcesCalls, 2);
+      expect(player.sources.single.uri.toString(), contains('quality=low'));
+      expect(player.initialIndex, 0);
+      expect(player.initialPosition, const Duration(seconds: 42));
+      expect(handler.mediaItem.value?.id, contains('quality=low'));
+      expect(states.last.audioUrl, contains('quality=low'));
+      expect(player.playCalls, 2);
+
+      await sub.cancel();
+      await handler.dispose();
+    },
+  );
 
   test(
     'audio handler throttles position-only app state updates within same second',
@@ -1148,6 +1204,7 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
   final _errors = StreamController<PlayerException>.broadcast(sync: true);
 
   List<UriAudioSource> sources = [];
+  int setAudioSourcesCalls = 0;
   int? initialIndex;
   Duration? initialPosition;
   @override
@@ -1193,6 +1250,7 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
     required int initialIndex,
     required Duration initialPosition,
   }) async {
+    setAudioSourcesCalls += 1;
     final error = setAudioSourcesError;
     if (error != null) {
       throw error;

@@ -37,6 +37,39 @@ void main() {
     expect(rescanned, isTrue);
   });
 
+  testWidgets('toggles low quality audio mode', (tester) async {
+    var lowQualityAudio = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) => SettingsScreen(
+              lowQualityAudio: lowQualityAudio,
+              onLowQualityAudioChanged: (value) {
+                setState(() => lowQualityAudio = value);
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('弱网省流量音质'), findsOneWidget);
+    expect(
+      tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+      isFalse,
+    );
+
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pump();
+
+    expect(lowQualityAudio, isTrue);
+    expect(
+      tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+      isTrue,
+    );
+  });
+
   testWidgets('shows missing cookie status', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(home: Scaffold(body: SettingsScreen())),

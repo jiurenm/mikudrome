@@ -34,6 +34,15 @@ void main() {
     );
   });
 
+  test('ApiClient builds low quality audio stream url', () {
+    final client = ApiClient(baseUrl: 'http://example.test');
+
+    expect(
+      client.streamAudioUrl(7, lowQuality: true),
+      'http://example.test/api/stream/7/audio?quality=low',
+    );
+  });
+
   test('default headers include trimmed runtime cookie when configured', () {
     ApiConfig.setRuntimeCookie(' session=abc; token=xyz ');
 

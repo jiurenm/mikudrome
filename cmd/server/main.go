@@ -48,11 +48,20 @@ func main() {
 	if p := os.Getenv("PLAYLIST_COVER_DIR"); p != "" {
 		cfg.PlaylistCoverDir = p
 	}
+	if p := os.Getenv("AUDIO_CACHE_DIR"); p != "" {
+		cfg.AudioCacheDir = p
+	}
 	if cfg.PlaylistCoverDir == "" {
 		cfg.PlaylistCoverDir = filepath.Join(filepath.Dir(cfg.DBPath), "playlist_covers")
 	}
+	if cfg.AudioCacheDir == "" {
+		cfg.AudioCacheDir = filepath.Join(filepath.Dir(cfg.DBPath), "audio_cache")
+	}
 	if err := os.MkdirAll(cfg.PlaylistCoverDir, 0o755); err != nil {
 		log.Fatalf("mkdir playlist_cover_dir: %v", err)
+	}
+	if err := os.MkdirAll(cfg.AudioCacheDir, 0o755); err != nil {
+		log.Fatalf("mkdir audio_cache_dir: %v", err)
 	}
 
 	st, err := store.New(cfg.DBPath)
@@ -62,17 +71,6 @@ func main() {
 	defer st.Close()
 
 	libraryTasks := library.NewTaskManager(cfg.MediaRoot, st, cfg.ScanWorkers, cfg.ScanBatchSize)
-
-	// Setup playlist cover directory.
-	if p := os.Getenv("PLAYLIST_COVER_DIR"); p != "" {
-		cfg.PlaylistCoverDir = p
-	}
-	if cfg.PlaylistCoverDir == "" {
-		cfg.PlaylistCoverDir = filepath.Join(filepath.Dir(cfg.DBPath), "playlist_covers")
-	}
-	if err := os.MkdirAll(cfg.PlaylistCoverDir, 0o755); err != nil {
-		log.Fatalf("mkdir playlist_cover_dir: %v", err)
-	}
 
 	// Start media scanning in background
 	go func() {
@@ -115,7 +113,7 @@ func main() {
 		select {}
 	}()
 
-	handler := api.New(st, cfg.MediaRoot, cfg.WebRoot, cfg.YtDlpProxy, cfg.PlaylistCoverDir, libraryTasks)
+	handler := api.New(st, cfg.MediaRoot, cfg.WebRoot, cfg.YtDlpProxy, cfg.PlaylistCoverDir, cfg.AudioCacheDir, libraryTasks)
 	log.Printf("listening on %s", cfg.HTTPAddr)
 	if err := http.ListenAndServe(cfg.HTTPAddr, handler); err != nil {
 		log.Fatal(err)

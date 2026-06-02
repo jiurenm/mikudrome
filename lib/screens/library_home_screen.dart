@@ -140,6 +140,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   bool _shuffleEnabled = false;
   bool _showPlayer = false;
   bool _preferVideoOnExpand = false;
+  bool _preferLowQualityAudio = false;
   bool _isPlaying = false;
   double _playbackProgress = 0;
   String _elapsedLabel = '--:--';
@@ -731,7 +732,18 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   }
 
   String _mobileAudioUrlForTrack(Track track) {
-    return ApiClient().streamAudioUrl(track.id);
+    return ApiClient().streamAudioUrl(
+      track.id,
+      lowQuality: _preferLowQualityAudio,
+    );
+  }
+
+  void _setLowQualityAudioPreference(bool value) {
+    if (_preferLowQualityAudio == value) return;
+    setState(() {
+      _preferLowQualityAudio = value;
+    });
+    unawaited(_syncMobileAudioQueuePreservingProgress());
   }
 
   MobilePlaybackOrderMode get _mobilePlaybackOrderMode =>
@@ -1632,8 +1644,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
         settings: SettingsScreen(
           serverUrl: ApiConfig.defaultBaseUrl,
           hasServerCookie: ApiConfig.defaultHeaders.containsKey('Cookie'),
+          lowQualityAudio: _preferLowQualityAudio,
           onEditServer: _openServerSettings,
           onRescan: _openMobileRescan,
+          onLowQualityAudioChanged: _setLowQualityAudioPreference,
         ),
       );
 

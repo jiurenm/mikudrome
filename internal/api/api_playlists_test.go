@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -38,7 +39,8 @@ func newTestHandlerWithDBPath(t *testing.T) (*Handler, string) {
 	}
 	t.Cleanup(func() { s.Close() })
 	coverDir := filepath.Join(dir, "covers")
-	return New(s, dir, "", "", coverDir, nil), dbPath
+	audioCacheDir := filepath.Join(dir, "audio-cache")
+	return New(s, dir, "", "", coverDir, audioCacheDir, nil), dbPath
 }
 
 func doReq(h http.Handler, method, path, body string) *httptest.ResponseRecorder {
@@ -159,6 +161,78 @@ func TestServeStreamTranscodesALACAudioForBrowser(t *testing.T) {
 	}
 }
 
+func TestServeStreamLowQualityTranscodesAndCachesAudio(t *testing.T) {
+	h := newTestHandler(t)
+
+	audioPath := filepath.Join(h.mediaRoot, "track.flac")
+	if err := os.WriteFile(audioPath, bytes.Repeat([]byte("f"), 256*1024), 0o644); err != nil {
+		t.Fatalf("write flac audio: %v", err)
+	}
+	id := seedAudioTrack(t, h, "Track", audioPath, "FLAC", 180)
+	origTranscoder := lowBitrateAudioTranscoder
+	t.Cleanup(func() { lowBitrateAudioTranscoder = origTranscoder })
+	transcodeCalls := 0
+	lowBitrateAudioTranscoder = func(_ context.Context, sourcePath, outputPath string) error {
+		transcodeCalls += 1
+		if sourcePath != audioPath {
+			t.Fatalf("transcoder source = %q, want %q", sourcePath, audioPath)
+		}
+		return os.WriteFile(outputPath, []byte("cached low bitrate mp3"), 0o644)
+	}
+
+	path := fmt.Sprintf("/api/stream/%d/audio?quality=low", id)
+	rr := doReq(h, http.MethodGet, path, "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "audio/mpeg") {
+		t.Fatalf("Content-Type = %q, want audio/mpeg", ct)
+	}
+	if body := rr.Body.String(); body != "cached low bitrate mp3" {
+		t.Fatalf("body = %q, want cached low bitrate mp3", body)
+	}
+	if transcodeCalls != 1 {
+		t.Fatalf("transcodeCalls = %d, want 1", transcodeCalls)
+	}
+
+	rr = doReq(h, http.MethodGet, path, "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("cached status = %d, want %d: %s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if body := rr.Body.String(); body != "cached low bitrate mp3" {
+		t.Fatalf("cached body = %q, want cached low bitrate mp3", body)
+	}
+	if transcodeCalls != 1 {
+		t.Fatalf("transcodeCalls after cache hit = %d, want 1", transcodeCalls)
+	}
+}
+
+func TestServeStreamLowQualityKeepsAlreadySmallMP3Original(t *testing.T) {
+	h := newTestHandler(t)
+
+	audioPath := filepath.Join(h.mediaRoot, "track.mp3")
+	original := []byte("small mp3 source")
+	if err := os.WriteFile(audioPath, original, 0o644); err != nil {
+		t.Fatalf("write mp3 audio: %v", err)
+	}
+	id := seedAudioTrack(t, h, "Track", audioPath, "MP3", 180)
+	origTranscoder := lowBitrateAudioTranscoder
+	t.Cleanup(func() { lowBitrateAudioTranscoder = origTranscoder })
+	lowBitrateAudioTranscoder = func(context.Context, string, string) error {
+		t.Fatal("transcoder should not be called for already-small MP3")
+		return nil
+	}
+
+	path := fmt.Sprintf("/api/stream/%d/audio?quality=low", id)
+	rr := doReq(h, http.MethodGet, path, "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if body := rr.Body.Bytes(); !bytes.Equal(body, original) {
+		t.Fatalf("body = %q, want original mp3", string(body))
+	}
+}
+
 // seedTrack inserts a minimal producer+album+track and returns the track ID.
 func seedTrack(t *testing.T, h *Handler, title string) int64 {
 	t.Helper()
@@ -180,6 +254,32 @@ func seedTrack(t *testing.T, h *Handler, title string) int64 {
 	}
 	for _, tr := range tracks {
 		if tr.Title == title {
+			return tr.ID
+		}
+	}
+	t.Fatalf("track %q not found after seed", title)
+	return 0
+}
+
+func seedAudioTrack(t *testing.T, h *Handler, title, audioPath, format string, durationSeconds int) int64 {
+	t.Helper()
+	pid, err := h.store.UpsertProducer("TestProducer", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	aid, err := h.store.UpsertAlbum("TestAlbum", "", pid, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.store.UpsertTrack(title, audioPath, "", "", aid, 1, 1, "", 2024, durationSeconds, format); err != nil {
+		t.Fatal(err)
+	}
+	tracks, err := h.store.ListTracks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tr := range tracks {
+		if tr.AudioPath == audioPath {
 			return tr.ID
 		}
 	}

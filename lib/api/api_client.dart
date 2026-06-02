@@ -282,7 +282,10 @@ class ApiClient {
 
   // --- Stream URLs (no HTTP call, just URL builder) ---
 
-  String streamAudioUrl(int trackId) => _url(ApiEndpoints.streamAudio(trackId));
+  String streamAudioUrl(int trackId, {bool lowQuality = false}) {
+    final path = ApiEndpoints.streamAudio(trackId);
+    return _url(lowQuality ? '$path?quality=low' : path);
+  }
 
   String streamVideoUrl(int trackId) => _url(ApiEndpoints.streamVideo(trackId));
 

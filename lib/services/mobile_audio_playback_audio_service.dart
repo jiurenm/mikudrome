@@ -12,6 +12,8 @@ const _favoriteIcon = 'drawable/ic_favorite';
 const _favoriteBorderIcon = 'drawable/ic_favorite_border';
 const _positionEmitInterval = Duration(seconds: 1);
 const _maxPlaybackRecoveryAttempts = 3;
+const _audioQualityQueryKey = 'quality';
+const _lowQualityAudioValue = 'low';
 const _mobileAudioLoadConfiguration = AudioLoadConfiguration(
   androidLoadControl: AndroidLoadControl(
     minBufferDuration: Duration(seconds: 30),
@@ -360,7 +362,13 @@ class MikudromeAudioHandler extends BaseAudioHandler
     _currentIndex = clampedIndex;
     mediaItem.add(queue.value[clampedIndex]);
     if (!didChangeTrack) {
-      _publishPlaybackState();
+      _publishPlaybackState(
+        processingState:
+            playbackState.value.processingState ==
+                AudioProcessingState.buffering
+            ? AudioProcessingState.buffering
+            : AudioProcessingState.ready,
+      );
       _emitMikudromeState(index: clampedIndex);
       return;
     }
@@ -403,6 +411,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
       );
       _emitMikudromeState(isPlaying: false, isCompleted: true);
     } else if (state == ProcessingState.buffering && _tracks.isNotEmpty) {
+      final retryPosition = _positionForPause();
       _publishPlaybackState(
         isPlaying: _playbackRequested && _lastPausedSeekPosition == null,
         processingState: AudioProcessingState.buffering,
@@ -411,6 +420,14 @@ class MikudromeAudioHandler extends BaseAudioHandler
         isPlaying: _playbackRequested && _lastPausedSeekPosition == null,
         isCompleted: false,
       );
+      if (_playbackRequested && _lastPausedSeekPosition == null) {
+        unawaited(
+          _switchCurrentTrackToLowQuality(
+            retryPosition,
+            resumePlayback: true,
+          ).catchError((_) {}),
+        );
+      }
     } else if (state == ProcessingState.ready ||
         state == ProcessingState.loading) {
       _publishPlaybackState(
@@ -472,6 +489,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
   Future<void> _recoverPlaybackAt(Duration position) async {
     _isRecoveringPlayback = true;
     try {
+      await _switchCurrentTrackToLowQuality(position);
       await _player.seek(position);
       if (_disposed || !_playbackRequested || _tracks.isEmpty) return;
       await _player.play();
@@ -484,6 +502,66 @@ class MikudromeAudioHandler extends BaseAudioHandler
     } finally {
       _isRecoveringPlayback = false;
     }
+  }
+
+  Future<void> _switchCurrentTrackToLowQuality(
+    Duration position, {
+    bool resumePlayback = false,
+  }) async {
+    if (_disposed || _tracks.isEmpty || _audioUrls.isEmpty) return;
+    final index = (_currentIndex ?? _player.currentIndex ?? 0).clamp(
+      0,
+      _audioUrls.length - 1,
+    );
+    final currentUrl = _audioUrls[index];
+    final lowQualityUrl = _withLowQualityAudio(currentUrl);
+    if (lowQualityUrl == currentUrl) return;
+
+    final nextAudioUrls = List<String>.from(_audioUrls);
+    nextAudioUrls[index] = lowQualityUrl;
+    final nextQueue = List<MediaItem>.from(queue.value);
+    if (index < nextQueue.length) {
+      nextQueue[index] = nextQueue[index].copyWith(id: lowQualityUrl);
+    }
+
+    await _player.setAudioSources(
+      nextAudioUrls
+          .map(
+            (url) => AudioSource.uri(
+              Uri.parse(url),
+              headers: ApiConfig.defaultHeaders,
+            ),
+          )
+          .toList(growable: false),
+      initialIndex: index,
+      initialPosition: position,
+    );
+    if (_disposed || _tracks.isEmpty) return;
+    _audioUrls = List<String>.unmodifiable(nextAudioUrls);
+    queue.add(List<MediaItem>.unmodifiable(nextQueue));
+    if (index < nextQueue.length) {
+      mediaItem.add(nextQueue[index]);
+    }
+    _emitMikudromeState(index: index, position: position);
+    if (resumePlayback && _playbackRequested) {
+      await _player.play();
+    }
+  }
+
+  String _withLowQualityAudio(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return url;
+    if (uri.queryParameters[_audioQualityQueryKey] == _lowQualityAudioValue) {
+      return url;
+    }
+    return uri
+        .replace(
+          queryParameters: {
+            ...uri.queryParameters,
+            _audioQualityQueryKey: _lowQualityAudioValue,
+          },
+        )
+        .toString();
   }
 
   bool _shouldEmitPosition(Duration position) {

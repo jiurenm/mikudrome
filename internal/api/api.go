@@ -2,7 +2,10 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -12,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mikudrome/mikudrome/internal/library"
@@ -20,6 +24,13 @@ import (
 )
 
 var browserAudioTranscoder = streamBrowserAudioTranscode
+var lowBitrateAudioTranscoder = transcodeLowBitrateAudio
+
+const (
+	lowQualityAudioValue   = "low"
+	lowQualityAudioBitrate = "128k"
+	lowQualityDirectKbps   = 160
+)
 
 // Handler serves the REST API, static file streaming, and Flutter web static files.
 type Handler struct {
@@ -28,17 +39,20 @@ type Handler struct {
 	webRoot          string
 	ytdlpProxy       string
 	playlistCoverDir string
+	audioCacheDir    string
 	libraryTasks     *library.TaskManager
+	audioCacheMu     sync.Mutex
 }
 
 // New returns an HTTP handler for the API.
-func New(s *store.Store, mediaRoot, webRoot, ytdlpProxy, playlistCoverDir string, libraryTasks *library.TaskManager) *Handler {
+func New(s *store.Store, mediaRoot, webRoot, ytdlpProxy, playlistCoverDir, audioCacheDir string, libraryTasks *library.TaskManager) *Handler {
 	return &Handler{
 		store:            s,
 		mediaRoot:        mediaRoot,
 		webRoot:          webRoot,
 		ytdlpProxy:       ytdlpProxy,
 		playlistCoverDir: playlistCoverDir,
+		audioCacheDir:    audioCacheDir,
 		libraryTasks:     libraryTasks,
 	}
 }
@@ -730,6 +744,10 @@ func (h *Handler) serveStream(w http.ResponseWriter, r *http.Request) {
 	switch parts[1] {
 	case "audio":
 		path = track.AudioPath
+		if isLowQualityAudioRequest(r) {
+			h.serveLowQualityAudio(w, r, track)
+			return
+		}
 		if shouldTranscodeForBrowserAudio(track) {
 			w.Header().Set("Content-Type", "audio/mpeg")
 			w.Header().Set("Cache-Control", "no-store")
@@ -756,11 +774,132 @@ func (h *Handler) serveStream(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, path)
 }
 
+func isLowQualityAudioRequest(r *http.Request) bool {
+	return strings.EqualFold(r.URL.Query().Get("quality"), lowQualityAudioValue)
+}
+
+func (h *Handler) serveLowQualityAudio(w http.ResponseWriter, r *http.Request, track store.Track) {
+	path := track.AudioPath
+	if path == "" {
+		http.NotFound(w, r)
+		return
+	}
+	if shouldServeOriginalForLowQuality(track, path) {
+		if contentType := audioContentType(path); contentType != "" {
+			w.Header().Set("Content-Type", contentType)
+		}
+		http.ServeFile(w, r, path)
+		return
+	}
+
+	cachePath, err := h.lowQualityAudioCachePath(track, path)
+	if err != nil {
+		log.Printf("api: low quality audio cache path failed for %s: %v", path, err)
+		http.NotFound(w, r)
+		return
+	}
+	if err := h.ensureLowQualityAudioCache(r.Context(), path, cachePath); err != nil {
+		log.Printf("api: low quality audio transcode failed for %s: %v", path, err)
+		http.Error(w, "low quality audio unavailable", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "audio/mpeg")
+	http.ServeFile(w, r, cachePath)
+}
+
+func shouldServeOriginalForLowQuality(track store.Track, path string) bool {
+	if shouldTranscodeForBrowserAudio(track) {
+		return false
+	}
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".mp3", ".m4a", ".aac", ".ogg":
+	default:
+		return false
+	}
+	if track.DurationSeconds <= 0 {
+		return false
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Size() <= 0 {
+		return false
+	}
+	kbps := (info.Size() * 8) / int64(track.DurationSeconds) / 1000
+	return kbps <= lowQualityDirectKbps
+}
+
+func (h *Handler) lowQualityAudioCachePath(track store.Track, sourcePath string) (string, error) {
+	info, err := os.Stat(sourcePath)
+	if err != nil {
+		return "", err
+	}
+	cacheDir := h.audioCacheDir
+	if strings.TrimSpace(cacheDir) == "" {
+		cacheDir = filepath.Join(os.TempDir(), "mikudrome-audio-cache")
+	}
+	key := fmt.Sprintf(
+		"%d:%s:%d:%d:%s",
+		track.ID,
+		sourcePath,
+		info.Size(),
+		info.ModTime().UnixNano(),
+		lowQualityAudioBitrate,
+	)
+	sum := sha256.Sum256([]byte(key))
+	return filepath.Join(cacheDir, hex.EncodeToString(sum[:])+".mp3"), nil
+}
+
+func (h *Handler) ensureLowQualityAudioCache(ctx context.Context, sourcePath, cachePath string) error {
+	h.audioCacheMu.Lock()
+	defer h.audioCacheMu.Unlock()
+
+	if _, err := os.Stat(cachePath); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(cachePath), "low-audio-*.mp3")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	defer os.Remove(tmpPath)
+	if err := lowBitrateAudioTranscoder(ctx, sourcePath, tmpPath); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, cachePath)
+}
+
 func shouldTranscodeForBrowserAudio(track store.Track) bool {
 	if !strings.EqualFold(filepath.Ext(track.AudioPath), ".m4a") {
 		return false
 	}
 	return strings.Contains(strings.ToUpper(track.Format), "ALAC")
+}
+
+func transcodeLowBitrateAudio(ctx context.Context, sourcePath, outputPath string) error {
+	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-v", "error",
+		"-nostdin",
+		"-y",
+		"-i", sourcePath,
+		"-vn",
+		"-codec:a", "libmp3lame",
+		"-b:a", lowQualityAudioBitrate,
+		"-f", "mp3",
+		outputPath,
+	)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("ffmpeg: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
 }
 
 func streamBrowserAudioTranscode(ctx context.Context, w io.Writer, path string) error {

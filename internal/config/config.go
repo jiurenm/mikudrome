@@ -26,6 +26,9 @@ type Config struct {
 	// PlaylistCoverDir is the directory where user-uploaded playlist covers are stored.
 	// Default: filepath.Join(filepath.Dir(DBPath), "playlist_covers").
 	PlaylistCoverDir string
+	// AudioCacheDir is the directory where generated low-bitrate audio files are stored.
+	// Default: filepath.Join(filepath.Dir(DBPath), "audio_cache").
+	AudioCacheDir string
 }
 
 // Default returns a config with sensible defaults.
@@ -42,6 +45,7 @@ func Default() *Config {
 		c.MediaRoot = filepath.Join(wd, "media")
 		c.WebRoot = filepath.Join(wd, "build", "web")
 		c.PlaylistCoverDir = filepath.Join(wd, "data", "playlist_covers")
+		c.AudioCacheDir = filepath.Join(wd, "data", "audio_cache")
 	}
 	return c
 }
