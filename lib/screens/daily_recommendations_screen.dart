@@ -5,6 +5,7 @@ import '../models/daily_recommendations.dart';
 import '../models/track.dart';
 import '../theme/app_theme.dart';
 import '../utils/responsive.dart';
+import '../widgets/mobile_page_header.dart';
 import '../widgets/playlist_detail/playlist_track_row.dart';
 
 class DailyRecommendationsScreen extends StatefulWidget {
@@ -56,28 +57,100 @@ class _DailyRecommendationsScreenState
     widget.onPlayTrack?.call(tracks[index], tracks, index);
   }
 
+  SliverToBoxAdapter _buildHeader(
+    BuildContext context, {
+    required DailyRecommendations? recommendations,
+    required List<Track> tracks,
+  }) {
+    final mobile = isMobile(context);
+    final playAllButton = FilledButton.icon(
+      onPressed: tracks.isEmpty ? null : () => _playTrack(tracks, 0),
+      icon: const Icon(Icons.play_arrow_rounded),
+      label: const Text('播放全部'),
+    );
+
+    if (mobile) {
+      return SliverToBoxAdapter(
+        child: MobilePageHeader(
+          title: '每日推荐',
+          subtitle: recommendations?.date,
+          onBack: widget.onBack,
+          bottom: recommendations == null
+              ? null
+              : Align(alignment: Alignment.centerLeft, child: playAllButton),
+        ),
+      );
+    }
+
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(40, 36, 40, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '每日推荐',
+              style: TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+                height: 1.1,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              recommendations?.date ?? '',
+              style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
+            ),
+            const SizedBox(height: 18),
+            playAllButton,
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final mobile = isMobile(context);
     return Scaffold(
-      appBar: mobile && widget.onBack != null
-          ? AppBar(
-              backgroundColor: AppTheme.mikuDark,
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: widget.onBack,
-              ),
-              title: const Text('每日推荐', style: TextStyle(fontSize: 16)),
-            )
-          : null,
       backgroundColor: AppTheme.mikuDark,
       body: FutureBuilder<DailyRecommendations>(
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
+            if (mobile) {
+              return CustomScrollView(
+                slivers: [
+                  _buildHeader(
+                    context,
+                    recommendations: null,
+                    tracks: const <Track>[],
+                  ),
+                  const SliverFillRemaining(
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                ],
+              );
+            }
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
+            if (mobile) {
+              return CustomScrollView(
+                slivers: [
+                  _buildHeader(
+                    context,
+                    recommendations: null,
+                    tracks: const <Track>[],
+                  ),
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _DailyRecommendationsError(onRetry: _reload),
+                  ),
+                ],
+              );
+            }
             return _DailyRecommendationsError(onRetry: _reload);
           }
           final recommendations = snapshot.data;
@@ -87,45 +160,10 @@ class _DailyRecommendationsScreenState
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      mobile ? 16 : 40,
-                      mobile ? 20 : 36,
-                      mobile ? 16 : 40,
-                      12,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          '每日推荐',
-                          style: TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontSize: 26,
-                            fontWeight: FontWeight.w800,
-                            height: 1.1,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          recommendations?.date ?? '',
-                          style: const TextStyle(
-                            color: AppTheme.textMuted,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        FilledButton.icon(
-                          onPressed: tracks.isEmpty
-                              ? null
-                              : () => _playTrack(tracks, 0),
-                          icon: const Icon(Icons.play_arrow_rounded),
-                          label: const Text('播放全部'),
-                        ),
-                      ],
-                    ),
-                  ),
+                _buildHeader(
+                  context,
+                  recommendations: recommendations,
+                  tracks: tracks,
                 ),
                 if (tracks.isEmpty)
                   const SliverFillRemaining(

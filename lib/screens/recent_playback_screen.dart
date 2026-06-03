@@ -5,6 +5,7 @@ import '../models/playback_history_item.dart';
 import '../models/track.dart';
 import '../theme/app_theme.dart';
 import '../utils/responsive.dart';
+import '../widgets/mobile_page_header.dart';
 import '../widgets/playlist_detail/playlist_track_row.dart';
 
 class RecentPlaybackScreen extends StatefulWidget {
@@ -52,35 +53,21 @@ class _RecentPlaybackScreenState extends State<RecentPlaybackScreen> {
       backgroundColor: AppTheme.mikuDark,
       body: CustomScrollView(
         slivers: [
-          if (mobile && widget.onBack != null)
-            SliverAppBar(
-              backgroundColor: AppTheme.mikuDark,
-              pinned: false,
-              floating: true,
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: widget.onBack,
-              ),
-              title: const Text('最近播放', style: TextStyle(fontSize: 16)),
-            ),
           SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                mobile ? 16 : 40,
-                mobile ? 20 : 36,
-                mobile ? 16 : 40,
-                12,
-              ),
-              child: const Text(
-                '最近播放',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  height: 1.1,
-                ),
-              ),
-            ),
+            child: mobile
+                ? MobilePageHeader(title: '最近播放', onBack: widget.onBack)
+                : const Padding(
+                    padding: EdgeInsets.fromLTRB(40, 36, 40, 12),
+                    child: Text(
+                      '最近播放',
+                      style: TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        height: 1.1,
+                      ),
+                    ),
+                  ),
           ),
           FutureBuilder<List<PlaybackHistoryItem>>(
             future: _itemsFuture,

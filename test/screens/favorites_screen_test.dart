@@ -16,6 +16,40 @@ void main() {
     PlaylistRepository.instance.favoriteTrackIds.clear();
   });
 
+  testWidgets(
+    'mobile layout uses one in-page title with compact back control',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final httpClient = _FavoritesRecordingHttpClient();
+      var backCount = 0;
+
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: FavoritesScreen(
+              baseUrl: 'http://127.0.0.1:8080',
+              onBack: () => backCount += 1,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => httpClient);
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('收藏'), findsOneWidget);
+      expect(find.text('Favorite Tracks'), findsNothing);
+      expect(find.text('FAVORITES'), findsNothing);
+      expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
+      expect(backCount, 1);
+    },
+  );
+
   testWidgets('removes favorites through the favorites endpoint', (
     tester,
   ) async {

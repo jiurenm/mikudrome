@@ -8,6 +8,34 @@ import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/screens/daily_recommendations_screen.dart';
 
 void main() {
+  testWidgets(
+    'mobile layout uses one in-page title with compact back control',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      var backCount = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DailyRecommendationsScreen(
+            client: _DailyRecommendationsClient(_daily),
+            onBack: () => backCount += 1,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('每日推荐'), findsOneWidget);
+      expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
+      expect(backCount, 1);
+    },
+  );
+
   testWidgets('renders populated daily recommendations and play all', (
     tester,
   ) async {
@@ -89,7 +117,7 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
     expect(backCount, 1);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
@@ -105,7 +133,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
     expect(backCount, 2);
     expect(find.text('每日推荐加载失败'), findsOneWidget);
   });

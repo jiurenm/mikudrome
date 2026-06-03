@@ -17,10 +17,7 @@ class FavoritesHero extends StatelessWidget {
     gradient: LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [
-        Colors.pink.shade900.withValues(alpha: 0.3),
-        AppTheme.mikuDark,
-      ],
+      colors: [Colors.pink.shade900.withValues(alpha: 0.3), AppTheme.mikuDark],
     ),
   );
 
@@ -35,13 +32,13 @@ class FavoritesHero extends StatelessWidget {
   }
 
   Widget _buildMobileLayout(BuildContext context, BoxDecoration gradient) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final iconSize = screenWidth * 0.3;
+    const iconSize = 84.0;
 
     return Container(
       decoration: gradient,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-      child: Column(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
             width: iconSize,
@@ -50,59 +47,49 @@ class FavoritesHero extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  Colors.pink.shade400,
-                  Colors.red.shade600,
-                ],
+                colors: [Colors.pink.shade400, Colors.red.shade600],
               ),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
+            child: const Icon(
               Icons.favorite,
               size: iconSize * 0.6,
               color: Colors.white,
             ),
           ),
-          const SizedBox(height: 16),
-          Text(
-            'FAVORITES',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Colors.pink.shade300,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$trackCount 首收藏',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppTheme.textMuted),
                 ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Favorite Tracks',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: AppTheme.textPrimary,
-                  fontWeight: FontWeight.w900,
+                const SizedBox(height: 14),
+                Semantics(
+                  label: '播放全部收藏',
+                  button: true,
+                  child: FilledButton.icon(
+                    onPressed: trackCount > 0 ? onPlay : null,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.pink.shade600,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 10,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                    icon: const Icon(Icons.play_arrow, size: 20),
+                    label: const Text('播放全部'),
+                  ),
                 ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '$trackCount tracks',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppTheme.textMuted,
-                ),
-          ),
-          const SizedBox(height: 16),
-          Semantics(
-            label: 'Play all favorites',
-            button: true,
-            child: FilledButton.icon(
-              onPressed: trackCount > 0 ? onPlay : null,
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.pink.shade600,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-              ),
-              icon: const Icon(Icons.play_arrow, size: 20),
-              label: const Text('PLAY'),
+              ],
             ),
           ),
         ],
@@ -125,18 +112,11 @@ class FavoritesHero extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  Colors.pink.shade400,
-                  Colors.red.shade600,
-                ],
+                colors: [Colors.pink.shade400, Colors.red.shade600],
               ),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(
-              Icons.favorite,
-              size: 120,
-              color: Colors.white,
-            ),
+            child: const Icon(Icons.favorite, size: 120, color: Colors.white),
           ),
           const SizedBox(width: 32),
           Expanded(
@@ -149,16 +129,16 @@ class FavoritesHero extends StatelessWidget {
                   Text(
                     'FAVORITES',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: Colors.pink.shade300,
-                        ),
+                      color: Colors.pink.shade300,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Favorite Tracks',
                     style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                          color: AppTheme.textPrimary,
-                          fontWeight: FontWeight.w900,
-                        ),
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                   const SizedBox(height: 24),
                   Row(
@@ -166,8 +146,8 @@ class FavoritesHero extends StatelessWidget {
                       Text(
                         '$trackCount tracks',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppTheme.textMuted,
-                            ),
+                          color: AppTheme.textMuted,
+                        ),
                       ),
                       const SizedBox(width: 24),
                       Semantics(
@@ -179,7 +159,9 @@ class FavoritesHero extends StatelessWidget {
                             backgroundColor: Colors.pink.shade600,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 32, vertical: 12),
+                              horizontal: 32,
+                              vertical: 12,
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(24),
                             ),

@@ -9,24 +9,24 @@ import '../models/playlist.dart';
 import '../services/playlist_repository.dart';
 import '../theme/app_theme.dart';
 import '../utils/responsive.dart';
+import '../widgets/mobile_page_header.dart';
 import '../widgets/playlists/new_playlist_dialog.dart';
+import '../widgets/playlists/playlist_cover.dart';
 import '../widgets/playlists/playlist_grid_card.dart';
 import '../widgets/playlists/rename_playlist_dialog.dart';
 
 class PlaylistsScreen extends StatefulWidget {
-  const PlaylistsScreen({
-    super.key,
-    this.onPlaylistTap,
-  });
+  const PlaylistsScreen({super.key, this.onPlaylistTap, this.client});
 
   final ValueChanged<int>? onPlaylistTap;
+  final ApiClient? client;
 
   @override
   State<PlaylistsScreen> createState() => _PlaylistsScreenState();
 }
 
 class _PlaylistsScreenState extends State<PlaylistsScreen> {
-  final _client = ApiClient();
+  late final ApiClient _client;
   bool _loading = false;
   bool _operationInProgress = false;
 
@@ -38,6 +38,7 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
   @override
   void initState() {
     super.initState();
+    _client = widget.client ?? ApiClient();
     PlaylistRepository.instance.initialize(_client);
     _loadPlaylists();
   }
@@ -69,9 +70,9 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
       await PlaylistRepository.instance.refreshPlaylists(_client);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load playlists: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to load playlists: $e')));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -91,14 +92,14 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
       final playlist = await _client.createPlaylist(name);
       PlaylistRepository.instance.upsertPlaylist(playlist);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Created playlist "$name"')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Created playlist "$name"')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to create playlist: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to create playlist: $e')));
     } finally {
       if (mounted) {
         setState(() => _operationInProgress = false);
@@ -121,14 +122,14 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
         PlaylistRepository.instance.upsertPlaylist(updated);
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Renamed to "$newName"')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Renamed to "$newName"')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to rename playlist: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to rename playlist: $e')));
     } finally {
       if (mounted) {
         setState(() => _operationInProgress = false);
@@ -162,14 +163,14 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
       await _client.deletePlaylist(playlist.id);
       PlaylistRepository.instance.removePlaylist(playlist.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Deleted "${playlist.name}"')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Deleted "${playlist.name}"')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete playlist: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to delete playlist: $e')));
     } finally {
       if (mounted) {
         setState(() => _operationInProgress = false);
@@ -189,9 +190,9 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
       final bytes = kIsWeb ? file.bytes : await File(file.path!).readAsBytes();
       if (bytes == null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to read file')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Failed to read file')));
         return;
       }
 
@@ -207,14 +208,14 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
         PlaylistRepository.instance.upsertPlaylist(updated);
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cover uploaded')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Cover uploaded')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to upload cover: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to upload cover: $e')));
     } finally {
       if (mounted) {
         setState(() => _operationInProgress = false);
@@ -231,14 +232,14 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
         PlaylistRepository.instance.upsertPlaylist(updated);
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cover cleared')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Cover cleared')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to clear cover: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to clear cover: $e')));
     } finally {
       if (mounted) {
         setState(() => _operationInProgress = false);
@@ -293,62 +294,57 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
   }
 
   Widget _buildHeader(BuildContext context, int playlistCount) {
+    final mobile = isMobile(context);
+    final addButton = IconButton(
+      icon: const Icon(Icons.add, color: AppTheme.textPrimary),
+      onPressed: _createPlaylist,
+      tooltip: mobile ? '新建歌单' : 'Create playlist',
+    );
+
+    if (mobile) {
+      return MobilePageHeader(
+        title: '歌单',
+        subtitle: '共 $playlistCount 个歌单',
+        actions: [addButton],
+      );
+    }
+
     final titleWidget = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Playlists',
           style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                color: AppTheme.textPrimary,
-                fontWeight: FontWeight.w700,
-              ),
+            color: AppTheme.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 8),
         Text(
           '$playlistCount playlists',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppTheme.textMuted,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AppTheme.textMuted),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );
 
-    final addButton = IconButton(
-      icon: const Icon(Icons.add, color: AppTheme.textPrimary),
-      onPressed: _createPlaylist,
-      tooltip: 'Create playlist',
-    );
-
-    if (isMobile(context)) {
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: titleWidget),
-          addButton,
-        ],
-      );
-    }
-
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        titleWidget,
-        addButton,
-      ],
+      children: [titleWidget, addButton],
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final mobile = isMobile(context);
     return Scaffold(
-      appBar: isMobile(context)
-          ? AppBar(
-              title: const Text('Playlists'),
-              backgroundColor: AppTheme.mikuDark,
-            )
-          : null,
+      backgroundColor: AppTheme.mikuDark,
       body: Stack(
         children: [
           ListenableBuilder(
@@ -365,72 +361,105 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
                 child: CustomScrollView(
                   slivers: [
                     SliverToBoxAdapter(
-                      child: Padding(
-                        padding: EdgeInsets.all(isMobile(context) ? 12.0 : 32.0),
-                        child: _buildHeader(context, playlists.length),
-                      ),
+                      child: mobile
+                          ? _buildHeader(context, playlists.length)
+                          : Padding(
+                              padding: const EdgeInsets.all(32),
+                              child: _buildHeader(context, playlists.length),
+                            ),
                     ),
                     if (playlists.isEmpty)
-                      const SliverFillRemaining(
+                      SliverFillRemaining(
                         child: Center(
                           child: Text(
-                            'No playlists yet. Tap + to create one.',
-                            style: TextStyle(color: AppTheme.textMuted),
+                            mobile
+                                ? '还没有歌单，点右上角 + 新建'
+                                : 'No playlists yet. Tap + to create one.',
+                            style: const TextStyle(color: AppTheme.textMuted),
                           ),
+                        ),
+                      )
+                    else if (mobile)
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 112),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate((
+                            context,
+                            index,
+                          ) {
+                            final playlist = playlists[index];
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                bottom: index == playlists.length - 1 ? 0 : 10,
+                              ),
+                              child: _MobilePlaylistRow(
+                                playlist: playlist,
+                                client: _client,
+                                onTap: () {
+                                  widget.onPlaylistTap?.call(playlist.id);
+                                },
+                                onShowMenu: () => _showPlaylistMenu(playlist),
+                              ),
+                            );
+                          }, childCount: playlists.length),
                         ),
                       )
                     else
                       SliverPadding(
                         padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
                         sliver: SliverGrid(
-                          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                            maxCrossAxisExtent: 200,
-                            mainAxisSpacing: _gridSpacing,
-                            crossAxisSpacing: _gridSpacing,
-                            childAspectRatio: 0.85,
-                          ),
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              final playlist = playlists[index];
-                              return GestureDetector(
-                                onLongPress: () => _showPlaylistMenu(playlist),
-                                child: Stack(
-                                  children: [
-                                    PlaylistGridCard(
-                                      playlist: playlist,
-                                      client: _client,
-                                      onTap: () {
-                                        widget.onPlaylistTap?.call(playlist.id);
-                                      },
-                                    ),
-                                    Positioned(
-                                      top: 4,
-                                      right: 4,
-                                      child: Material(
-                                        color: Colors.black.withValues(alpha: 0.5),
-                                        borderRadius: BorderRadius.circular(16),
-                                        child: IconButton(
-                                          icon: const Icon(
-                                            Icons.more_vert,
-                                            color: Colors.white,
-                                            size: _menuIconSize,
-                                          ),
-                                          padding: const EdgeInsets.all(4),
-                                          constraints: const BoxConstraints(
-                                            minWidth: _menuButtonSize,
-                                            minHeight: _menuButtonSize,
-                                          ),
-                                          onPressed: () => _showPlaylistMenu(playlist),
-                                          tooltip: 'Playlist options',
+                          gridDelegate:
+                              const SliverGridDelegateWithMaxCrossAxisExtent(
+                                maxCrossAxisExtent: 200,
+                                mainAxisSpacing: _gridSpacing,
+                                crossAxisSpacing: _gridSpacing,
+                                childAspectRatio: 0.85,
+                              ),
+                          delegate: SliverChildBuilderDelegate((
+                            context,
+                            index,
+                          ) {
+                            final playlist = playlists[index];
+                            return GestureDetector(
+                              onLongPress: () => _showPlaylistMenu(playlist),
+                              child: Stack(
+                                children: [
+                                  PlaylistGridCard(
+                                    playlist: playlist,
+                                    client: _client,
+                                    onTap: () {
+                                      widget.onPlaylistTap?.call(playlist.id);
+                                    },
+                                  ),
+                                  Positioned(
+                                    top: 4,
+                                    right: 4,
+                                    child: Material(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.5,
+                                      ),
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: IconButton(
+                                        icon: const Icon(
+                                          Icons.more_vert,
+                                          color: Colors.white,
+                                          size: _menuIconSize,
                                         ),
+                                        padding: const EdgeInsets.all(4),
+                                        constraints: const BoxConstraints(
+                                          minWidth: _menuButtonSize,
+                                          minHeight: _menuButtonSize,
+                                        ),
+                                        onPressed: () =>
+                                            _showPlaylistMenu(playlist),
+                                        tooltip: 'Playlist options',
                                       ),
                                     ),
-                                  ],
-                                ),
-                              );
-                            },
-                            childCount: playlists.length,
-                          ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }, childCount: playlists.length),
                         ),
                       ),
                   ],
@@ -441,11 +470,106 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
           if (_operationInProgress)
             Container(
               color: Colors.black.withValues(alpha: 0.3),
-              child: const Center(
-                child: CircularProgressIndicator(),
-              ),
+              child: const Center(child: CircularProgressIndicator()),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _MobilePlaylistRow extends StatelessWidget {
+  const _MobilePlaylistRow({
+    required this.playlist,
+    required this.client,
+    required this.onTap,
+    required this.onShowMenu,
+  });
+
+  static const double _coverSize = 60;
+  static const double _menuIconSize = 18;
+  static const double _menuButtonSize = 36;
+
+  final Playlist playlist;
+  final ApiClient client;
+  final VoidCallback onTap;
+  final VoidCallback onShowMenu;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: ValueKey<String>('mobile-playlist-row-${playlist.id}'),
+        onTap: onTap,
+        onLongPress: onShowMenu,
+        borderRadius: BorderRadius.circular(8),
+        child: Ink(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: AppTheme.cardBg.withValues(alpha: 0.86),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+          ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: PlaylistCover(
+                  playlist: playlist,
+                  client: client,
+                  size: _coverSize,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      playlist.name,
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      '${playlist.trackCount} 首',
+                      style: const TextStyle(
+                        color: AppTheme.textMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                key: ValueKey<String>('mobile-playlist-menu-${playlist.id}'),
+                icon: const Icon(
+                  Icons.more_horiz,
+                  color: AppTheme.textMuted,
+                  size: _menuIconSize,
+                ),
+                constraints: const BoxConstraints(
+                  minWidth: _menuButtonSize,
+                  minHeight: _menuButtonSize,
+                ),
+                padding: EdgeInsets.zero,
+                tooltip: '歌单操作',
+                onPressed: onShowMenu,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

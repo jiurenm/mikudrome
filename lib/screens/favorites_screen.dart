@@ -8,6 +8,7 @@ import '../services/playlist_repository.dart';
 import '../theme/app_theme.dart';
 import '../utils/responsive.dart';
 import '../widgets/favorites/favorites_hero.dart';
+import '../widgets/mobile_page_header.dart';
 import '../widgets/playlist_detail/playlist_track_row.dart';
 
 // Constants
@@ -225,19 +226,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         children: [
           CustomScrollView(
             slivers: [
-              if (isMobile(context) && widget.onBack != null)
-                SliverAppBar(
-                  backgroundColor: Colors.transparent,
-                  pinned: false,
-                  floating: true,
-                  leading: IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: widget.onBack,
-                  ),
-                  title: const Text(
-                    'Favorites',
-                    style: TextStyle(fontSize: 16),
-                  ),
+              if (isMobile(context))
+                SliverToBoxAdapter(
+                  child: MobilePageHeader(title: '收藏', onBack: widget.onBack),
                 ),
               SliverToBoxAdapter(
                 child: FavoritesHero(

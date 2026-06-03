@@ -7,6 +7,34 @@ import 'package:mikudrome/screens/library_home_screen.dart';
 import 'package:mikudrome/screens/recent_playback_screen.dart';
 
 void main() {
+  testWidgets(
+    'mobile layout uses one in-page title with compact back control',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      var backCount = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RecentPlaybackScreen(
+            client: _RecentPlaybackClient(_items),
+            onBack: () => backCount += 1,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('最近播放'), findsOneWidget);
+      expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
+      expect(backCount, 1);
+    },
+  );
+
   testWidgets('plays one selected history track', (tester) async {
     Track? played;
 

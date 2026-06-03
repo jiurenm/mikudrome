@@ -121,6 +121,8 @@ class PlayerScreen extends StatefulWidget {
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
+  static const _externalLyricSyncInterval = Duration(milliseconds: 100);
+
   VideoPlayerController? _controller;
   VoidCallback? _controllerListener;
   bool _isInitializing = true;
@@ -137,6 +139,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   List<TimedLyricLine> _timedLyrics = const [];
   int _activeLyricIndex = -1;
   Timer? _fullscreenChromeTimer;
+  Timer? _externalLyricSyncTimer;
+  Duration _externalLyricPosition = Duration.zero;
   late final PageController _mobileMediaPageController;
   late final WebMediaSessionService _mediaSession;
   late final WebAudioPlayer _webAudioPlayer;
@@ -191,7 +195,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Duration get _position {
     if (_usesExternalAudioPlayback) {
-      return _duration * (widget.externalProgress ?? 0);
+      return _externalLyricPosition;
     }
     return _usesWebAudioPlayer
         ? _webAudioPlayer.value.position
@@ -257,7 +261,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _mediaSession =
         widget.mediaSessionService ?? createWebMediaSessionService();
     _showQueue = !_track.hasVideo;
+    _resetExternalLyricPosition();
     _syncLyricsForTrack();
+    _syncExternalLyricTimer();
     widget.onControlsReady?.call(
       togglePlayback: _togglePlayback,
       seekToFraction: _seekTo,
@@ -294,6 +300,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
 
     final trackChanged = oldWidget.track.id != widget.track.id;
+    final externalPositionChanged =
+        trackChanged ||
+        oldWidget.externalProgress != widget.externalProgress ||
+        oldWidget.useExternalAudioPlayback != widget.useExternalAudioPlayback ||
+        oldWidget.playbackMode != widget.playbackMode;
+    if (externalPositionChanged) {
+      _resetExternalLyricPosition();
+    }
+
     if (trackChanged || oldWidget.track.lyrics != widget.track.lyrics) {
       _syncLyricsForTrack();
     }
@@ -306,6 +321,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 widget.useExternalAudioPlayback)) {
       _syncActiveLyricIndexForPosition(_position);
     }
+    _syncExternalLyricTimer();
 
     final shouldReinitializeController =
         trackChanged ||
@@ -338,6 +354,52 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (_usesExternalAudioPlayback) {
       _syncActiveLyricIndexForPosition(_position);
     }
+  }
+
+  Duration _positionFromExternalProgress() {
+    final duration = _duration;
+    if (duration <= Duration.zero) {
+      return Duration.zero;
+    }
+    final progress = (widget.externalProgress ?? 0).clamp(0.0, 1.0).toDouble();
+    return duration * progress;
+  }
+
+  void _resetExternalLyricPosition() {
+    _externalLyricPosition = _positionFromExternalProgress();
+  }
+
+  void _syncExternalLyricTimer() {
+    _externalLyricSyncTimer?.cancel();
+    _externalLyricSyncTimer = null;
+
+    if (!_usesExternalAudioPlayback || !_hasTimedLyrics || !_isPlaying) {
+      return;
+    }
+
+    _externalLyricSyncTimer = Timer.periodic(_externalLyricSyncInterval, (_) {
+      if (!mounted ||
+          !_usesExternalAudioPlayback ||
+          !_hasTimedLyrics ||
+          !_isPlaying) {
+        _externalLyricSyncTimer?.cancel();
+        _externalLyricSyncTimer = null;
+        return;
+      }
+
+      final duration = _duration;
+      final nextPosition = _externalLyricPosition + _externalLyricSyncInterval;
+      _externalLyricPosition =
+          duration > Duration.zero && nextPosition > duration
+          ? duration
+          : nextPosition;
+      _syncActiveLyricIndexForPosition(_externalLyricPosition, notify: true);
+
+      if (duration > Duration.zero && _externalLyricPosition >= duration) {
+        _externalLyricSyncTimer?.cancel();
+        _externalLyricSyncTimer = null;
+      }
+    });
   }
 
   void _syncActiveLyricIndexForPosition(
@@ -665,6 +727,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void dispose() {
     _mobileMediaPageController.dispose();
     _fullscreenChromeTimer?.cancel();
+    _externalLyricSyncTimer?.cancel();
     _detachControllerListener(_controller);
     widget.onVideoControllerChanged?.call(null);
     _mediaSessionBinding.invalidate();

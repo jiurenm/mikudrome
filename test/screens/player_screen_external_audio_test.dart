@@ -217,6 +217,49 @@ void main() {
     );
   });
 
+  testWidgets('external audio advances active mobile lyrics between updates', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _buildPlayer(
+        track: _timedLyricTrack,
+        externalProgress: 0.299,
+        externalIsPlaying: true,
+        onExternalPause: () async {},
+        onExternalSeekToFraction: (_) async {},
+        onControlsReady:
+            ({required togglePlayback, required seekToFraction}) {},
+        onPlaybackStateChanged:
+            ({
+              required bool isPlaying,
+              required double progress,
+              required String elapsedLabel,
+              required String durationLabel,
+            }) {},
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('歌词'));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('lyrics-line-active-0')),
+      findsOneWidget,
+    );
+
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('lyrics-line-active-1')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('mobile player timeline uses the asset thumb', (tester) async {
     await tester.binding.setSurfaceSize(const Size(430, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
