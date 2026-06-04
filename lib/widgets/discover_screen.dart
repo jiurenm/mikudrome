@@ -353,6 +353,88 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
     super.dispose();
   }
 
+  List<Widget> _buildMobileHomeSectionWidgets() {
+    final featuredAlbum = _albums.isNotEmpty ? _albums.first : null;
+    return [
+      const _MobileDiscoverTopBar(),
+      const SizedBox(height: 12),
+      _MobileSearchField(controller: _searchController),
+      const SizedBox(height: 16),
+      if (_refreshError != null) ...[
+        _RefreshErrorBanner(message: _refreshError!),
+        const SizedBox(height: 12),
+      ],
+      _DailyRecommendationsModule(
+        recommendations: _dailyRecommendations,
+        failed: _dailyRecommendationsFailed,
+        onTap: widget.onDailyRecommendationsSelected,
+        onRetry: () => _loadDiscoverData(showLoading: false),
+      ),
+      const SizedBox(height: 16),
+      _FeaturedAlbumBanner(
+        album: featuredAlbum,
+        onAlbumSelected: widget.onAlbumSelected,
+      ),
+      const SizedBox(height: 20),
+      _MobileSectionHeader(
+        title: '专辑推荐',
+        section: DiscoverSection.albums,
+        onMoreSelected: widget.onMoreSelected,
+      ),
+      const SizedBox(height: 10),
+      _AlbumStrip(
+        albums: _recommendedAlbums,
+        onAlbumSelected: widget.onAlbumSelected,
+      ),
+      const SizedBox(height: 20),
+      _MobileSectionHeader(
+        title: '热门P主',
+        section: DiscoverSection.producers,
+        onMoreSelected: widget.onMoreSelected,
+      ),
+      const SizedBox(height: 10),
+      _ProducerStrip(
+        producers: _producers.take(5).toList(),
+        onProducerSelected: widget.onProducerSelected,
+      ),
+      const SizedBox(height: 20),
+      _MobileSectionHeader(
+        title: '虚拟歌手',
+        section: DiscoverSection.vocalists,
+        onMoreSelected: widget.onMoreSelected,
+      ),
+      const SizedBox(height: 10),
+      _VocalistStrip(
+        vocalists: _vocalists.take(5).toList(),
+        onVocalistSelected: widget.onVocalistSelected,
+      ),
+      const SizedBox(height: 20),
+      _MobileSectionHeader(
+        title: '推荐MV',
+        section: DiscoverSection.mv,
+        onMoreSelected: widget.onMoreSelected,
+      ),
+      const SizedBox(height: 10),
+      _VideoStrip(videos: _videos.take(3).toList()),
+    ];
+  }
+
+  Widget _buildMobileLandscapeDashboard(BuildContext context) {
+    return SingleChildScrollView(
+      key: const ValueKey('discover-mobile-landscape-dashboard'),
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      child: Wrap(
+        spacing: 16,
+        runSpacing: 16,
+        children: _buildMobileHomeSectionWidgets()
+            .where((widget) => widget is! SizedBox)
+            .map((widget) => SizedBox(width: 360, child: widget))
+            .toList(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -384,81 +466,21 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
       );
     }
 
-    final featuredAlbum = _albums.isNotEmpty ? _albums.first : null;
     return RefreshIndicator(
       onRefresh: _refreshDiscoverData,
-      child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
-            sliver: SliverList.list(
-              children: [
-                const _MobileDiscoverTopBar(),
-                const SizedBox(height: 12),
-                _MobileSearchField(controller: _searchController),
-                const SizedBox(height: 16),
-                if (_refreshError != null) ...[
-                  _RefreshErrorBanner(message: _refreshError!),
-                  const SizedBox(height: 12),
-                ],
-                _DailyRecommendationsModule(
-                  recommendations: _dailyRecommendations,
-                  failed: _dailyRecommendationsFailed,
-                  onTap: widget.onDailyRecommendationsSelected,
-                  onRetry: () => _loadDiscoverData(showLoading: false),
+      child: isNativePhoneLandscapeSurface(context)
+          ? _buildMobileLandscapeDashboard(context)
+          : CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
+                  sliver: SliverList.list(
+                    children: _buildMobileHomeSectionWidgets(),
+                  ),
                 ),
-                const SizedBox(height: 16),
-                _FeaturedAlbumBanner(
-                  album: featuredAlbum,
-                  onAlbumSelected: widget.onAlbumSelected,
-                ),
-                const SizedBox(height: 20),
-                _MobileSectionHeader(
-                  title: '专辑推荐',
-                  section: DiscoverSection.albums,
-                  onMoreSelected: widget.onMoreSelected,
-                ),
-                const SizedBox(height: 10),
-                _AlbumStrip(
-                  albums: _recommendedAlbums,
-                  onAlbumSelected: widget.onAlbumSelected,
-                ),
-                const SizedBox(height: 20),
-                _MobileSectionHeader(
-                  title: '热门P主',
-                  section: DiscoverSection.producers,
-                  onMoreSelected: widget.onMoreSelected,
-                ),
-                const SizedBox(height: 10),
-                _ProducerStrip(
-                  producers: _producers.take(5).toList(),
-                  onProducerSelected: widget.onProducerSelected,
-                ),
-                const SizedBox(height: 20),
-                _MobileSectionHeader(
-                  title: '虚拟歌手',
-                  section: DiscoverSection.vocalists,
-                  onMoreSelected: widget.onMoreSelected,
-                ),
-                const SizedBox(height: 10),
-                _VocalistStrip(
-                  vocalists: _vocalists.take(5).toList(),
-                  onVocalistSelected: widget.onVocalistSelected,
-                ),
-                const SizedBox(height: 20),
-                _MobileSectionHeader(
-                  title: '推荐MV',
-                  section: DiscoverSection.mv,
-                  onMoreSelected: widget.onMoreSelected,
-                ),
-                const SizedBox(height: 10),
-                _VideoStrip(videos: _videos.take(3).toList()),
               ],
             ),
-          ),
-        ],
-      ),
     );
   }
 }

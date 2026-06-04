@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/api/api_client.dart';
@@ -167,6 +168,38 @@ void main() {
     expect(thirdPosition.dx, greaterThan(secondPosition.dx));
     expect(firstCardSize.width, lessThanOrEqualTo(116));
     expect(firstCardSize.height, firstCardSize.width);
+  });
+
+  testWidgets('MyMusicScreen uses landscape grouped layout', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    try {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(size: Size(844, 390)),
+            child: Scaffold(
+              body: MyMusicScreen(
+                onNavigate: (_) {},
+                onPlaylistTap: (_) {},
+                onQueue: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('my-music-mobile-landscape')),
+        findsOneWidget,
+      );
+      expect(find.text('收藏'), findsOneWidget);
+      expect(find.text('歌单'), findsOneWidget);
+      expect(find.text('最近播放'), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 }
 
