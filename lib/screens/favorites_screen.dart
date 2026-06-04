@@ -8,7 +8,6 @@ import '../services/playlist_repository.dart';
 import '../theme/app_theme.dart';
 import '../utils/responsive.dart';
 import '../widgets/favorites/favorites_hero.dart';
-import '../widgets/mobile_page_header.dart';
 import '../widgets/playlist_detail/playlist_track_row.dart';
 
 // Constants
@@ -226,9 +225,29 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         children: [
           CustomScrollView(
             slivers: [
-              if (isMobile(context))
+              if (isMobile(context) && widget.onBack != null)
                 SliverToBoxAdapter(
-                  child: MobilePageHeader(title: '收藏', onBack: widget.onBack),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        onPressed: widget.onBack,
+                        tooltip: '返回',
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(
+                          width: 36,
+                          height: 36,
+                        ),
+                        icon: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: AppTheme.textPrimary,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               SliverToBoxAdapter(
                 child: FavoritesHero(

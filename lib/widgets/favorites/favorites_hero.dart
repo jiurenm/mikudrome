@@ -32,64 +32,57 @@ class FavoritesHero extends StatelessWidget {
   }
 
   Widget _buildMobileLayout(BuildContext context, BoxDecoration gradient) {
-    const iconSize = 84.0;
+    const iconSize = 96.0;
 
     return Container(
       decoration: gradient,
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: iconSize,
-            height: iconSize,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Colors.pink.shade400, Colors.red.shade600],
+          Center(
+            child: Container(
+              width: iconSize,
+              height: iconSize,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Colors.pink.shade400, Colors.red.shade600],
+                ),
+                borderRadius: BorderRadius.circular(8),
               ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              Icons.favorite,
-              size: iconSize * 0.6,
-              color: Colors.white,
+              child: const Icon(
+                Icons.favorite,
+                size: iconSize * 0.6,
+                color: Colors.white,
+              ),
             ),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$trackCount 首收藏',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: AppTheme.textMuted),
+          const SizedBox(height: 16),
+          Text(
+            '$trackCount 首收藏',
+            textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppTheme.textMuted),
+          ),
+          const SizedBox(height: 16),
+          Semantics(
+            label: '播放全部收藏',
+            button: true,
+            child: FilledButton.icon(
+              onPressed: trackCount > 0 ? onPlay : null,
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.pink.shade600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
                 ),
-                const SizedBox(height: 14),
-                Semantics(
-                  label: '播放全部收藏',
-                  button: true,
-                  child: FilledButton.icon(
-                    onPressed: trackCount > 0 ? onPlay : null,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.pink.shade600,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 10,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                    ),
-                    icon: const Icon(Icons.play_arrow, size: 20),
-                    label: const Text('播放全部'),
-                  ),
-                ),
-              ],
+              ),
+              icon: const Icon(Icons.play_arrow, size: 20),
+              label: const Text('播放全部'),
             ),
           ),
         ],

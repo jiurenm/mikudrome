@@ -16,39 +16,50 @@ void main() {
     PlaylistRepository.instance.favoriteTrackIds.clear();
   });
 
-  testWidgets(
-    'mobile layout uses one in-page title with compact back control',
-    (tester) async {
-      tester.view.physicalSize = const Size(390, 844);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets('mobile layout omits page title and keeps compact back control', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
-      final httpClient = _FavoritesRecordingHttpClient();
-      var backCount = 0;
+    final httpClient = _FavoritesRecordingHttpClient();
+    var backCount = 0;
 
-      await HttpOverrides.runZoned(() async {
-        await tester.pumpWidget(
-          MaterialApp(
-            home: FavoritesScreen(
-              baseUrl: 'http://127.0.0.1:8080',
-              onBack: () => backCount += 1,
-            ),
+    await HttpOverrides.runZoned(() async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: FavoritesScreen(
+            baseUrl: 'http://127.0.0.1:8080',
+            onBack: () => backCount += 1,
           ),
-        );
-        await tester.pumpAndSettle();
-      }, createHttpClient: (_) => httpClient);
+        ),
+      );
+      await tester.pumpAndSettle();
+    }, createHttpClient: (_) => httpClient);
 
-      expect(tester.takeException(), isNull);
-      expect(find.text('收藏'), findsOneWidget);
-      expect(find.text('Favorite Tracks'), findsNothing);
-      expect(find.text('FAVORITES'), findsNothing);
-      expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    expect(find.text('收藏'), findsNothing);
+    expect(find.text('Favorite Tracks'), findsNothing);
+    expect(find.text('FAVORITES'), findsNothing);
+    expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsOneWidget);
+    expect(
+      tester.getCenter(find.byIcon(Icons.arrow_back_ios_new_rounded)).dx,
+      lessThan(64),
+    );
+    expect(
+      tester.getCenter(find.byIcon(Icons.favorite).first).dx,
+      closeTo(195, 1),
+    );
+    expect(
+      tester.getSize(find.widgetWithText(FilledButton, '播放全部')).width,
+      greaterThan(300),
+    );
 
-      await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
-      expect(backCount, 1);
-    },
-  );
+    await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
+    expect(backCount, 1);
+  });
 
   testWidgets('removes favorites through the favorites endpoint', (
     tester,

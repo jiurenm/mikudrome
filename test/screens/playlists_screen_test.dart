@@ -16,11 +16,15 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
+    var backCount = 0;
     await tester.pumpWidget(
       MaterialApp(
         home: MediaQuery(
           data: const MediaQueryData(size: Size(390, 844)),
-          child: PlaylistsScreen(client: _PlaylistsClient()),
+          child: PlaylistsScreen(
+            client: _PlaylistsClient(),
+            onBack: () => backCount += 1,
+          ),
         ),
       ),
     );
@@ -28,6 +32,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('歌单'), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsOneWidget);
     expect(find.text('共 3 个歌单'), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('mobile-playlist-row-1')),
@@ -38,6 +43,9 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('工作时听的超长歌单标题应该被截断而不是撑破布局'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
+    expect(backCount, 1);
   });
 }
 

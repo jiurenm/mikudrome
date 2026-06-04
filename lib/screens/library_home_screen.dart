@@ -413,6 +413,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
         );
       case ShellRoute.playlists:
         return PlaylistsScreen(
+          onBack: _mobileHistory.isNotEmpty ? _handleMobileBack : null,
           onPlaylistTap: (playlistId) {
             _recordMobileHistory();
             setState(() {

@@ -16,9 +16,15 @@ import '../widgets/playlists/playlist_grid_card.dart';
 import '../widgets/playlists/rename_playlist_dialog.dart';
 
 class PlaylistsScreen extends StatefulWidget {
-  const PlaylistsScreen({super.key, this.onPlaylistTap, this.client});
+  const PlaylistsScreen({
+    super.key,
+    this.onPlaylistTap,
+    this.onBack,
+    this.client,
+  });
 
   final ValueChanged<int>? onPlaylistTap;
+  final VoidCallback? onBack;
   final ApiClient? client;
 
   @override
@@ -305,6 +311,7 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
       return MobilePageHeader(
         title: '歌单',
         subtitle: '共 $playlistCount 个歌单',
+        onBack: widget.onBack,
         actions: [addButton],
       );
     }
