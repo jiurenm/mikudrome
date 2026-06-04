@@ -92,7 +92,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   @override
   Widget build(BuildContext context) {
     if (widget.showSectionTabs &&
-        isMobile(context) &&
+        (isMobile(context) || isMobileSurface(context)) &&
         (widget.child == null || widget.preferMobileHome)) {
       return _MobileDiscoverHome(
         onMoreSelected: widget.onMobileMoreSelected,

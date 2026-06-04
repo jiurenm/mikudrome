@@ -20,6 +20,7 @@ import '../widgets/player/pip_mini_player.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/discover_screen.dart';
 import '../widgets/mobile_app_shell.dart';
+import '../widgets/mobile_chrome_metrics.dart';
 import 'album_detail_screen.dart';
 import 'albums_screen.dart';
 import 'daily_recommendations_screen.dart';
@@ -336,7 +337,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   }
 
   void _recordMobileHistory() {
-    if (!isMobile(context)) return;
+    if (!isMobileSurface(context)) return;
     final snapshot = _currentMobileSnapshot();
     if (_mobileHistory.isNotEmpty &&
         _isSameMobileSnapshot(_mobileHistory.last, snapshot)) {
@@ -346,7 +347,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   }
 
   void _handleMobileBack() {
-    if (!isMobile(context)) return;
+    if (!isMobileSurface(context)) return;
     if (_showPlayer) {
       _collapseCurrentMobilePlayer();
       return;
@@ -359,7 +360,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
 
   Widget _contentForRoute(ShellRoute route) {
     // On mobile, 'more' is the sentinel for the "More" tab
-    if (isMobile(context) && route == ShellRoute.more) {
+    if (isMobileSurface(context) && route == ShellRoute.more) {
       return MobileMoreScreen(
         onNavigate: (r) {
           _recordMobileHistory();
@@ -722,14 +723,14 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
 
   bool get _canUseMobileAudioPlayback {
     if (!mounted) return false;
-    return isMobile(context) &&
+    return isMobileSurface(context) &&
         _playbackMode == PlaybackMode.audio &&
         _currentTrack?.hasAudio == true;
   }
 
   bool get _isMobilePlaybackSurface {
     if (!mounted) return false;
-    return isMobile(context);
+    return isMobileSurface(context);
   }
 
   String _mobileAudioUrlForTrack(Track track) {
@@ -830,7 +831,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   }
 
   void _handleMobileAudioState(MobileAudioPlaybackState state) {
-    if (!mounted || !isMobile(context) || _playbackMode != PlaybackMode.audio) {
+    if (!mounted ||
+        !isMobileSurface(context) ||
+        _playbackMode != PlaybackMode.audio) {
       return;
     }
     if (_isStaleMobileVideoCollapseAudioState(state)) {
@@ -1513,7 +1516,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   @override
   Widget build(BuildContext context) {
     final currentTrack = _currentTrack;
-    final mobile = isMobile(context);
+    final surface = surfaceTypeOf(context);
+    final mobile = isMobileSurface(context);
 
     Widget mainContent;
     if (_selectedAlbum != null) {
@@ -1609,7 +1613,11 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     // --- Branch: Mobile vs Desktop ---
     if (mobile) {
       // Mobile: three-tab shell + MobilePlayerSheet overlay.
-      final bottomPadding = MediaQuery.of(context).padding.bottom + 56;
+      final chromeMetrics = MobileChromeMetrics.forSurface(
+        surface,
+        safeAreaBottom: MediaQuery.of(context).padding.bottom,
+      );
+      final bottomPadding = chromeMetrics.playerInset;
 
       final showMyMusicContent =
           _route == ShellRoute.favorites ||
