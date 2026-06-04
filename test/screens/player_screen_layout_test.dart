@@ -38,6 +38,7 @@ Widget _buildPlayer({
   Track? track,
   List<Track>? queue,
   String? currentCoverUrl,
+  PlaybackMode playbackMode = PlaybackMode.audio,
   bool shuffleEnabled = false,
   VoidCallback? onToggleShuffle,
   String Function(Track track)? coverUrlForTrack,
@@ -52,7 +53,7 @@ Widget _buildPlayer({
         queue: resolvedQueue,
         currentIndex: 0,
         contextLabel: 'Layout Test',
-        playbackMode: PlaybackMode.audio,
+        playbackMode: playbackMode,
         onSelectTrack: (_) {},
         onPrevious: () {},
         onNext: () {},
@@ -83,6 +84,7 @@ Future<void> _pumpPlayer(
   Track? track,
   List<Track>? queue,
   String? currentCoverUrl,
+  PlaybackMode playbackMode = PlaybackMode.audio,
   bool shuffleEnabled = false,
   VoidCallback? onToggleShuffle,
   String Function(Track track)? coverUrlForTrack,
@@ -93,6 +95,7 @@ Future<void> _pumpPlayer(
       track: track,
       queue: queue,
       currentCoverUrl: currentCoverUrl,
+      playbackMode: playbackMode,
       shuffleEnabled: shuffleEnabled,
       onToggleShuffle: onToggleShuffle,
       coverUrlForTrack: coverUrlForTrack,
@@ -1124,6 +1127,56 @@ void main() {
       await tester.tap(find.text('队列'));
       await tester.pumpAndSettle();
       expect(find.text('Layout Test'), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('mobile landscape video queue button opens mobile queue modal', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const current = Track(
+      id: 77,
+      title: 'Landscape MV',
+      audioPath: '/tmp/77.flac',
+      videoPath: '/tmp/77.mp4',
+      vocal: 'Miku',
+    );
+    const next = Track(
+      id: 78,
+      title: 'Next Landscape MV',
+      audioPath: '/tmp/78.flac',
+      videoPath: '/tmp/78.mp4',
+      vocal: 'Miku',
+    );
+
+    try {
+      await _pumpPlayer(
+        tester,
+        surfaceSize: const Size(844, 390),
+        track: current,
+        queue: const [current, next],
+        playbackMode: PlaybackMode.video,
+      );
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+      final queueButton = find.byKey(const ValueKey('mobile-mv-queue-button'));
+      expect(queueButton, findsOneWidget);
+
+      await tester.ensureVisible(queueButton);
+      await tester.pumpAndSettle();
+      await tester.tap(queueButton);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Next Landscape MV'), findsOneWidget);
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }

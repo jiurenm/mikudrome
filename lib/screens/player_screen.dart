@@ -921,7 +921,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _toggleQueue() {
-    if (isMobile(context)) {
+    if (isMobileSurface(context)) {
       showModalBottomSheet(
         context: context,
         backgroundColor: AppTheme.mikuDark,
