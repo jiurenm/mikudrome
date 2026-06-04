@@ -159,16 +159,11 @@ class _PlaylistItemEditorSheetState extends State<PlaylistItemEditorSheet> {
               const SizedBox(height: 16),
               TextField(
                 controller: _noteController,
-                decoration: const InputDecoration(
-                  labelText: 'Note',
-                ),
+                decoration: const InputDecoration(labelText: 'Note'),
                 maxLines: 2,
               ),
               const SizedBox(height: 24),
-              Text(
-                'Group',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              Text('Group', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               RadioGroup<int>(
                 groupValue: _selectedGroupId,
@@ -190,10 +185,7 @@ class _PlaylistItemEditorSheetState extends State<PlaylistItemEditorSheet> {
                 ),
               ),
               const SizedBox(height: 16),
-              Text(
-                'Cover',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              Text('Cover', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               RadioGroup<String>(
                 groupValue: _selectedCoverMode,
@@ -234,14 +226,16 @@ class _PlaylistItemEditorSheetState extends State<PlaylistItemEditorSheet> {
                   runSpacing: 8,
                   children: [
                     OutlinedButton(
-                      onPressed:
-                          _coverActionInProgress ? null : _uploadCustomCover,
+                      onPressed: _coverActionInProgress
+                          ? null
+                          : _uploadCustomCover,
                       child: const Text('Upload Cover'),
                     ),
                     if (_hasCustomCover)
                       TextButton(
-                        onPressed:
-                            _coverActionInProgress ? null : _clearCustomCover,
+                        onPressed: _coverActionInProgress
+                            ? null
+                            : _clearCustomCover,
                         child: const Text('Remove Cover'),
                       ),
                   ],

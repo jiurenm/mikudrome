@@ -15,7 +15,9 @@ final class MediaSessionHandlerBinding {
     service.setActionHandlers(
       onPlay: _guardVoid(generation, onPlay),
       onPause: _guardVoid(generation, onPause),
-      onPrevious: onPrevious == null ? null : _guardVoid(generation, onPrevious),
+      onPrevious: onPrevious == null
+          ? null
+          : _guardVoid(generation, onPrevious),
       onNext: onNext == null ? null : _guardVoid(generation, onNext),
       onSeekTo: onSeekTo == null ? null : _guardSeek(generation, onSeekTo),
     );

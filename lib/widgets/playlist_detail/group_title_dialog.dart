@@ -46,9 +46,7 @@ class _GroupTitleDialogState extends State<GroupTitleDialog> {
       content: TextField(
         controller: _controller,
         autofocus: true,
-        decoration: InputDecoration(
-          labelText: widget.fieldLabelText,
-        ),
+        decoration: InputDecoration(labelText: widget.fieldLabelText),
         onSubmitted: (_) => _submit(),
       ),
       actions: [
@@ -56,10 +54,7 @@ class _GroupTitleDialogState extends State<GroupTitleDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          onPressed: _submit,
-          child: Text(widget.confirmText),
-        ),
+        FilledButton(onPressed: _submit, child: Text(widget.confirmText)),
       ],
     );
   }

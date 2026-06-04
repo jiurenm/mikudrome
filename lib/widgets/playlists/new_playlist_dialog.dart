@@ -48,10 +48,7 @@ class _NewPlaylistDialogState extends State<NewPlaylistDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        TextButton(
-          onPressed: _submit,
-          child: const Text('Create'),
-        ),
+        TextButton(onPressed: _submit, child: const Text('Create')),
       ],
     );
   }

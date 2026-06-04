@@ -130,7 +130,7 @@ void main() {
         'groups': [
           {
             'id': 5,
-            'items': [11, 12]
+            'items': [11, 12],
           },
         ],
       });
@@ -139,9 +139,7 @@ void main() {
     test('serializes group title payload with stable keys', () {
       const payload = PlaylistGroupTitleInput(title: 'Highlights');
 
-      expect(payload.toJson(), {
-        'title': 'Highlights',
-      });
+      expect(payload.toJson(), {'title': 'Highlights'});
     });
   });
 }

@@ -42,20 +42,23 @@ Future<void> _expectCoverLightboxBehavior(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('AlbumHeroSection mobile hero opens and closes the cover lightbox',
-      (tester) async {
-    await tester.pumpWidget(_buildHarness(const Size(390, 844)));
-    await tester.pump();
+  testWidgets(
+    'AlbumHeroSection mobile hero opens and closes the cover lightbox',
+    (tester) async {
+      await tester.pumpWidget(_buildHarness(const Size(390, 844)));
+      await tester.pump();
 
-    await _expectCoverLightboxBehavior(tester);
-  });
+      await _expectCoverLightboxBehavior(tester);
+    },
+  );
 
   testWidgets(
-      'AlbumHeroSection desktop hero opens and closes the cover lightbox',
-      (tester) async {
-    await tester.pumpWidget(_buildHarness(const Size(1024, 768)));
-    await tester.pump();
+    'AlbumHeroSection desktop hero opens and closes the cover lightbox',
+    (tester) async {
+      await tester.pumpWidget(_buildHarness(const Size(1024, 768)));
+      await tester.pump();
 
-    await _expectCoverLightboxBehavior(tester);
-  });
+      await _expectCoverLightboxBehavior(tester);
+    },
+  );
 }

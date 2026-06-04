@@ -50,10 +50,7 @@ class _RenamePlaylistDialogState extends State<RenamePlaylistDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        TextButton(
-          onPressed: _submit,
-          child: const Text('Save'),
-        ),
+        TextButton(onPressed: _submit, child: const Text('Save')),
       ],
     );
   }

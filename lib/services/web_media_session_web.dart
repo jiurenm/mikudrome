@@ -12,14 +12,12 @@ WebMediaSessionService createWebMediaSessionService() =>
 @visibleForTesting
 WebMediaSessionService createWebMediaSessionServiceForTest({
   required WebMediaSessionAdapter? adapter,
-}) =>
-    _WebMediaSessionService(adapter: adapter);
+}) => _WebMediaSessionService(adapter: adapter);
 
 @visibleForTesting
 BrowserWebMediaSessionAdapter createBrowserWebMediaSessionAdapterForTest({
   required JSObject mediaSession,
-}) =>
-    BrowserWebMediaSessionAdapter._(mediaSession);
+}) => BrowserWebMediaSessionAdapter._(mediaSession);
 
 abstract interface class WebMediaSessionAdapter {
   void setMetadata({
@@ -46,7 +44,7 @@ abstract interface class WebMediaSessionAdapter {
 
 final class _WebMediaSessionService implements WebMediaSessionService {
   _WebMediaSessionService({required WebMediaSessionAdapter? adapter})
-      : _adapter = adapter;
+    : _adapter = adapter;
 
   final WebMediaSessionAdapter? _adapter;
 
@@ -169,10 +167,10 @@ final class BrowserWebMediaSessionAdapter implements WebMediaSessionAdapter {
   @override
   void setActionHandler(String action, Object? handler) {
     _safe(() {
-      _mediaSession.callMethodVarArgs(
-        'setActionHandler'.toJS,
-        <JSAny?>[action.toJS, handler as JSFunction?],
-      );
+      _mediaSession.callMethodVarArgs('setActionHandler'.toJS, <JSAny?>[
+        action.toJS,
+        handler as JSFunction?,
+      ]);
     });
   }
 
@@ -189,8 +187,9 @@ final class BrowserWebMediaSessionAdapter implements WebMediaSessionAdapter {
         metadataInit.album = album;
       }
       if (artworkUrl != null && artworkUrl.isNotEmpty) {
-        metadataInit.artwork =
-            <web.MediaImage>[web.MediaImage(src: artworkUrl)].toJS;
+        metadataInit.artwork = <web.MediaImage>[
+          web.MediaImage(src: artworkUrl),
+        ].toJS;
       }
 
       _mediaSession['metadata'] = web.MediaMetadata(metadataInit);

@@ -56,9 +56,9 @@ class PlaylistEditBar extends StatelessWidget {
               const SizedBox(width: 12),
               Text(
                 'Drag to reorder',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppTheme.textMuted),
               ),
             ],
           ),

@@ -45,10 +45,7 @@ class MobileBottomNav extends StatelessWidget {
       selectedFontSize: 12,
       unselectedFontSize: 12,
       items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.album),
-          label: 'Albums',
-        ),
+        BottomNavigationBarItem(icon: Icon(Icons.album), label: 'Albums'),
         BottomNavigationBarItem(
           icon: Icon(Icons.movie_outlined),
           label: 'MV Gallery',

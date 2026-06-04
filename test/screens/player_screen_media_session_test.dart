@@ -55,12 +55,12 @@ class _FakeWebMediaSessionService implements WebMediaSessionService {
 }
 
 Track _track(int id) => Track(
-      id: id,
-      title: 'Track $id',
-      audioPath: '/tmp/$id.flac',
-      videoPath: '',
-      composer: 'Composer $id',
-    );
+  id: id,
+  title: 'Track $id',
+  audioPath: '/tmp/$id.flac',
+  videoPath: '',
+  composer: 'Composer $id',
+);
 
 Widget _buildPlayer({
   required _FakeWebMediaSessionService mediaSession,
@@ -85,12 +85,13 @@ Widget _buildPlayer({
       onSwitchPlaybackMode: (_) {},
       playbackOrderMode: PlaybackOrderMode.sequential,
       onCyclePlaybackOrderMode: () {},
-      onPlaybackStateChanged: ({
-        required bool isPlaying,
-        required double progress,
-        required String elapsedLabel,
-        required String durationLabel,
-      }) {},
+      onPlaybackStateChanged:
+          ({
+            required bool isPlaying,
+            required double progress,
+            required String elapsedLabel,
+            required String durationLabel,
+          }) {},
       mediaSessionService: mediaSession,
       mediaSessionCanSeek: mediaSessionCanSeek,
       initializeControllerOnStart: false,
@@ -188,51 +189,50 @@ void main() {
       expect(mediaSession.seekToHandler, isNotNull);
     });
 
-    testWidgets(
-      'rebind updates handlers when callback identity changes',
-      (tester) async {
-        await tester.binding.setSurfaceSize(const Size(1920, 1080));
-        addTearDown(() => tester.binding.setSurfaceSize(null));
+    testWidgets('rebind updates handlers when callback identity changes', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(1920, 1080));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
-        final mediaSession = _FakeWebMediaSessionService();
-        final queue = [_track(1), _track(1)];
-        var oldNextCount = 0;
-        var newNextCount = 0;
+      final mediaSession = _FakeWebMediaSessionService();
+      final queue = [_track(1), _track(1)];
+      var oldNextCount = 0;
+      var newNextCount = 0;
 
-        await tester.pumpWidget(
-          _buildPlayer(
-            mediaSession: mediaSession,
-            queue: queue,
-            currentIndex: 0,
-            onPrevious: () {},
-            onNext: () => oldNextCount++,
-          ),
-        );
+      await tester.pumpWidget(
+        _buildPlayer(
+          mediaSession: mediaSession,
+          queue: queue,
+          currentIndex: 0,
+          onPrevious: () {},
+          onNext: () => oldNextCount++,
+        ),
+      );
 
-        final staleNext = mediaSession.nextHandler!;
-        await staleNext();
-        expect(oldNextCount, 1);
-        expect(newNextCount, 0);
+      final staleNext = mediaSession.nextHandler!;
+      await staleNext();
+      expect(oldNextCount, 1);
+      expect(newNextCount, 0);
 
-        await tester.pumpWidget(
-          _buildPlayer(
-            mediaSession: mediaSession,
-            queue: queue,
-            currentIndex: 0,
-            onPrevious: () {},
-            onNext: () => newNextCount++,
-          ),
-        );
+      await tester.pumpWidget(
+        _buildPlayer(
+          mediaSession: mediaSession,
+          queue: queue,
+          currentIndex: 0,
+          onPrevious: () {},
+          onNext: () => newNextCount++,
+        ),
+      );
 
-        await staleNext();
-        expect(oldNextCount, 1);
-        expect(newNextCount, 0);
+      await staleNext();
+      expect(oldNextCount, 1);
+      expect(newNextCount, 0);
 
-        await mediaSession.nextHandler!();
-        expect(oldNextCount, 1);
-        expect(newNextCount, 1);
-      },
-    );
+      await mediaSession.nextHandler!();
+      expect(oldNextCount, 1);
+      expect(newNextCount, 1);
+    });
 
     testWidgets(
       'rebind updates prev/next handlers and suppresses stale callbacks',
@@ -286,33 +286,32 @@ void main() {
       },
     );
 
-    testWidgets(
-      'next handler updates media session metadata immediately',
-      (tester) async {
-        await tester.binding.setSurfaceSize(const Size(1920, 1080));
-        addTearDown(() => tester.binding.setSurfaceSize(null));
+    testWidgets('next handler updates media session metadata immediately', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(1920, 1080));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
-        final mediaSession = _FakeWebMediaSessionService();
-        final queue = [_track(1), _track(2)];
-        var nextCount = 0;
+      final mediaSession = _FakeWebMediaSessionService();
+      final queue = [_track(1), _track(2)];
+      var nextCount = 0;
 
-        await tester.pumpWidget(
-          _buildPlayer(
-            mediaSession: mediaSession,
-            queue: queue,
-            currentIndex: 0,
-            onPrevious: () {},
-            onNext: () => nextCount++,
-          ),
-        );
+      await tester.pumpWidget(
+        _buildPlayer(
+          mediaSession: mediaSession,
+          queue: queue,
+          currentIndex: 0,
+          onPrevious: () {},
+          onNext: () => nextCount++,
+        ),
+      );
 
-        expect(mediaSession.metadataTitle, queue.first.title);
+      expect(mediaSession.metadataTitle, queue.first.title);
 
-        await mediaSession.nextHandler!();
+      await mediaSession.nextHandler!();
 
-        expect(nextCount, 1);
-        expect(mediaSession.metadataTitle, queue[1].title);
-      },
-    );
+      expect(nextCount, 1);
+      expect(mediaSession.metadataTitle, queue[1].title);
+    });
   });
 }

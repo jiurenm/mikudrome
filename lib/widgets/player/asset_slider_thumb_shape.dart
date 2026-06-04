@@ -3,10 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 class AssetSliderThumbShape extends SliderComponentShape {
-  const AssetSliderThumbShape({
-    required this.image,
-    required this.size,
-  });
+  const AssetSliderThumbShape({required this.image, required this.size});
 
   final ImageProvider image;
   final double size;

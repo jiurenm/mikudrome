@@ -15,10 +15,7 @@ class DetailCoverLightboxTrigger extends StatelessWidget {
   final String semanticLabel;
 
   void _openLightbox(BuildContext context) {
-    showDetailCoverLightbox(
-      context,
-      child: lightboxBuilder(context),
-    );
+    showDetailCoverLightbox(context, child: lightboxBuilder(context));
   }
 
   @override
@@ -70,10 +67,7 @@ Future<void> showDetailCoverLightbox(
 }
 
 class DetailCoverLightbox extends StatefulWidget {
-  const DetailCoverLightbox({
-    super.key,
-    required this.child,
-  });
+  const DetailCoverLightbox({super.key, required this.child});
 
   final Widget child;
 
@@ -100,11 +94,9 @@ class _DetailCoverLightboxState extends State<DetailCoverLightbox> {
     }
 
     final focalPoint = event.localPosition;
-    final currentScale =
-        _transformationController.value.getMaxScaleOnAxis().clamp(
-              _minScale,
-              _maxScale,
-            );
+    final currentScale = _transformationController.value
+        .getMaxScaleOnAxis()
+        .clamp(_minScale, _maxScale);
     final targetScale = (currentScale * (event.scrollDelta.dy < 0 ? 1.1 : 0.9))
         .clamp(_minScale, _maxScale);
     final scaleDelta = targetScale / currentScale;

@@ -51,7 +51,8 @@ class _PipMiniPlayerState extends State<PipMiniPlayer> {
       builder: (context, constraints) {
         final areaWidth = constraints.maxWidth;
         final areaHeight = constraints.maxHeight;
-        final pos = _position ??
+        final pos =
+            _position ??
             Offset(
               areaWidth - _width - _margin,
               areaHeight - _height - _bottomOffset - _margin,
@@ -66,10 +67,11 @@ class _PipMiniPlayerState extends State<PipMiniPlayer> {
                 onPanUpdate: (details) {
                   setState(() {
                     _position = Offset(
-                      (pos.dx + details.delta.dx)
-                          .clamp(0, areaWidth - _width),
-                      (pos.dy + details.delta.dy)
-                          .clamp(0, areaHeight - _height),
+                      (pos.dx + details.delta.dx).clamp(0, areaWidth - _width),
+                      (pos.dy + details.delta.dy).clamp(
+                        0,
+                        areaHeight - _height,
+                      ),
                     );
                   });
                 },
@@ -148,10 +150,7 @@ class _PipMiniPlayerState extends State<PipMiniPlayer> {
                 onTap: widget.onTogglePlay,
               ),
               const Spacer(),
-              _overlayButton(
-                icon: Icons.close,
-                onTap: widget.onClose,
-              ),
+              _overlayButton(icon: Icons.close, onTap: widget.onClose),
             ],
           ),
         ],
@@ -159,10 +158,7 @@ class _PipMiniPlayerState extends State<PipMiniPlayer> {
     );
   }
 
-  Widget _overlayButton({
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
+  Widget _overlayButton({required IconData icon, required VoidCallback onTap}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),

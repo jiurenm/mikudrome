@@ -6,10 +6,9 @@ WebAudioPlayer createWebAudioPlayer() => _sharedPlayer;
 
 WebAudioPlayer createWebAudioPlayerForTest({
   required WebAudioElementAdapter? adapter,
-}) =>
-    adapter == null
-        ? _NoopWebAudioPlayer()
-        : AdapterBackedWebAudioPlayer(adapter: adapter);
+}) => adapter == null
+    ? _NoopWebAudioPlayer()
+    : AdapterBackedWebAudioPlayer(adapter: adapter);
 
 final class _NoopWebAudioPlayer implements WebAudioPlayer {
   @override

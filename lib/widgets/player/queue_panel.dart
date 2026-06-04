@@ -57,7 +57,9 @@ class QueuePanel extends StatelessWidget {
                 } catch (e) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Failed to update favorite')),
+                      const SnackBar(
+                        content: Text('Failed to update favorite'),
+                      ),
                     );
                   }
                 }
@@ -85,15 +87,15 @@ class QueuePanel extends StatelessWidget {
             children: [
               Text(
                 contextLabel,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppTheme.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(color: AppTheme.textMuted),
               ),
               Text(
                 '${currentIndex + 1}/${queue.length}',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppTheme.mikuGreen,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(color: AppTheme.mikuGreen),
               ),
             ],
           ),

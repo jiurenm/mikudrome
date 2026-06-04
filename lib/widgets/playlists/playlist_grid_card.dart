@@ -50,9 +50,9 @@ class PlaylistGridCard extends StatelessWidget {
             ),
             Text(
               '${playlist.trackCount} tracks',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.textMuted,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppTheme.textMuted),
             ),
           ],
         ),

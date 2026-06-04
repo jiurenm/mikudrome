@@ -23,10 +23,8 @@ class AddToPlaylistSheet extends StatefulWidget {
   }) {
     return showModalBottomSheet<void>(
       context: context,
-      builder: (context) => AddToPlaylistSheet(
-        trackIds: trackIds,
-        client: client,
-      ),
+      builder: (context) =>
+          AddToPlaylistSheet(trackIds: trackIds, client: client),
     );
   }
 
@@ -69,8 +67,10 @@ class _AddToPlaylistSheetState extends State<AddToPlaylistSheet> {
       PlaylistRepository.instance.upsertPlaylist(playlist);
 
       // Add tracks to it
-      final added =
-          await widget.client.addTracksToPlaylist(playlist.id, widget.trackIds);
+      final added = await widget.client.addTracksToPlaylist(
+        playlist.id,
+        widget.trackIds,
+      );
       final skipped = widget.trackIds.length - added;
 
       if (!context.mounted) return;
@@ -85,7 +85,8 @@ class _AddToPlaylistSheetState extends State<AddToPlaylistSheet> {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Failed to add tracks. Please try again.')),
+          content: Text('Failed to add tracks. Please try again.'),
+        ),
       );
       // Don't close sheet on error
     }
@@ -96,8 +97,10 @@ class _AddToPlaylistSheetState extends State<AddToPlaylistSheet> {
 
     setState(() => _isLoading = true);
     try {
-      final added =
-          await widget.client.addTracksToPlaylist(playlist.id, widget.trackIds);
+      final added = await widget.client.addTracksToPlaylist(
+        playlist.id,
+        widget.trackIds,
+      );
       final skipped = widget.trackIds.length - added;
 
       if (!context.mounted) return;
@@ -112,7 +115,8 @@ class _AddToPlaylistSheetState extends State<AddToPlaylistSheet> {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Failed to add tracks. Please try again.')),
+          content: Text('Failed to add tracks. Please try again.'),
+        ),
       );
       // Don't close sheet on error
     }
@@ -138,8 +142,9 @@ class _AddToPlaylistSheetState extends State<AddToPlaylistSheet> {
               ListTile(
                 leading: const Icon(Icons.add),
                 title: const Text('New playlist'),
-                onTap:
-                    _isLoading ? null : () => _createNewPlaylistAndAdd(context),
+                onTap: _isLoading
+                    ? null
+                    : () => _createNewPlaylistAndAdd(context),
                 enabled: !_isLoading,
               ),
               const Divider(),
@@ -189,9 +194,7 @@ class _AddToPlaylistSheetState extends State<AddToPlaylistSheet> {
             Positioned.fill(
               child: Container(
                 color: Colors.black.withValues(alpha: 0.3),
-                child: const Center(
-                  child: CircularProgressIndicator(),
-                ),
+                child: const Center(child: CircularProgressIndicator()),
               ),
             ),
         ],

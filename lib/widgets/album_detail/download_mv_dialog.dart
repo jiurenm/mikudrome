@@ -51,8 +51,9 @@ class _DownloadMvDialogState extends State<DownloadMvDialog> {
     }
     setState(() => _loading = true);
     try {
-      await ApiClient(baseUrl: widget.baseUrl)
-          .downloadTrackMv(widget.trackId, url);
+      await ApiClient(
+        baseUrl: widget.baseUrl,
+      ).downloadTrackMv(widget.trackId, url);
       if (!mounted) return;
       Navigator.of(context).pop();
       widget.onSuccess();
@@ -68,10 +69,7 @@ class _DownloadMvDialogState extends State<DownloadMvDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: AppTheme.cardBg,
-      title: const Text(
-        '下载 MV',
-        style: TextStyle(color: AppTheme.textPrimary),
-      ),
+      title: const Text('下载 MV', style: TextStyle(color: AppTheme.textPrimary)),
       content: SizedBox(
         width: 400,
         child: Column(
@@ -80,9 +78,9 @@ class _DownloadMvDialogState extends State<DownloadMvDialog> {
           children: [
             Text(
               widget.trackTitle,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: AppTheme.textMuted,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(color: AppTheme.textMuted),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),

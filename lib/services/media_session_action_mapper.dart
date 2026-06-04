@@ -16,10 +16,7 @@ PlaybackCommand resolvePlaybackCommand({
   }
 }
 
-double computeSeekFraction({
-  required double seekMs,
-  required int durationMs,
-}) {
+double computeSeekFraction({required double seekMs, required int durationMs}) {
   if (!seekMs.isFinite || durationMs <= 0) {
     return 0;
   }

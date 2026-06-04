@@ -64,8 +64,9 @@ class _AutoScrollTextState extends State<AutoScrollText>
       maxLines: 1,
     )..layout();
 
-    final nextOverflow =
-        (textPainter.width - availableWidth).clamp(0, double.infinity).toDouble();
+    final nextOverflow = (textPainter.width - availableWidth)
+        .clamp(0, double.infinity)
+        .toDouble();
 
     if ((nextOverflow - _overflow).abs() < 0.5) {
       _syncPlayback();
@@ -135,7 +136,9 @@ class _AutoScrollTextState extends State<AutoScrollText>
       widget.text,
       style: widget.style,
       maxLines: 1,
-      overflow: _overflow > 0 && widget.active ? TextOverflow.visible : TextOverflow.ellipsis,
+      overflow: _overflow > 0 && widget.active
+          ? TextOverflow.visible
+          : TextOverflow.ellipsis,
       softWrap: false,
       textAlign: widget.textAlign,
     );
@@ -149,10 +152,7 @@ class _AutoScrollTextState extends State<AutoScrollText>
         animation: _controller,
         builder: (context, child) {
           final dx = _offsetAnimation?.value ?? 0;
-          return Transform.translate(
-            offset: Offset(-dx, 0),
-            child: child,
-          );
+          return Transform.translate(offset: Offset(-dx, 0), child: child);
         },
         child: textWidget,
       ),

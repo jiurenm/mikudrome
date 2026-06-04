@@ -20,9 +20,7 @@ SurfaceType surfaceTypeForSize(
   final landscape = size.width > size.height;
 
   if (nativeMobilePlatform && phoneSized) {
-    return landscape
-        ? SurfaceType.mobileLandscape
-        : SurfaceType.mobilePortrait;
+    return landscape ? SurfaceType.mobileLandscape : SurfaceType.mobilePortrait;
   }
 
   if (nativeMobilePlatform && size.shortestSide >= kPhoneMaxShortestSide) {
