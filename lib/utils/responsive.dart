@@ -6,7 +6,7 @@ const double kPhoneMaxShortestSide = 600;
 
 enum SurfaceType { mobilePortrait, mobileLandscape, tablet, desktop }
 
-bool _isNativePhonePlatform(TargetPlatform platform) {
+bool _isNativeMobilePlatform(TargetPlatform platform) {
   return platform == TargetPlatform.android || platform == TargetPlatform.iOS;
 }
 
@@ -15,17 +15,17 @@ SurfaceType surfaceTypeForSize(
   required bool isWeb,
   required TargetPlatform platform,
 }) {
-  final nativePhonePlatform = !isWeb && _isNativePhonePlatform(platform);
+  final nativeMobilePlatform = !isWeb && _isNativeMobilePlatform(platform);
   final phoneSized = size.shortestSide < kPhoneMaxShortestSide;
   final landscape = size.width > size.height;
 
-  if (nativePhonePlatform && phoneSized) {
+  if (nativeMobilePlatform && phoneSized) {
     return landscape
         ? SurfaceType.mobileLandscape
         : SurfaceType.mobilePortrait;
   }
 
-  if (!isWeb && size.shortestSide >= kPhoneMaxShortestSide) {
+  if (nativeMobilePlatform && size.shortestSide >= kPhoneMaxShortestSide) {
     return SurfaceType.tablet;
   }
 

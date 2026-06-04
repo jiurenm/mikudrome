@@ -49,6 +49,17 @@ void main() {
       );
     });
 
+    test('desktop platform with large window is desktop', () {
+      expect(
+        surfaceTypeForSize(
+          const Size(1440, 900),
+          isWeb: false,
+          platform: TargetPlatform.linux,
+        ),
+        SurfaceType.desktop,
+      );
+    });
+
     test('web landscape window does not enter native phone landscape', () {
       expect(
         surfaceTypeForSize(
