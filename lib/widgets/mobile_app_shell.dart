@@ -191,12 +191,17 @@ class _MobileAppShellState extends State<MobileAppShell> {
     required String tooltip,
   }) {
     final selected = tab == currentTab;
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: () => _selectTab(_tabToIndex(tab)),
-      icon: Icon(selected ? activeIcon : icon),
-      color: selected ? AppTheme.mikuGreen : AppTheme.textMuted,
-      style: IconButton.styleFrom(fixedSize: const Size(48, 48)),
+    return Semantics(
+      selected: selected,
+      child: IconButton(
+        tooltip: tooltip,
+        onPressed: () => _selectTab(_tabToIndex(tab)),
+        isSelected: selected,
+        selectedIcon: Icon(activeIcon),
+        icon: Icon(icon),
+        color: selected ? AppTheme.mikuGreen : AppTheme.textMuted,
+        style: IconButton.styleFrom(fixedSize: const Size(48, 48)),
+      ),
     );
   }
 }
