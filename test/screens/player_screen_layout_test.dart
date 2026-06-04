@@ -6,6 +6,7 @@ import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/screens/library_home_screen.dart';
 import 'package:mikudrome/screens/player_screen.dart';
 import 'package:mikudrome/services/playlist_repository.dart';
+import 'package:mikudrome/widgets/player/asset_slider_thumb_shape.dart';
 // ignore: depend_on_referenced_packages
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
@@ -1059,6 +1060,40 @@ void main() {
       expect(
         find.byKey(const ValueKey('mobile-player-queue-peek')),
         findsNothing,
+      );
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('mobile landscape audio player uses mobile slider styling', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    try {
+      await _pumpPlayer(tester, surfaceSize: const Size(844, 390));
+
+      final sliderThemeFinder = find.descendant(
+        of: find.byKey(const ValueKey('mobile-landscape-player')),
+        matching: find.byType(SliderTheme),
+      );
+      expect(sliderThemeFinder, findsOneWidget);
+
+      final sliderTheme = tester.widget<SliderTheme>(sliderThemeFinder);
+      final activeTrackColor = sliderTheme.data.activeTrackColor!;
+      expect(
+        sliderTheme.data.overlayColor,
+        activeTrackColor.withValues(alpha: 0.15),
+      );
+      expect(sliderTheme.data.trackHeight, 5);
+      expect(sliderTheme.data.thumbShape, isA<AssetSliderThumbShape>());
+      expect(
+        sliderTheme.data.thumbShape!.getPreferredSize(true, false),
+        const Size(18, 18),
       );
     } finally {
       debugDefaultTargetPlatformOverride = null;

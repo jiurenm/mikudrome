@@ -1338,6 +1338,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
           activeTrackColor: accentColor,
           inactiveTrackColor: Colors.white24,
           thumbColor: accentColor,
+          overlayColor: accentColor.withValues(alpha: 0.15),
+          trackHeight: 5,
+          thumbShape: const AssetSliderThumbShape(
+            image: AssetImage('lib/assets/thumb.png'),
+            size: 18,
+          ),
         ),
         child: Slider(
           value: progress.clamp(0.0, 1.0),
