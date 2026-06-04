@@ -22,6 +22,7 @@ import '../theme/vocal_theme.dart';
 import '../utils/responsive.dart';
 import '../widgets/favorite_button.dart';
 import '../widgets/player/asset_slider_thumb_shape.dart';
+import '../widgets/player/mobile_landscape_audio_player.dart';
 import '../widgets/player/mobile_mv_player_surface.dart';
 import '../widgets/player_screen_parts.dart';
 import 'player_playback_policy.dart';
@@ -134,6 +135,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool _showFullscreenChrome = true;
   bool _showLyrics = true;
   bool _showMobileQueue = false;
+  bool _showLandscapePanel = false;
+  LandscapePlayerPanelTab _landscapePanelTab = LandscapePlayerPanelTab.lyrics;
   bool _mobileDefaultApplied = false;
   int _mobileMediaPageIndex = 0;
   List<TimedLyricLine> _timedLyrics = const [];
@@ -968,7 +971,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
         width >= (_isVideoMode ? 1280 : 1440);
     final queuePanelWidth = _isVideoMode ? 320.0 : 280.0;
 
-    if (isMobile(context) && !_isFullscreen) {
+    if (isNativePhoneLandscapeSurface(context) && !_isFullscreen) {
+      if (_isVideoMode) {
+        return _buildMobileVideoLayout(context, accentColor);
+      }
+      return _buildMobileLandscapeAudioLayout(context, accentColor);
+    }
+
+    if (isMobileSurface(context) && !_isFullscreen) {
       return _buildMobileLayout(context, accentColor);
     }
 
@@ -1302,6 +1312,102 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ),
       onOpenQueue: _toggleQueue,
       onEnterFullscreen: _enterFullscreen,
+    );
+  }
+
+  Widget _buildMobileLandscapeAudioLayout(
+    BuildContext context,
+    Color accentColor,
+  ) {
+    final duration = _duration;
+    final position = _position > duration ? duration : _position;
+    final progress = duration.inMilliseconds == 0
+        ? 0.0
+        : position.inMilliseconds / duration.inMilliseconds;
+
+    return MobileLandscapeAudioPlayer(
+      title: _track.title,
+      subtitle: _queueSubtitle,
+      artwork: _buildMobileArtwork(
+        context,
+        size: 132,
+        accentColor: accentColor,
+      ),
+      progress: SliderTheme(
+        data: SliderTheme.of(context).copyWith(
+          activeTrackColor: accentColor,
+          inactiveTrackColor: Colors.white24,
+          thumbColor: accentColor,
+        ),
+        child: Slider(
+          value: progress.clamp(0.0, 1.0),
+          onChanged: duration == Duration.zero ? null : _seekTo,
+        ),
+      ),
+      elapsedLabel: _formatDuration(position),
+      durationLabel: _formatDuration(duration),
+      actions: Row(
+        children: [
+          FavoriteButton(trackId: _track.id, client: _api, size: 32),
+          IconButton(
+            onPressed: () {},
+            icon: const Icon(Icons.more_vert),
+            color: Colors.white70,
+            tooltip: '更多',
+          ),
+        ],
+      ),
+      controls: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          IconButton(
+            onPressed: widget.onToggleShuffle,
+            icon: const Icon(Icons.shuffle),
+            color: widget.shuffleEnabled ? accentColor : Colors.white,
+            tooltip: widget.shuffleEnabled ? '恢复顺序' : '随机播放',
+          ),
+          IconButton(
+            icon: const Icon(Icons.skip_previous),
+            color: Colors.white,
+            disabledColor: Colors.white24,
+            onPressed: _hasPrevious ? widget.onPrevious : null,
+          ),
+          IconButton(
+            onPressed: _togglePlayback,
+            icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+            color: Colors.white,
+          ),
+          IconButton(
+            icon: const Icon(Icons.skip_next),
+            color: Colors.white,
+            disabledColor: Colors.white24,
+            onPressed: _hasNext ? widget.onNext : null,
+          ),
+          _buildPlaybackOrderButton(
+            baseColor: Colors.white,
+            accentColor: accentColor,
+          ),
+        ],
+      ),
+      sidePanelVisible: _showLandscapePanel,
+      selectedPanelTab: _landscapePanelTab,
+      onShowSidePanel: () => setState(() => _showLandscapePanel = true),
+      onHideSidePanel: () => setState(() => _showLandscapePanel = false),
+      onSelectPanelTab: (tab) => setState(() => _landscapePanelTab = tab),
+      lyrics: LyricsSection(
+        lyrics: _track.lyrics,
+        timedLyrics: _timedLyrics,
+        activeIndex: _hasTimedLyrics ? _activeLyricIndex : -1,
+        framed: false,
+      ),
+      queue: QueuePanel(
+        contextLabel: widget.contextLabel,
+        queue: widget.queue,
+        currentIndex: widget.currentIndex,
+        isVideoMode: _isVideoMode,
+        coverUrlForTrack: _coverUrlForTrack,
+        onSelectTrack: widget.onSelectTrack,
+      ),
     );
   }
 

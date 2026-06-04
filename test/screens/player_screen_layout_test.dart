@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1035,6 +1036,63 @@ void main() {
       expect(tester.widget<Text>(durationFinder).data, '00:00');
     },
   );
+
+  testWidgets('mobile landscape audio player hides side panel by default', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    try {
+      await _pumpPlayer(tester, surfaceSize: const Size(844, 390));
+
+      expect(
+        find.byKey(const ValueKey('mobile-landscape-player')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-landscape-player-side-panel')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-player-queue-peek')),
+        findsNothing,
+      );
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('mobile landscape audio player opens lyrics and queue panel', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    try {
+      await _pumpPlayer(tester, surfaceSize: const Size(844, 390));
+
+      await tester.tap(find.byTooltip('显示歌词和队列'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('mobile-landscape-player-side-panel')),
+        findsOneWidget,
+      );
+      expect(find.text('歌词'), findsOneWidget);
+      expect(find.text('队列'), findsOneWidget);
+
+      await tester.tap(find.text('队列'));
+      await tester.pumpAndSettle();
+      expect(find.text('Layout Test'), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
 }
 
 class _FavoriteRecordingHttpClient implements HttpClient {
