@@ -254,6 +254,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   String get _playbackOrderTooltip => '播放顺序：$_playbackOrderLabel';
 
+  bool _usesPlayerMobileLayout(BuildContext context) {
+    return isMobile(context) || isMobileSurface(context);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -921,7 +925,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _toggleQueue() {
-    if (isMobileSurface(context)) {
+    if (_usesPlayerMobileLayout(context)) {
       showModalBottomSheet(
         context: context,
         backgroundColor: AppTheme.mikuDark,
@@ -965,8 +969,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget build(BuildContext context) {
     final accentColor = VocalThemeProvider.of(context);
     final width = MediaQuery.sizeOf(context).width;
+    final usesPlayerMobileLayout = _usesPlayerMobileLayout(context);
     final queueVisible =
-        !isMobile(context) &&
+        !usesPlayerMobileLayout &&
         _showQueue &&
         width >= (_isVideoMode ? 1280 : 1440);
     final queuePanelWidth = _isVideoMode ? 320.0 : 280.0;
@@ -978,7 +983,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return _buildMobileLandscapeAudioLayout(context, accentColor);
     }
 
-    if (isMobileSurface(context) && !_isFullscreen) {
+    if (usesPlayerMobileLayout && !_isFullscreen) {
       return _buildMobileLayout(context, accentColor);
     }
 
@@ -1400,6 +1405,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       onShowSidePanel: () => setState(() => _showLandscapePanel = true),
       onHideSidePanel: () => setState(() => _showLandscapePanel = false),
       onSelectPanelTab: (tab) => setState(() => _landscapePanelTab = tab),
+      onCollapse: widget.onClose,
       lyrics: LyricsSection(
         lyrics: _track.lyrics,
         timedLyrics: _timedLyrics,

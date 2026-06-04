@@ -13,6 +13,7 @@ import 'package:video_player_platform_interface/video_player_platform_interface.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 Track _desktopTrack() => const Track(
   id: 7,
@@ -210,6 +211,30 @@ void main() {
       find.byKey(const ValueKey('player-audio-title-block')),
       findsNothing,
     );
+  });
+
+  testWidgets('width-mobile desktop surface keeps mobile player layout', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    try {
+      await _pumpPlayer(tester, surfaceSize: const Size(430, 900));
+
+      expect(
+        find.byKey(const ValueKey('mobile-player-immersive')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('player-audio-left-column')),
+        findsNothing,
+      );
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 
   testWidgets('mobile player uses compact controls with title actions', (
@@ -1064,6 +1089,7 @@ void main() {
         find.byKey(const ValueKey('mobile-player-queue-peek')),
         findsNothing,
       );
+      expect(find.byTooltip('收起'), findsOneWidget);
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
@@ -1128,6 +1154,72 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Layout Test'), findsOneWidget);
     } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets(
+    'mobile landscape audio player adapts side panel on small phones',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      await tester.binding.setSurfaceSize(const Size(640, 360));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      try {
+        await _pumpPlayer(tester, surfaceSize: const Size(640, 360));
+
+        await tester.tap(find.byTooltip('显示歌词和队列'));
+        await tester.pumpAndSettle();
+
+        final sidePanel = find.byKey(
+          const ValueKey('mobile-landscape-player-side-panel'),
+        );
+        expect(sidePanel, findsOneWidget);
+        expect(tester.getRect(sidePanel).width, lessThan(320));
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    },
+  );
+
+  testWidgets('mobile landscape panel tabs expose selected semantics', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    try {
+      await _pumpPlayer(tester, surfaceSize: const Size(844, 390));
+
+      await tester.tap(find.byTooltip('显示歌词和队列'));
+      await tester.pumpAndSettle();
+
+      final lyricsSemantics = find.byKey(
+        const ValueKey('mobile-landscape-panel-tab-lyrics'),
+      );
+      expect(lyricsSemantics, findsOneWidget);
+      expect(
+        tester.getSemantics(lyricsSemantics).flagsCollection.isSelected,
+        ui.Tristate.isTrue,
+      );
+
+      await tester.tap(find.text('队列'));
+      await tester.pumpAndSettle();
+
+      final queueSemantics = find.byKey(
+        const ValueKey('mobile-landscape-panel-tab-queue'),
+      );
+      expect(queueSemantics, findsOneWidget);
+      expect(
+        tester.getSemantics(queueSemantics).flagsCollection.isSelected,
+        ui.Tristate.isTrue,
+      );
+    } finally {
+      semantics.dispose();
       debugDefaultTargetPlatformOverride = null;
     }
   });
