@@ -40,7 +40,10 @@ class _FavoriteButtonState extends State<FavoriteButton> {
     setState(() => _isAnimating = true);
 
     try {
-      await PlaylistRepository.instance.toggleFavorite(widget.trackId, widget.client);
+      await PlaylistRepository.instance.toggleFavorite(
+        widget.trackId,
+        widget.client,
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -62,8 +65,9 @@ class _FavoriteButtonState extends State<FavoriteButton> {
     return ListenableBuilder(
       listenable: PlaylistRepository.instance,
       builder: (context, _) {
-        final isFavorite =
-            PlaylistRepository.instance.isFavorite(widget.trackId);
+        final isFavorite = PlaylistRepository.instance.isFavorite(
+          widget.trackId,
+        );
 
         return AnimatedScale(
           scale: _isAnimating ? _kAnimationScale : 1.0,

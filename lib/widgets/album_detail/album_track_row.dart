@@ -119,7 +119,7 @@ class _AlbumTrackRowState extends State<AlbumTrackRow> {
     final track = widget.track;
     final index = widget.index;
     final isActive = widget.isCurrentlyPlaying;
-    final mobile = isMobile(context);
+    final mobile = isMobile(context) || isMobileSurface(context);
     final numberColor = isActive || _hovering
         ? AppTheme.mikuGreen
         : AppTheme.textMuted;

@@ -20,7 +20,7 @@ class AlbumActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mobile = isMobile(context);
+    final mobile = isMobile(context) || isMobileSurface(context);
     if (mobile) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),

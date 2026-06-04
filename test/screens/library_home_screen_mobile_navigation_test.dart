@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/models/track.dart';
@@ -31,6 +32,33 @@ void main() {
     expect(find.text('专辑推荐'), findsOneWidget);
     expect(find.text('热门P主'), findsOneWidget);
     expect(find.text('GHOST'), findsWidgets);
+  });
+
+  testWidgets('native phone landscape keeps mobile navigation shell', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    try {
+      await HttpOverrides.runZoned(() async {
+        await _pumpMobileLibrary(tester, size: const Size(844, 390));
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+      expect(
+        find.byKey(const ValueKey('mobile-landscape-shell')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-landscape-rail')),
+        findsOneWidget,
+      );
+      expect(find.text('专辑推荐'), findsOneWidget);
+      expect(find.text('Albums'), findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 
   testWidgets(
@@ -1372,8 +1400,9 @@ void _invokeScopedIconButton(
 Future<void> _pumpMobileLibrary(
   WidgetTester tester, {
   MobileAudioPlaybackService? mobileAudioPlaybackService,
+  Size size = const Size(390, 844),
 }) {
-  tester.view.physicalSize = const Size(390, 844);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(() {
     tester.view.resetPhysicalSize();

@@ -17,11 +17,7 @@ Widget _buildHarness() {
             height: 320,
             color: Colors.teal,
           ),
-          child: Container(
-            width: 96,
-            height: 96,
-            color: Colors.teal,
-          ),
+          child: Container(width: 96, height: 96, color: Colors.teal),
         ),
       ),
     ),
@@ -29,8 +25,9 @@ Widget _buildHarness() {
 }
 
 void main() {
-  testWidgets('DetailCoverLightboxTrigger opens and closes the lightbox',
-      (tester) async {
+  testWidgets('DetailCoverLightboxTrigger opens and closes the lightbox', (
+    tester,
+  ) async {
     final semantics = tester.ensureSemantics();
 
     await tester.pumpWidget(_buildHarness());
@@ -46,10 +43,14 @@ void main() {
       find.byKey(const ValueKey('detail-cover-lightbox-close-button')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('detail-cover-preview-child')),
-        findsOneWidget);
     expect(
-      tester.getRect(find.byKey(const ValueKey('detail-cover-lightbox-backdrop'))),
+      find.byKey(const ValueKey('detail-cover-preview-child')),
+      findsOneWidget,
+    );
+    expect(
+      tester.getRect(
+        find.byKey(const ValueKey('detail-cover-lightbox-backdrop')),
+      ),
       tester.getRect(find.byKey(const ValueKey('detail-cover-lightbox'))),
     );
 
@@ -73,8 +74,9 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('DetailCoverLightbox supports desktop wheel zoom',
-      (tester) async {
+  testWidgets('DetailCoverLightbox supports desktop wheel zoom', (
+    tester,
+  ) async {
     await tester.binding.setSurfaceSize(const Size(1280, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -86,17 +88,15 @@ void main() {
       const ValueKey('detail-cover-lightbox-viewer'),
     );
     final renderBox = tester.renderObject<RenderBox>(interactiveViewer);
-    final pointerPosition = tester.getTopLeft(interactiveViewer) +
-        const Offset(240, 180);
+    final pointerPosition =
+        tester.getTopLeft(interactiveViewer) + const Offset(240, 180);
     final localPointerPosition = renderBox.globalToLocal(pointerPosition);
 
     final before = tester.widget<InteractiveViewer>(interactiveViewer);
-    final beforeScenePoint =
-        before.transformationController!.toScene(localPointerPosition);
-    expect(
-      before.transformationController!.value.getMaxScaleOnAxis(),
-      1.0,
+    final beforeScenePoint = before.transformationController!.toScene(
+      localPointerPosition,
     );
+    expect(before.transformationController!.value.getMaxScaleOnAxis(), 1.0);
 
     await tester.sendEventToBinding(
       PointerScrollEvent(
@@ -107,8 +107,9 @@ void main() {
     await tester.pump();
 
     final after = tester.widget<InteractiveViewer>(interactiveViewer);
-    final afterScenePoint =
-        after.transformationController!.toScene(localPointerPosition);
+    final afterScenePoint = after.transformationController!.toScene(
+      localPointerPosition,
+    );
     expect(
       after.transformationController!.value.getMaxScaleOnAxis(),
       greaterThan(1.0),
@@ -135,7 +136,10 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('detail-cover-lightbox')),
+        findsOneWidget,
+      );
 
       await tester.tap(
         find.byKey(const ValueKey('detail-cover-lightbox-close-button')),
@@ -147,7 +151,10 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.space);
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('detail-cover-lightbox')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('detail-cover-lightbox')),
+        findsOneWidget,
+      );
     },
   );
 

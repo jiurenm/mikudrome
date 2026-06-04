@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../api/config.dart';
 import '../theme/app_theme.dart';
+import '../utils/responsive.dart';
 import 'discover_screen.dart';
+import 'mobile_chrome_metrics.dart';
 import 'my_music_screen.dart';
 import 'settings_screen.dart';
 
@@ -62,6 +64,9 @@ class _MobileAppShellState extends State<MobileAppShell> {
   @override
   Widget build(BuildContext context) {
     final currentTab = _currentTab;
+    if (surfaceTypeOf(context) == SurfaceType.mobileLandscape) {
+      return _buildLandscapeShell(currentTab);
+    }
 
     return Scaffold(
       backgroundColor: AppTheme.mikuDark,
@@ -110,6 +115,92 @@ class _MobileAppShellState extends State<MobileAppShell> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildLandscapeShell(MobileAppTab currentTab) {
+    return Scaffold(
+      key: const ValueKey('mobile-landscape-shell'),
+      backgroundColor: AppTheme.mikuDark,
+      body: SafeArea(
+        child: Row(
+          children: [
+            SizedBox(
+              key: const ValueKey('mobile-landscape-rail'),
+              width: kLandscapeRailWidth,
+              child: ColoredBox(
+                color: AppTheme.footerBg,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _railButton(
+                      tab: MobileAppTab.discover,
+                      currentTab: currentTab,
+                      icon: Icons.explore_outlined,
+                      activeIcon: Icons.explore,
+                      tooltip: '发现',
+                    ),
+                    const SizedBox(height: 14),
+                    _railButton(
+                      tab: MobileAppTab.myMusic,
+                      currentTab: currentTab,
+                      icon: Icons.library_music_outlined,
+                      activeIcon: Icons.library_music,
+                      tooltip: '我的音乐',
+                    ),
+                    const SizedBox(height: 14),
+                    _railButton(
+                      tab: MobileAppTab.settings,
+                      currentTab: currentTab,
+                      icon: Icons.settings_outlined,
+                      activeIcon: Icons.settings,
+                      tooltip: '设置',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: IndexedStack(
+                index: _tabToIndex(currentTab),
+                children: [
+                  widget.discover ?? const DiscoverScreen(),
+                  widget.myMusic ?? const MyMusicScreen(),
+                  widget.settings ??
+                      SettingsScreen(
+                        serverUrl: ApiConfig.defaultBaseUrl,
+                        hasServerCookie: ApiConfig.defaultHeaders.containsKey(
+                          'Cookie',
+                        ),
+                      ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _railButton({
+    required MobileAppTab tab,
+    required MobileAppTab currentTab,
+    required IconData icon,
+    required IconData activeIcon,
+    required String tooltip,
+  }) {
+    final selected = tab == currentTab;
+    return Semantics(
+      selected: selected,
+      child: IconButton(
+        tooltip: tooltip,
+        onPressed: () => _selectTab(_tabToIndex(tab)),
+        isSelected: selected,
+        selectedIcon: Icon(activeIcon),
+        icon: Icon(icon),
+        color: selected ? AppTheme.mikuGreen : AppTheme.textMuted,
+        style: IconButton.styleFrom(fixedSize: const Size(48, 48)),
       ),
     );
   }

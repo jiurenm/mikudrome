@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/models/album.dart';
@@ -305,6 +306,40 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.chevron_left));
     expect(backCount, 1);
+  });
+
+  testWidgets('producer detail uses mobile landscape layout', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    try {
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(
+          _harness(
+            size: const Size(844, 390),
+            child: ProducerDetailScreen(
+              producer: _producer,
+              baseUrl: 'http://example.test',
+              onBack: () {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => _ProducerDetailFakeHttpClient());
+
+      expect(
+        find.byKey(const ValueKey('producer-detail-mobile-landscape')),
+        findsOneWidget,
+      );
+      expect(find.text('播放全部'), findsOneWidget);
+      expect(find.text('歌曲 2'), findsOneWidget);
+      expect(find.text('GHOST'), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+      await tester.binding.setSurfaceSize(null);
+    }
   });
 
   testWidgets('mobile tracks tab uses mobile rows instead of desktop table', (

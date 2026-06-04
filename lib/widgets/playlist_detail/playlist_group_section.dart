@@ -16,11 +16,9 @@ class PlaylistGroupSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolvedHeader = header ??
-        Text(
-          title ?? '',
-          style: Theme.of(context).textTheme.titleMedium,
-        );
+    final resolvedHeader =
+        header ??
+        Text(title ?? '', style: Theme.of(context).textTheme.titleMedium);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

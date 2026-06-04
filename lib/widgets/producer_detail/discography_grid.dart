@@ -17,7 +17,7 @@ class DiscographyGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mobile = isMobile(context);
+    final mobile = isMobile(context) || isMobileSurface(context);
     if (albums.isEmpty) {
       return Text(
         mobile ? '还没有专辑' : 'No albums',

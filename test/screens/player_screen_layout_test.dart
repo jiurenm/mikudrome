@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -5,12 +6,14 @@ import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/screens/library_home_screen.dart';
 import 'package:mikudrome/screens/player_screen.dart';
 import 'package:mikudrome/services/playlist_repository.dart';
+import 'package:mikudrome/widgets/player/asset_slider_thumb_shape.dart';
 // ignore: depend_on_referenced_packages
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 Track _desktopTrack() => const Track(
   id: 7,
@@ -36,6 +39,7 @@ Widget _buildPlayer({
   Track? track,
   List<Track>? queue,
   String? currentCoverUrl,
+  PlaybackMode playbackMode = PlaybackMode.audio,
   bool shuffleEnabled = false,
   VoidCallback? onToggleShuffle,
   String Function(Track track)? coverUrlForTrack,
@@ -50,7 +54,7 @@ Widget _buildPlayer({
         queue: resolvedQueue,
         currentIndex: 0,
         contextLabel: 'Layout Test',
-        playbackMode: PlaybackMode.audio,
+        playbackMode: playbackMode,
         onSelectTrack: (_) {},
         onPrevious: () {},
         onNext: () {},
@@ -81,6 +85,7 @@ Future<void> _pumpPlayer(
   Track? track,
   List<Track>? queue,
   String? currentCoverUrl,
+  PlaybackMode playbackMode = PlaybackMode.audio,
   bool shuffleEnabled = false,
   VoidCallback? onToggleShuffle,
   String Function(Track track)? coverUrlForTrack,
@@ -91,6 +96,7 @@ Future<void> _pumpPlayer(
       track: track,
       queue: queue,
       currentCoverUrl: currentCoverUrl,
+      playbackMode: playbackMode,
       shuffleEnabled: shuffleEnabled,
       onToggleShuffle: onToggleShuffle,
       coverUrlForTrack: coverUrlForTrack,
@@ -205,6 +211,30 @@ void main() {
       find.byKey(const ValueKey('player-audio-title-block')),
       findsNothing,
     );
+  });
+
+  testWidgets('width-mobile desktop surface keeps mobile player layout', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    try {
+      await _pumpPlayer(tester, surfaceSize: const Size(430, 900));
+
+      expect(
+        find.byKey(const ValueKey('mobile-player-immersive')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('player-audio-left-column')),
+        findsNothing,
+      );
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 
   testWidgets('mobile player uses compact controls with title actions', (
@@ -1035,6 +1065,214 @@ void main() {
       expect(tester.widget<Text>(durationFinder).data, '00:00');
     },
   );
+
+  testWidgets('mobile landscape audio player hides side panel by default', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    try {
+      await _pumpPlayer(tester, surfaceSize: const Size(844, 390));
+
+      expect(
+        find.byKey(const ValueKey('mobile-landscape-player')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-landscape-player-side-panel')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-player-queue-peek')),
+        findsNothing,
+      );
+      expect(find.byTooltip('收起'), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('mobile landscape audio player uses mobile slider styling', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    try {
+      await _pumpPlayer(tester, surfaceSize: const Size(844, 390));
+
+      final sliderThemeFinder = find.descendant(
+        of: find.byKey(const ValueKey('mobile-landscape-player')),
+        matching: find.byType(SliderTheme),
+      );
+      expect(sliderThemeFinder, findsOneWidget);
+
+      final sliderTheme = tester.widget<SliderTheme>(sliderThemeFinder);
+      final activeTrackColor = sliderTheme.data.activeTrackColor!;
+      expect(
+        sliderTheme.data.overlayColor,
+        activeTrackColor.withValues(alpha: 0.15),
+      );
+      expect(sliderTheme.data.trackHeight, 5);
+      expect(sliderTheme.data.thumbShape, isA<AssetSliderThumbShape>());
+      expect(
+        sliderTheme.data.thumbShape!.getPreferredSize(true, false),
+        const Size(18, 18),
+      );
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('mobile landscape audio player opens lyrics and queue panel', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    try {
+      await _pumpPlayer(tester, surfaceSize: const Size(844, 390));
+
+      await tester.tap(find.byTooltip('显示歌词和队列'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('mobile-landscape-player-side-panel')),
+        findsOneWidget,
+      );
+      expect(find.text('歌词'), findsOneWidget);
+      expect(find.text('队列'), findsOneWidget);
+
+      await tester.tap(find.text('队列'));
+      await tester.pumpAndSettle();
+      expect(find.text('Layout Test'), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets(
+    'mobile landscape audio player adapts side panel on small phones',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      await tester.binding.setSurfaceSize(const Size(640, 360));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      try {
+        await _pumpPlayer(tester, surfaceSize: const Size(640, 360));
+
+        await tester.tap(find.byTooltip('显示歌词和队列'));
+        await tester.pumpAndSettle();
+
+        final sidePanel = find.byKey(
+          const ValueKey('mobile-landscape-player-side-panel'),
+        );
+        expect(sidePanel, findsOneWidget);
+        expect(tester.getRect(sidePanel).width, lessThan(320));
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    },
+  );
+
+  testWidgets('mobile landscape panel tabs expose selected semantics', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    try {
+      await _pumpPlayer(tester, surfaceSize: const Size(844, 390));
+
+      await tester.tap(find.byTooltip('显示歌词和队列'));
+      await tester.pumpAndSettle();
+
+      final lyricsSemantics = find.byKey(
+        const ValueKey('mobile-landscape-panel-tab-lyrics'),
+      );
+      expect(lyricsSemantics, findsOneWidget);
+      expect(
+        tester.getSemantics(lyricsSemantics).flagsCollection.isSelected,
+        ui.Tristate.isTrue,
+      );
+
+      await tester.tap(find.text('队列'));
+      await tester.pumpAndSettle();
+
+      final queueSemantics = find.byKey(
+        const ValueKey('mobile-landscape-panel-tab-queue'),
+      );
+      expect(queueSemantics, findsOneWidget);
+      expect(
+        tester.getSemantics(queueSemantics).flagsCollection.isSelected,
+        ui.Tristate.isTrue,
+      );
+    } finally {
+      semantics.dispose();
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('mobile landscape video queue button opens mobile queue modal', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const current = Track(
+      id: 77,
+      title: 'Landscape MV',
+      audioPath: '/tmp/77.flac',
+      videoPath: '/tmp/77.mp4',
+      vocal: 'Miku',
+    );
+    const next = Track(
+      id: 78,
+      title: 'Next Landscape MV',
+      audioPath: '/tmp/78.flac',
+      videoPath: '/tmp/78.mp4',
+      vocal: 'Miku',
+    );
+
+    try {
+      await _pumpPlayer(
+        tester,
+        surfaceSize: const Size(844, 390),
+        track: current,
+        queue: const [current, next],
+        playbackMode: PlaybackMode.video,
+      );
+
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+      final queueButton = find.byKey(const ValueKey('mobile-mv-queue-button'));
+      expect(queueButton, findsOneWidget);
+
+      await tester.ensureVisible(queueButton);
+      await tester.pumpAndSettle();
+      await tester.tap(queueButton);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Next Landscape MV'), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
 }
 
 class _FavoriteRecordingHttpClient implements HttpClient {

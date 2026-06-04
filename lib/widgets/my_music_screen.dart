@@ -7,6 +7,7 @@ import '../models/playlist.dart';
 import '../models/track.dart';
 import '../services/playlist_repository.dart';
 import '../theme/app_theme.dart';
+import '../utils/responsive.dart';
 import 'app_shell.dart';
 import 'playlists/playlist_cover.dart';
 
@@ -94,6 +95,14 @@ class _MyMusicContent extends StatelessWidget {
         (onNavigate == null
             ? null
             : () => onNavigate?.call(ShellRoute.recentPlayed));
+
+    if (isNativePhoneLandscapeSurface(context)) {
+      return _buildMobileLandscape(
+        favoriteTap: favoriteTap,
+        playlistTap: playlistTap,
+        recentPlayedTap: recentPlayedTap,
+      );
+    }
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 22, 16, 96),
@@ -183,6 +192,51 @@ class _MyMusicContent extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildMobileLandscape({
+    required VoidCallback? favoriteTap,
+    required VoidCallback? playlistTap,
+    required VoidCallback? recentPlayedTap,
+  }) {
+    return Padding(
+      key: const ValueKey('my-music-mobile-landscape'),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: _QuickActionCard(
+              icon: Icons.favorite,
+              iconColor: const Color(0xFFFF4D7D),
+              title: '收藏',
+              subtitle: '收藏的歌曲',
+              onTap: favoriteTap,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: _QuickActionCard(
+              icon: Icons.music_note,
+              iconColor: AppTheme.mikuGreen,
+              title: '歌单',
+              subtitle: '${playlists.length} 个歌单',
+              onTap: playlistTap,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: _QuickActionCard(
+              icon: Icons.history,
+              iconColor: const Color(0xFF48A9D8),
+              title: '最近播放',
+              subtitle: '继续听歌',
+              onTap: recentPlayedTap,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -19,7 +19,7 @@ class FeaturedMvsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mobile = isMobile(context);
+    final mobile = isMobile(context) || isMobileSurface(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -134,7 +134,9 @@ class _MvCardState extends State<_MvCard> {
                 children: [
                   Text(
                     widget.title,
-                    maxLines: isMobile(context) ? 2 : 1,
+                    maxLines: isMobile(context) || isMobileSurface(context)
+                        ? 2
+                        : 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       color: Colors.white,

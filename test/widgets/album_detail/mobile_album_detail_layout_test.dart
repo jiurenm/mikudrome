@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/api/api.dart';
 import 'package:mikudrome/models/album.dart';
@@ -137,6 +138,40 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Add to Playlist'), findsOneWidget);
+  });
+
+  testWidgets('album detail uses mobile landscape layout', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    try {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(size: Size(844, 390)),
+            child: AlbumDetailScreen(
+              album: _album,
+              client: _FakeAlbumClient(),
+              onBack: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('album-detail-mobile-landscape')),
+        findsOneWidget,
+      );
+      expect(find.text('播放全部'), findsOneWidget);
+      expect(find.text('12 首歌曲'), findsOneWidget);
+      expect(find.text('Track A'), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+      await tester.binding.setSurfaceSize(null);
+    }
   });
 
   testWidgets('album row tap reports the default audio intent', (tester) async {

@@ -9,11 +9,8 @@ import '../theme/app_theme.dart';
 import 'app_shell.dart';
 
 class MobileMoreScreen extends StatefulWidget {
-  MobileMoreScreen({
-    super.key,
-    required this.onNavigate,
-    ApiClient? client,
-  }) : client = client ?? ApiClient(baseUrl: ApiConfig.defaultBaseUrl);
+  MobileMoreScreen({super.key, required this.onNavigate, ApiClient? client})
+    : client = client ?? ApiClient(baseUrl: ApiConfig.defaultBaseUrl);
 
   final ValueChanged<ShellRoute> onNavigate;
   final ApiClient client;

@@ -6,17 +6,14 @@ import 'web_audio_player_contract.dart';
 
 WebAudioPlayer? _sharedPlayer;
 
-WebAudioPlayer createWebAudioPlayer() =>
-    _sharedPlayer ??= AdapterBackedWebAudioPlayer(
-      adapter: BrowserWebAudioElementAdapter(),
-    );
+WebAudioPlayer createWebAudioPlayer() => _sharedPlayer ??=
+    AdapterBackedWebAudioPlayer(adapter: BrowserWebAudioElementAdapter());
 
 WebAudioPlayer createWebAudioPlayerForTest({
   required WebAudioElementAdapter? adapter,
-}) =>
-    adapter == null
-        ? throw ArgumentError.notNull('adapter')
-        : AdapterBackedWebAudioPlayer(adapter: adapter);
+}) => adapter == null
+    ? throw ArgumentError.notNull('adapter')
+    : AdapterBackedWebAudioPlayer(adapter: adapter);
 
 final class BrowserWebAudioElementAdapter implements WebAudioElementAdapter {
   BrowserWebAudioElementAdapter() : _audio = web.HTMLAudioElement() {
@@ -77,12 +74,12 @@ final class BrowserWebAudioElementAdapter implements WebAudioElementAdapter {
 
   @override
   Stream<String?> get onError => _audio.onError.map((_) {
-        final error = _audio.error;
-        if (error == null) {
-          return 'Failed to play audio.';
-        }
-        return error.message.isEmpty ? 'Failed to play audio.' : error.message;
-      });
+    final error = _audio.error;
+    if (error == null) {
+      return 'Failed to play audio.';
+    }
+    return error.message.isEmpty ? 'Failed to play audio.' : error.message;
+  });
 
   @override
   Stream<void> get onLoadedMetadata => _audio.onLoadedMetadata.map((_) {});

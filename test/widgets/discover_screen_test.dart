@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/models/album.dart';
@@ -14,10 +15,10 @@ import 'package:mikudrome/models/vocalist.dart';
 import 'package:mikudrome/widgets/discover/discover_data_cache.dart';
 import 'package:mikudrome/widgets/discover_screen.dart';
 
-Widget _harness(Widget child) {
+Widget _harness(Widget child, {Size size = const Size(390, 844)}) {
   return MaterialApp(
     home: MediaQuery(
-      data: const MediaQueryData(size: Size(390, 844)),
+      data: MediaQueryData(size: size),
       child: Scaffold(body: child),
     ),
   );
@@ -270,6 +271,36 @@ void main() {
     expect(find.textContaining('Daily One'), findsOneWidget);
     expect(find.textContaining('Daily Two'), findsOneWidget);
   });
+
+  testWidgets(
+    'DiscoverScreen uses landscape dashboard on native phone landscape',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+      await tester.binding.setSurfaceSize(const Size(844, 390));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      try {
+        await HttpOverrides.runZoned(() async {
+          await tester.pumpWidget(
+            _harness(const DiscoverScreen(), size: const Size(844, 390)),
+          );
+          await tester.pumpAndSettle();
+        }, createHttpClient: (_) => _DiscoverFakeHttpClient());
+
+        expect(
+          find.byKey(const ValueKey('discover-mobile-landscape-dashboard')),
+          findsOneWidget,
+        );
+        expect(find.text('专辑推荐'), findsOneWidget);
+        expect(find.text('热门P主'), findsOneWidget);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+        await tester.binding.setSurfaceSize(null);
+      }
+    },
+  );
 
   testWidgets(
     'mobile recommendation home renders cached daily recommendations',

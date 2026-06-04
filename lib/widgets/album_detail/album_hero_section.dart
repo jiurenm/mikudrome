@@ -52,7 +52,7 @@ class AlbumHeroSection extends StatelessWidget {
     final year = trackYear > 0 ? trackYear : album.year;
     final totalSec = _totalDurationSeconds(tracks);
     final durationStr = _formatDuration(totalSec);
-    final mobile = isMobile(context);
+    final mobile = isMobile(context) || isMobileSurface(context);
 
     final gradient = BoxDecoration(
       gradient: LinearGradient(

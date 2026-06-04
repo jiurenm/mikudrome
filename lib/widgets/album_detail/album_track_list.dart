@@ -38,7 +38,7 @@ class AlbumTrackList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mobile = isMobile(context);
+    final mobile = isMobile(context) || isMobileSurface(context);
     return SliverPadding(
       padding: EdgeInsets.fromLTRB(mobile ? 16 : 40, 0, mobile ? 12 : 40, 80),
       sliver: SliverList(

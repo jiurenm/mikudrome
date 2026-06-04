@@ -83,7 +83,7 @@ abstract interface class WebAudioPlayer {
 
 final class AdapterBackedWebAudioPlayer implements WebAudioPlayer {
   AdapterBackedWebAudioPlayer({required WebAudioElementAdapter adapter})
-      : _adapter = adapter {
+    : _adapter = adapter {
     _subscriptions = [
       _adapter.onLoadedMetadata.listen((_) => _handleLoadedMetadata()),
       _adapter.onTimeUpdate.listen((_) => _syncFromAdapter(isCompleted: false)),
@@ -147,8 +147,9 @@ final class AdapterBackedWebAudioPlayer implements WebAudioPlayer {
       return;
     }
     _currentUrl = url;
-    _pendingInitialPosition =
-        initialPosition > Duration.zero ? initialPosition : null;
+    _pendingInitialPosition = initialPosition > Duration.zero
+        ? initialPosition
+        : null;
     _value = const WebAudioPlayerValue();
     _notifyListeners();
 
@@ -185,10 +186,7 @@ final class AdapterBackedWebAudioPlayer implements WebAudioPlayer {
   Future<void> seekTo(Duration position) async {
     final clamped = _clampToDuration(position);
     _adapter.currentPosition = clamped;
-    _value = _value.copyWith(
-      position: clamped,
-      isCompleted: false,
-    );
+    _value = _value.copyWith(position: clamped, isCompleted: false);
     _notifyListeners();
   }
 

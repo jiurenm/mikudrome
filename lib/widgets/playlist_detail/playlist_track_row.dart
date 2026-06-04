@@ -182,7 +182,7 @@ class _PlaylistTrackRowState extends State<PlaylistTrackRow> {
   Widget build(BuildContext context) {
     final track = _track;
     final isActive = widget.isCurrentlyPlaying;
-    final mobile = isMobile(context);
+    final mobile = isMobile(context) || isMobileSurface(context);
     final vocalLine = _vocalLine;
     final note = _note;
     final titleColor = isActive || _hovering

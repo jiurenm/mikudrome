@@ -15,10 +15,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: MobileMoreScreen(
-            onNavigate: (_) {},
-            client: client,
-          ),
+          body: MobileMoreScreen(onNavigate: (_) {}, client: client),
         ),
       ),
     );
@@ -56,10 +53,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: MobileMoreScreen(
-            onNavigate: (_) {},
-            client: client,
-          ),
+          body: MobileMoreScreen(onNavigate: (_) {}, client: client),
         ),
       ),
     );
@@ -78,10 +72,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: MobileMoreScreen(
-            onNavigate: (_) {},
-            client: client,
-          ),
+          body: MobileMoreScreen(onNavigate: (_) {}, client: client),
         ),
       ),
     );
@@ -101,10 +92,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: MobileMoreScreen(
-            onNavigate: (_) {},
-            client: client,
-          ),
+          body: MobileMoreScreen(onNavigate: (_) {}, client: client),
         ),
       ),
     );
@@ -134,7 +122,8 @@ void main() {
 
 class _FakeLibraryTaskApiClient extends ApiClient {
   _FakeLibraryTaskApiClient({LibraryTaskStatus? initialStatus})
-    : _status = initialStatus ??
+    : _status =
+          initialStatus ??
           const LibraryTaskStatus(
             taskType: 'full_rescan',
             status: 'idle',

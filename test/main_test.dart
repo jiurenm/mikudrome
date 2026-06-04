@@ -11,12 +11,9 @@ void main() {
 
     await loadBundledFonts(loadFont: fakeLoader);
 
-    expect(
-      calls,
-      <String>[
-        'NotoSansJP:lib/assets/fonts/NotoSansJP-Regular.ttf',
-        'NotoSansSC:lib/assets/fonts/NotoSansSC-Regular.ttf',
-      ],
-    );
+    expect(calls, <String>[
+      'NotoSansJP:lib/assets/fonts/NotoSansJP-Regular.ttf',
+      'NotoSansSC:lib/assets/fonts/NotoSansSC-Regular.ttf',
+    ]);
   });
 }

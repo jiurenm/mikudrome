@@ -30,7 +30,8 @@ Widget _buildLyricsSection({
           width: width,
           height: height,
           child: LyricsSection(
-            lyrics: lyrics ??
+            lyrics:
+                lyrics ??
                 timedLyrics.map((line) => line.texts.join(' / ')).join('\n'),
             timedLyrics: timedLyrics,
             activeIndex: activeIndex,
@@ -69,7 +70,9 @@ void main() {
       await _pumpDesktopStage(tester);
 
       expect(
-          find.byKey(const ValueKey<String>('lyrics-stage')), findsOneWidget);
+        find.byKey(const ValueKey<String>('lyrics-stage')),
+        findsOneWidget,
+      );
       expect(
         find.byKey(const ValueKey<String>('lyrics-stage-mask')),
         findsOneWidget,
@@ -194,9 +197,11 @@ void main() {
       await _pumpDesktopStage(tester);
 
       final activeLineText = tester.widget<Text>(find.text('Line 4'));
-      final expectedHighlight =
-          Color.lerp(AppTheme.mikuGreen, Colors.white, 0.18)!
-              .withValues(alpha: 1.0);
+      final expectedHighlight = Color.lerp(
+        AppTheme.mikuGreen,
+        Colors.white,
+        0.18,
+      )!.withValues(alpha: 1.0);
 
       expect(activeLineText.style?.color, expectedHighlight);
     },
@@ -220,14 +225,8 @@ void main() {
 
       expect(shadows, isNotNull);
       expect(shadows, isNotEmpty);
-      expect(
-        shadows!.every((shadow) => shadow.offset.dx > 0),
-        isTrue,
-      );
-      expect(
-        shadows.every((shadow) => shadow.blurRadius <= 14),
-        isTrue,
-      );
+      expect(shadows!.every((shadow) => shadow.offset.dx > 0), isTrue);
+      expect(shadows.every((shadow) => shadow.blurRadius <= 14), isTrue);
     },
   );
 
@@ -353,16 +352,16 @@ void main() {
       );
       await _pumpDesktopStage(tester);
 
-      final maskFinder =
-          find.byKey(const ValueKey<String>('lyrics-stage-mask'));
+      final maskFinder = find.byKey(
+        const ValueKey<String>('lyrics-stage-mask'),
+      );
       final lineFinder = find.byKey(const ValueKey<String>('lyrics-line-0'));
 
       expect(
-          find.byKey(const ValueKey<String>('lyrics-stage')), findsOneWidget);
-      expect(
-        maskFinder,
+        find.byKey(const ValueKey<String>('lyrics-stage')),
         findsOneWidget,
       );
+      expect(maskFinder, findsOneWidget);
       expect(find.byType(ListView), findsNothing);
       expect(find.text('Line 0'), findsOneWidget);
       expect(lineFinder, findsOneWidget);
@@ -377,32 +376,30 @@ void main() {
     },
   );
 
-  testWidgets(
-    'narrow desktop timed lyrics still render the stage path',
-    (tester) async {
-      await tester.pumpWidget(
-        _buildLyricsSection(
-          timedLyrics: _timedLyrics(80),
-          activeIndex: 40,
-          width: 420,
-          height: 320,
-        ),
-      );
-      await _pumpDesktopStage(tester);
+  testWidgets('narrow desktop timed lyrics still render the stage path', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildLyricsSection(
+        timedLyrics: _timedLyrics(80),
+        activeIndex: 40,
+        width: 420,
+        height: 320,
+      ),
+    );
+    await _pumpDesktopStage(tester);
 
-      expect(
-          find.byKey(const ValueKey<String>('lyrics-stage')), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey<String>('lyrics-stage-mask')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey<String>('lyrics-line-glow-40')),
-        findsOneWidget,
-      );
-      expect(find.byType(ListView), findsNothing);
-    },
-  );
+    expect(find.byKey(const ValueKey<String>('lyrics-stage')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('lyrics-stage-mask')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('lyrics-line-glow-40')),
+      findsOneWidget,
+    );
+    expect(find.byType(ListView), findsNothing);
+  });
 
   testWidgets(
     'wide non-desktop timed lyrics stay on the scrollable list path',
@@ -500,59 +497,57 @@ void main() {
     },
   );
 
-  testWidgets(
-    'mobile timed lyrics center the lyric block on app runtimes',
-    (tester) async {
-      final timedLyrics = <TimedLyricLine>[
-        const TimedLyricLine(
-          start: Duration.zero,
-          texts: <String>['Primary line', 'Translated line'],
-        ),
-      ];
+  testWidgets('mobile timed lyrics center the lyric block on app runtimes', (
+    tester,
+  ) async {
+    final timedLyrics = <TimedLyricLine>[
+      const TimedLyricLine(
+        start: Duration.zero,
+        texts: <String>['Primary line', 'Translated line'],
+      ),
+    ];
 
-      await tester.pumpWidget(
-        _buildLyricsSection(
-          timedLyrics: timedLyrics,
-          activeIndex: 0,
-          width: 420,
-          height: 320,
-          platform: TargetPlatform.android,
-        ),
-      );
-      await _pumpMobileLyrics(tester);
+    await tester.pumpWidget(
+      _buildLyricsSection(
+        timedLyrics: timedLyrics,
+        activeIndex: 0,
+        width: 420,
+        height: 320,
+        platform: TargetPlatform.android,
+      ),
+    );
+    await _pumpMobileLyrics(tester);
 
-      final primaryText = tester.widget<Text>(find.text('Primary line'));
-      final translatedText = tester.widget<Text>(find.text('Translated line'));
+    final primaryText = tester.widget<Text>(find.text('Primary line'));
+    final translatedText = tester.widget<Text>(find.text('Translated line'));
 
-      expect(primaryText.textAlign, TextAlign.center);
-      expect(translatedText.textAlign, TextAlign.center);
-    },
-  );
+    expect(primaryText.textAlign, TextAlign.center);
+    expect(translatedText.textAlign, TextAlign.center);
+  });
 
-  testWidgets(
-    'mobile timed lyrics keep a clearer gap between lyric blocks',
-    (tester) async {
-      await tester.pumpWidget(
-        _buildLyricsSection(
-          timedLyrics: _timedLyrics(3),
-          activeIndex: 1,
-          width: 420,
-          height: 320,
-          platform: TargetPlatform.android,
-        ),
-      );
-      await _pumpMobileLyrics(tester);
+  testWidgets('mobile timed lyrics keep a clearer gap between lyric blocks', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildLyricsSection(
+        timedLyrics: _timedLyrics(3),
+        activeIndex: 1,
+        width: 420,
+        height: 320,
+        platform: TargetPlatform.android,
+      ),
+    );
+    await _pumpMobileLyrics(tester);
 
-      final line0 = tester.getTopLeft(find.byKey(
-        const ValueKey<String>('lyrics-line-0'),
-      ));
-      final line1 = tester.getTopLeft(find.byKey(
-        const ValueKey<String>('lyrics-line-1'),
-      ));
+    final line0 = tester.getTopLeft(
+      find.byKey(const ValueKey<String>('lyrics-line-0')),
+    );
+    final line1 = tester.getTopLeft(
+      find.byKey(const ValueKey<String>('lyrics-line-1')),
+    );
 
-      expect(line1.dy - line0.dy, greaterThan(20));
-    },
-  );
+    expect(line1.dy - line0.dy, greaterThan(20));
+  });
 
   testWidgets(
     'mobile timed lyrics pause follow on manual scroll and return to current',
@@ -632,41 +627,40 @@ void main() {
     },
   );
 
-  testWidgets(
-    'mobile timed lyrics auto-follow does not enter manual pause',
-    (tester) async {
-      final timedLyrics = _timedLyrics(60);
+  testWidgets('mobile timed lyrics auto-follow does not enter manual pause', (
+    tester,
+  ) async {
+    final timedLyrics = _timedLyrics(60);
 
-      await tester.pumpWidget(
-        _buildLyricsSection(
-          timedLyrics: timedLyrics,
-          activeIndex: 1,
-          width: 420,
-          height: 320,
-          platform: TargetPlatform.android,
-        ),
-      );
-      await _pumpMobileLyrics(tester);
+    await tester.pumpWidget(
+      _buildLyricsSection(
+        timedLyrics: timedLyrics,
+        activeIndex: 1,
+        width: 420,
+        height: 320,
+        platform: TargetPlatform.android,
+      ),
+    );
+    await _pumpMobileLyrics(tester);
 
-      await tester.pumpWidget(
-        _buildLyricsSection(
-          timedLyrics: timedLyrics,
-          activeIndex: 35,
-          width: 420,
-          height: 320,
-          platform: TargetPlatform.android,
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 250));
+    await tester.pumpWidget(
+      _buildLyricsSection(
+        timedLyrics: timedLyrics,
+        activeIndex: 35,
+        width: 420,
+        height: 320,
+        platform: TargetPlatform.android,
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
 
-      expect(
-        find.byKey(const ValueKey<String>('mobile-lyrics-return-current')),
-        findsNothing,
-      );
-      expect(find.text('Line 35'), findsOneWidget);
-    },
-  );
+    expect(
+      find.byKey(const ValueKey<String>('mobile-lyrics-return-current')),
+      findsNothing,
+    );
+    expect(find.text('Line 35'), findsOneWidget);
+  });
 
   testWidgets(
     'mobile timed lyrics clear manual pause when timed lyrics change',
@@ -719,34 +713,30 @@ void main() {
     },
   );
 
-  testWidgets(
-    'plain text lyrics keep the fallback scroll view structure',
-    (tester) async {
-      await tester.pumpWidget(
-        _buildLyricsSection(
-          timedLyrics: const <TimedLyricLine>[],
-          activeIndex: -1,
-          lyrics: 'First line\nSecond line',
-          width: desktopWidth,
-          height: desktopHeight,
-        ),
-      );
-      await tester.pumpAndSettle();
+  testWidgets('plain text lyrics keep the fallback scroll view structure', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildLyricsSection(
+        timedLyrics: const <TimedLyricLine>[],
+        activeIndex: -1,
+        lyrics: 'First line\nSecond line',
+        width: desktopWidth,
+        height: desktopHeight,
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.byType(SelectableText), findsOneWidget);
-      expect(find.byType(SingleChildScrollView), findsOneWidget);
-      expect(find.byKey(const ValueKey<String>('lyrics-stage')), findsNothing);
-      expect(
-        find.byKey(const ValueKey<String>('lyrics-stage-mask')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const ValueKey<String>('lyrics-line-0')),
-        findsNothing,
-      );
-      expect(find.text('First line\nSecond line'), findsOneWidget);
-    },
-  );
+    expect(find.byType(SelectableText), findsOneWidget);
+    expect(find.byType(SingleChildScrollView), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('lyrics-stage')), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('lyrics-stage-mask')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey<String>('lyrics-line-0')), findsNothing);
+    expect(find.text('First line\nSecond line'), findsOneWidget);
+  });
 
   testWidgets(
     'keeps far active lyric jumps from snapping to the bottom of the list',

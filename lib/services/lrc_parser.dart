@@ -45,7 +45,9 @@ List<TimedLyricLine> parseLrcLyrics(String raw) {
         seconds: seconds,
         milliseconds: milliseconds,
       );
-      groupedTexts.putIfAbsent(start.inMilliseconds, () => <String>[]).add(text);
+      groupedTexts
+          .putIfAbsent(start.inMilliseconds, () => <String>[])
+          .add(text);
     }
   }
 
@@ -54,18 +56,14 @@ List<TimedLyricLine> parseLrcLyrics(String raw) {
       start: Duration(milliseconds: entry.key),
       texts: List<String>.unmodifiable(entry.value),
     );
-  }).toList()
-    ..sort((a, b) => a.start.compareTo(b.start));
+  }).toList()..sort((a, b) => a.start.compareTo(b.start));
 
   return result;
 }
 
 bool hasTimedLyrics(String raw) => parseLrcLyrics(raw).isNotEmpty;
 
-int findActiveLyricIndex(
-  List<TimedLyricLine> lines,
-  Duration position,
-) {
+int findActiveLyricIndex(List<TimedLyricLine> lines, Duration position) {
   if (lines.isEmpty || position < lines.first.start) {
     return -1;
   }

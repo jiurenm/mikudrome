@@ -31,7 +31,8 @@ class PlaylistGroup {
       isSystem: json['is_system'] as bool? ?? false,
       createdAt: json['created_at'] as int? ?? 0,
       updatedAt: json['updated_at'] as int? ?? 0,
-      items: (json['items'] as List<dynamic>?)
+      items:
+          (json['items'] as List<dynamic>?)
               ?.map(
                 (item) => PlaylistItem.fromJson(item as Map<String, dynamic>),
               )

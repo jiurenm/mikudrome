@@ -55,8 +55,7 @@ class _AnimatedEqualizerState extends State<AnimatedEqualizer>
               // Offset each bar's phase so they animate out of sync
               final phase = i * 0.3;
               final t = (_controller.value + phase) % 1.0;
-              final height =
-                  widget.size * (0.3 + 0.7 * sin(t * pi).abs());
+              final height = widget.size * (0.3 + 0.7 * sin(t * pi).abs());
               return Padding(
                 padding: EdgeInsets.only(left: i == 0 ? 0 : gap),
                 child: Container(

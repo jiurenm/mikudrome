@@ -95,7 +95,10 @@ class Video {
 
   static List<String> _dedup(Iterable<String> items) {
     final seen = <String>{};
-    return [for (final s in items) if (seen.add(s)) s];
+    return [
+      for (final s in items)
+        if (seen.add(s)) s,
+    ];
   }
 
   /// Duration formatted as "mm:ss" or "hh:mm:ss".

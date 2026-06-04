@@ -16,9 +16,7 @@ void main() {
 
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(
-          body: TrackInfoSection(track: track),
-        ),
+        home: Scaffold(body: TrackInfoSection(track: track)),
       ),
     );
 

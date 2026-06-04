@@ -53,8 +53,9 @@ class _HomeScreenState extends State<HomeScreen> {
           queue: queue,
           currentIndex: index < 0 ? 0 : index,
           contextLabel: 'Home / All Tracks',
-          playbackMode:
-              track.hasVideo ? PlaybackMode.video : PlaybackMode.audio,
+          playbackMode: track.hasVideo
+              ? PlaybackMode.video
+              : PlaybackMode.audio,
           onSelectTrack: (_) {},
           onPrevious: () {},
           onNext: () {},
@@ -62,12 +63,13 @@ class _HomeScreenState extends State<HomeScreen> {
           onSwitchPlaybackMode: (_) {},
           playbackOrderMode: PlaybackOrderMode.sequential,
           onCyclePlaybackOrderMode: () {},
-          onPlaybackStateChanged: ({
-            required bool isPlaying,
-            required double progress,
-            required String elapsedLabel,
-            required String durationLabel,
-          }) {},
+          onPlaybackStateChanged:
+              ({
+                required bool isPlaying,
+                required double progress,
+                required String elapsedLabel,
+                required String durationLabel,
+              }) {},
           baseUrl: _api.baseUrl,
         ),
       ),
@@ -103,10 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Text(_error!, textAlign: TextAlign.center),
               const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _loadTracks,
-                child: const Text('Retry'),
-              ),
+              FilledButton(onPressed: _loadTracks, child: const Text('Retry')),
             ],
           ),
         ),
@@ -124,7 +123,9 @@ class _HomeScreenState extends State<HomeScreen> {
         return ListTile(
           leading: Icon(
             track.hasVideo ? Icons.video_library : Icons.music_note,
-            color: track.hasVideo ? Theme.of(context).colorScheme.primary : null,
+            color: track.hasVideo
+                ? Theme.of(context).colorScheme.primary
+                : null,
           ),
           title: Text(track.title),
           subtitle: track.hasVideo ? const Text('Tap to play MV') : null,

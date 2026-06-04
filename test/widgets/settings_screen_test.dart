@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/widgets/settings_screen.dart';
@@ -76,5 +77,41 @@ void main() {
     );
 
     expect(find.text('Cookie 未配置'), findsOneWidget);
+  });
+
+  testWidgets('settings uses two-column native phone landscape layout', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    try {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(size: Size(844, 390)),
+            child: Scaffold(
+              body: SettingsScreen(
+                serverUrl: 'http://192.168.1.2:8080',
+                hasServerCookie: false,
+                lowQualityAudio: true,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('settings-mobile-landscape')),
+        findsOneWidget,
+      );
+      expect(find.text('服务器'), findsOneWidget);
+      expect(find.text('弱网省流量音质'), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+      await tester.binding.setSurfaceSize(null);
+    }
   });
 }

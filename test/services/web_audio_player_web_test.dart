@@ -92,55 +92,58 @@ class _FakeAudioAdapter implements WebAudioElementAdapter {
 
 void main() {
   test(
-      'persistent web audio player reports completion and can load a new track',
-      () async {
-    final adapter = _FakeAudioAdapter();
-    final player = createWebAudioPlayerForTest(adapter: adapter);
+    'persistent web audio player reports completion and can load a new track',
+    () async {
+      final adapter = _FakeAudioAdapter();
+      final player = createWebAudioPlayerForTest(adapter: adapter);
 
-    await player.load(
-      url: 'https://example.test/one.mp3',
-      initialPosition: const Duration(seconds: 1),
-      autoplay: true,
-    );
-    adapter.emitLoadedMetadata(duration: const Duration(seconds: 10));
-    await Future<void>.delayed(Duration.zero);
-    adapter.emitEnded();
-    await Future<void>.delayed(Duration.zero);
+      await player.load(
+        url: 'https://example.test/one.mp3',
+        initialPosition: const Duration(seconds: 1),
+        autoplay: true,
+      );
+      adapter.emitLoadedMetadata(duration: const Duration(seconds: 10));
+      await Future<void>.delayed(Duration.zero);
+      adapter.emitEnded();
+      await Future<void>.delayed(Duration.zero);
 
-    expect(player.value.isCompleted, isTrue);
-    expect(player.value.position, const Duration(seconds: 10));
+      expect(player.value.isCompleted, isTrue);
+      expect(player.value.position, const Duration(seconds: 10));
 
-    await player.load(
-      url: 'https://example.test/two.mp3',
-      initialPosition: Duration.zero,
-      autoplay: true,
-    );
-    adapter.emitLoadedMetadata(duration: const Duration(seconds: 8));
-    await Future<void>.delayed(Duration.zero);
+      await player.load(
+        url: 'https://example.test/two.mp3',
+        initialPosition: Duration.zero,
+        autoplay: true,
+      );
+      adapter.emitLoadedMetadata(duration: const Duration(seconds: 8));
+      await Future<void>.delayed(Duration.zero);
 
-    expect(adapter.sources.last, 'https://example.test/two.mp3');
-    expect(adapter.playCallCount, 2);
-    expect(player.value.isCompleted, isFalse);
-  });
+      expect(adapter.sources.last, 'https://example.test/two.mp3');
+      expect(adapter.playCallCount, 2);
+      expect(player.value.isCompleted, isFalse);
+    },
+  );
 
-  test('web audio player emits diagnostic messages for load and completion',
-      () async {
-    final adapter = _FakeAudioAdapter();
-    final player = createWebAudioPlayerForTest(adapter: adapter);
+  test(
+    'web audio player emits diagnostic messages for load and completion',
+    () async {
+      final adapter = _FakeAudioAdapter();
+      final player = createWebAudioPlayerForTest(adapter: adapter);
 
-    await player.load(
-      url: 'https://example.test/diagnostic.mp3',
-      initialPosition: Duration.zero,
-      autoplay: true,
-    );
-    adapter.emitLoadedMetadata(duration: const Duration(seconds: 5));
-    await Future<void>.delayed(Duration.zero);
-    adapter.emitEnded();
-    await Future<void>.delayed(Duration.zero);
+      await player.load(
+        url: 'https://example.test/diagnostic.mp3',
+        initialPosition: Duration.zero,
+        autoplay: true,
+      );
+      adapter.emitLoadedMetadata(duration: const Duration(seconds: 5));
+      await Future<void>.delayed(Duration.zero);
+      adapter.emitEnded();
+      await Future<void>.delayed(Duration.zero);
 
-    expect(player.value.isCompleted, isTrue);
-    expect(player.value.duration, const Duration(seconds: 5));
-  });
+      expect(player.value.isCompleted, isTrue);
+      expect(player.value.duration, const Duration(seconds: 5));
+    },
+  );
 
   test('loading the same url again reuses the current player state', () async {
     final adapter = _FakeAudioAdapter();

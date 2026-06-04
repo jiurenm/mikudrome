@@ -1,6 +1,10 @@
+import 'dart:ui' as ui;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/widgets/mobile_app_shell.dart';
+import 'package:mikudrome/widgets/mobile_chrome_metrics.dart';
 
 void main() {
   testWidgets('shows Discover, My Music, and Settings tabs', (tester) async {
@@ -67,6 +71,119 @@ void main() {
     await tester.tap(find.text('发现'));
     await tester.pumpAndSettle();
     expect(find.text('count 1'), findsOneWidget);
+  });
+
+  testWidgets('uses a left rail on native phone landscape', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final semantics = tester.ensureSemantics();
+
+    try {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(size: Size(844, 390)),
+            child: MobileAppShell(
+              discover: Text('discover body'),
+              myMusic: Text('music body'),
+              settings: Text('settings body'),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('mobile-landscape-shell')),
+        findsOneWidget,
+      );
+      final railFinder = find.byKey(const ValueKey('mobile-landscape-rail'));
+      expect(railFinder, findsOneWidget);
+      expect(tester.widget<SizedBox>(railFinder).width, kLandscapeRailWidth);
+      expect(find.byType(BottomNavigationBar), findsNothing);
+      expect(find.text('discover body'), findsOneWidget);
+
+      final railButtons = tester.widgetList<IconButton>(
+        find.byType(IconButton),
+      );
+      expect(railButtons, hasLength(3));
+      for (final button in railButtons) {
+        expect(button.style?.fixedSize?.resolve({}), const Size(48, 48));
+      }
+      expect(
+        tester
+            .getSemantics(find.byType(IconButton).first)
+            .flagsCollection
+            .isSelected,
+        ui.Tristate.isTrue,
+      );
+    } finally {
+      semantics.dispose();
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('landscape rail switches tabs', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final semantics = tester.ensureSemantics();
+
+    try {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(size: Size(844, 390)),
+            child: MobileAppShell(
+              discover: Text('discover body'),
+              myMusic: Text('music body'),
+              settings: Text('settings body'),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byTooltip('我的音乐'));
+      await tester.pumpAndSettle();
+      expect(find.text('music body'), findsOneWidget);
+      expect(
+        tester
+            .getSemantics(find.byType(IconButton).first)
+            .flagsCollection
+            .isSelected,
+        ui.Tristate.isFalse,
+      );
+      expect(
+        tester
+            .getSemantics(find.byType(IconButton).at(1))
+            .flagsCollection
+            .isSelected,
+        ui.Tristate.isTrue,
+      );
+
+      await tester.tap(find.byTooltip('设置'));
+      await tester.pumpAndSettle();
+      expect(find.text('settings body'), findsOneWidget);
+      expect(
+        tester
+            .getSemantics(find.byType(IconButton).at(1))
+            .flagsCollection
+            .isSelected,
+        ui.Tristate.isFalse,
+      );
+      expect(
+        tester
+            .getSemantics(find.byType(IconButton).at(2))
+            .flagsCollection
+            .isSelected,
+        ui.Tristate.isTrue,
+      );
+    } finally {
+      semantics.dispose();
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 }
 

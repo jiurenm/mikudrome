@@ -58,9 +58,6 @@ void main() {
   });
 
   test('non-finite seek (infinity) returns 0', () {
-    expect(
-      computeSeekFraction(seekMs: double.infinity, durationMs: 1000),
-      0.0,
-    );
+    expect(computeSeekFraction(seekMs: double.infinity, durationMs: 1000), 0.0);
   });
 }

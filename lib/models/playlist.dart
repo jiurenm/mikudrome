@@ -28,11 +28,13 @@ class Playlist {
       name: json['name'] as String? ?? '',
       coverPath: json['cover_path'] as String? ?? '',
       trackCount: json['track_count'] as int? ?? 0,
-      coverTrackIds: (json['cover_track_ids'] as List<dynamic>?)
+      coverTrackIds:
+          (json['cover_track_ids'] as List<dynamic>?)
               ?.map((e) => e as int)
               .toList() ??
           const [],
-      coverAlbumIds: (json['cover_album_ids'] as List<dynamic>?)
+      coverAlbumIds:
+          (json['cover_album_ids'] as List<dynamic>?)
               ?.map((e) => e as int)
               .toList() ??
           const [],
