@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/widgets/mobile_app_shell.dart';
@@ -67,6 +68,64 @@ void main() {
     await tester.tap(find.text('发现'));
     await tester.pumpAndSettle();
     expect(find.text('count 1'), findsOneWidget);
+  });
+
+  testWidgets('uses a left rail on native phone landscape', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(size: Size(844, 390)),
+          child: MobileAppShell(
+            discover: Text('discover body'),
+            myMusic: Text('music body'),
+            settings: Text('settings body'),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('mobile-landscape-shell')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('mobile-landscape-rail')), findsOneWidget);
+    expect(find.byType(BottomNavigationBar), findsNothing);
+    expect(find.text('discover body'), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('landscape rail switches tabs', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(size: Size(844, 390)),
+          child: MobileAppShell(
+            discover: Text('discover body'),
+            myMusic: Text('music body'),
+            settings: Text('settings body'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('我的音乐'));
+    await tester.pumpAndSettle();
+    expect(find.text('music body'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    expect(find.text('settings body'), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
   });
 }
 
