@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/api/api_client.dart';
@@ -603,6 +604,42 @@ void main() {
       expect(find.text('封面'), findsNothing);
     },
   );
+
+  testWidgets('PlaylistDetailScreen uses mobile landscape layout', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    try {
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(size: Size(844, 390)),
+          child: MaterialApp(
+            home: PlaylistDetailScreen(
+              playlistId: 7,
+              client: _FakeApiClient(_buildReorderableDetail()),
+              onBack: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('playlist-detail-mobile-landscape')),
+        findsOneWidget,
+      );
+      expect(find.widgetWithText(FilledButton, '播放全部'), findsOneWidget);
+      expect(find.text('3 首歌曲'), findsOneWidget);
+      expect(find.text('Track A'), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+      await tester.binding.setSurfaceSize(null);
+    }
+  });
 
   testWidgets(
     'PlaylistDetailScreen desktop hero cover closes lightbox and keeps play and edit working',

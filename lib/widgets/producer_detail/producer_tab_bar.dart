@@ -21,7 +21,7 @@ class ProducerTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (isMobile(context)) {
+    if (isMobile(context) || isMobileSurface(context)) {
       return _MobileProducerTabBar(
         index: index,
         onTap: onTap,

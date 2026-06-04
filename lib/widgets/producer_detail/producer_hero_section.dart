@@ -32,7 +32,7 @@ class ProducerHeroSection extends StatelessWidget {
     final avatarUrl = ApiClient(
       baseUrl: baseUrl,
     ).producerAvatarUrl(producer.id);
-    final mobile = isMobile(context);
+    final mobile = isMobile(context) || isMobileSurface(context);
     final avatarSize = mobile ? 80.0 : 192.0;
 
     Widget avatarWidget = Container(
@@ -106,92 +106,130 @@ class ProducerHeroSection extends StatelessWidget {
     if (mobile) {
       final loadedTrackCount = trackCount ?? producer.trackCount;
       final loadedAlbumCount = albumCount ?? producer.albumCount;
+      final statsText =
+          '$loadedTrackCount 首歌曲 · $loadedAlbumCount 张专辑 · $mvCount 个MV';
 
-      return Container(
-        key: const ValueKey('producer-detail-mobile-hero'),
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-        decoration: BoxDecoration(
-          color: AppTheme.cardBg,
-          border: Border(
-            bottom: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+      Widget actionControls() {
+        return Wrap(
+          spacing: 10,
+          runSpacing: 8,
           children: [
-            avatarWidget,
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    producer.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: AppTheme.textPrimary,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '$loadedTrackCount 首歌曲 · $loadedAlbumCount 张专辑 · $mvCount 个MV',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: AppTheme.textMuted),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
+            FilledButton.icon(
+              onPressed: hasTracks ? onPlayAll : null,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.mikuGreen,
+                foregroundColor: Colors.black,
+                disabledBackgroundColor: Colors.white.withValues(alpha: 0.08),
+                disabledForegroundColor: AppTheme.textMuted,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(22),
+                ),
+              ),
+              icon: const Icon(Icons.play_arrow, size: 20),
+              label: const Text('播放全部'),
+            ),
+            IconButton.filled(
+              key: const ValueKey('producer-detail-mobile-shuffle'),
+              onPressed: hasTracks ? onShuffle : null,
+              style: IconButton.styleFrom(
+                backgroundColor: AppTheme.mikuGreen.withValues(alpha: 0.16),
+                foregroundColor: AppTheme.mikuGreen,
+                disabledBackgroundColor: Colors.white.withValues(alpha: 0.04),
+                disabledForegroundColor: AppTheme.textMuted,
+              ),
+              tooltip: '随机播放',
+              icon: const Icon(Icons.shuffle),
+            ),
+          ],
+        );
+      }
+
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 320;
+
+          return Container(
+            key: const ValueKey('producer-detail-mobile-hero'),
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+            decoration: BoxDecoration(
+              color: AppTheme.cardBg,
+              border: Border(
+                bottom: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+            ),
+            child: compact
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      FilledButton.icon(
-                        onPressed: hasTracks ? onPlayAll : null,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppTheme.mikuGreen,
-                          foregroundColor: Colors.black,
-                          disabledBackgroundColor: Colors.white.withValues(
-                            alpha: 0.08,
-                          ),
-                          disabledForegroundColor: AppTheme.textMuted,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(22),
-                          ),
+                      avatarWidget,
+                      const SizedBox(height: 12),
+                      Text(
+                        producer.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: AppTheme.textPrimary,
+                          fontWeight: FontWeight.w800,
                         ),
-                        icon: const Icon(Icons.play_arrow, size: 20),
-                        label: const Text('播放全部'),
                       ),
-                      const SizedBox(width: 10),
-                      IconButton.filled(
-                        key: const ValueKey('producer-detail-mobile-shuffle'),
-                        onPressed: hasTracks ? onShuffle : null,
-                        style: IconButton.styleFrom(
-                          backgroundColor: AppTheme.mikuGreen.withValues(
-                            alpha: 0.16,
-                          ),
-                          foregroundColor: AppTheme.mikuGreen,
-                          disabledBackgroundColor: Colors.white.withValues(
-                            alpha: 0.04,
-                          ),
-                          disabledForegroundColor: AppTheme.textMuted,
+                      const SizedBox(height: 6),
+                      Text(
+                        statsText,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppTheme.textMuted,
                         ),
-                        tooltip: '随机播放',
-                        icon: const Icon(Icons.shuffle),
+                      ),
+                      const SizedBox(height: 14),
+                      actionControls(),
+                    ],
+                  )
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      avatarWidget,
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              producer.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(
+                                    color: AppTheme.textPrimary,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              statsText,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: AppTheme.textMuted),
+                            ),
+                            const SizedBox(height: 14),
+                            actionControls(),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       );
     }
 

@@ -161,15 +161,221 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
   }
 
   List<Widget> _mobileRefreshErrorWidgets(BuildContext context) {
-    if (!isMobile(context) || _refreshError == null) return const [];
+    if (!(isMobile(context) || isMobileSurface(context)) ||
+        _refreshError == null) {
+      return const [];
+    }
     return [
       _RefreshErrorBanner(message: _refreshError!),
       const SizedBox(height: 12),
     ];
   }
 
+  double _mobileLandscapeHeroWidth(BuildContext context) {
+    return (MediaQuery.sizeOf(context).width * 0.3)
+        .clamp(240.0, 360.0)
+        .toDouble();
+  }
+
+  Widget _buildMobileBackControl(BuildContext context) {
+    if (widget.onBack == null) return const SizedBox.shrink();
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: IconButton(
+        icon: const Icon(Icons.chevron_left),
+        color: AppTheme.textPrimary,
+        onPressed: widget.onBack,
+        tooltip: 'Back',
+      ),
+    );
+  }
+
+  Widget _buildMobileHero(BuildContext context) {
+    return ProducerHeroSection(
+      producer: _displayProducer,
+      baseUrl: widget._effectiveBaseUrl,
+      onPlayAll: _playAll,
+      onShuffle: _shufflePlay,
+      hasTracks: _tracks.isNotEmpty,
+      albumCount: _displayAlbumCount,
+      trackCount: _displayTrackCount,
+      mvCount: _tracksWithMv.length,
+    );
+  }
+
+  Widget _buildMobilePrimaryActions(BuildContext context) {
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildMobileLandscapeHeroColumn(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildMobileBackControl(context),
+        const SizedBox(height: 12),
+        _buildMobileHero(context),
+        const SizedBox(height: 14),
+        _buildMobilePrimaryActions(context),
+      ],
+    );
+  }
+
+  Widget _buildProducerDetailContentSliver(BuildContext context) {
+    final mobile = isMobile(context) || isMobileSurface(context);
+
+    if (_loading) {
+      return const SliverFillRemaining(
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error != null) {
+      return SliverFillRemaining(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_error!, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: _loadProducer,
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SliverPadding(
+      padding: EdgeInsets.fromLTRB(
+        mobile ? 16 : 48,
+        mobile ? 4 : 48,
+        mobile ? 16 : 48,
+        88,
+      ),
+      sliver: _tabIndex == 0
+          ? SliverList(
+              delegate: SliverChildListDelegate([
+                ..._mobileRefreshErrorWidgets(context),
+                if (!mobile) const _SectionTitle('Discography'),
+                if (!mobile) const SizedBox(height: 32),
+                DiscographyGrid(
+                  albums: _albums,
+                  onAlbumTap: (album) {
+                    if (widget.onAlbumTap != null) {
+                      widget.onAlbumTap!(album);
+                    } else {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (context) => AlbumDetailScreen(
+                            album: album,
+                            baseUrl: widget._effectiveBaseUrl,
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ]),
+            )
+          : _tabIndex == 1
+          ? SliverList(
+              delegate: SliverChildListDelegate([
+                ..._mobileRefreshErrorWidgets(context),
+                if (!mobile) const _SectionTitle('All Tracks'),
+                if (!mobile) const SizedBox(height: 8),
+                ProducerTrackList(
+                  tracks: _tracks,
+                  baseUrl: widget._effectiveBaseUrl,
+                  useMobileLayout: true,
+                  onPlay:
+                      (track, index, {intent = PlaybackStartIntent.audio}) =>
+                          _playTrack(track, index, intent: intent),
+                ),
+              ]),
+            )
+          : SliverList(
+              delegate: SliverChildListDelegate([
+                ..._mobileRefreshErrorWidgets(context),
+                if (!mobile) const _SectionTitle('Featured MVs'),
+                if (!mobile) const SizedBox(height: 8),
+                FeaturedMvsGrid(
+                  tracks: _tracksWithMv,
+                  baseUrl: widget._effectiveBaseUrl,
+                  onPlay: (track, index) => _playTrack(
+                    track,
+                    index,
+                    queue: _tracksWithMv,
+                    intent: PlaybackStartIntent.video,
+                  ),
+                ),
+              ]),
+            ),
+    );
+  }
+
+  Widget _buildMobileScrollableContent(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: _refreshProducer,
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverToBoxAdapter(
+            child: ProducerTabBar(
+              index: _tabIndex,
+              onTap: (i) => setState(() => _tabIndex = i),
+              albumCount: _displayAlbumCount,
+              trackCount: _displayTrackCount,
+              mvCount: _tracksWithMv.length,
+            ),
+          ),
+          _buildProducerDetailContentSliver(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileLandscapeContentColumn(BuildContext context) {
+    return _buildMobileScrollableContent(context);
+  }
+
+  Widget _buildMobileLandscape(BuildContext context) {
+    return SafeArea(
+      child: Row(
+        key: const ValueKey('producer-detail-mobile-landscape'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: _mobileLandscapeHeroWidth(context),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(18, 16, 16, 20),
+              child: _buildMobileLandscapeHeroColumn(context),
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(0, 16, 18, 20),
+              child: _buildMobileLandscapeContentColumn(context),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (isNativePhoneLandscapeSurface(context)) {
+      return Scaffold(
+        backgroundColor: AppTheme.mikuDark,
+        body: _buildMobileLandscape(context),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppTheme.mikuDark,
       body: Column(
@@ -219,111 +425,7 @@ class _ProducerDetailScreenState extends State<ProducerDetailScreen> {
                       mvCount: _tracksWithMv.length,
                     ),
                   ),
-                  if (_loading)
-                    const SliverFillRemaining(
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (_error != null)
-                    SliverFillRemaining(
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(_error!, textAlign: TextAlign.center),
-                              const SizedBox(height: 16),
-                              FilledButton(
-                                onPressed: _loadProducer,
-                                child: const Text('Retry'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    )
-                  else
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(
-                        isMobile(context) ? 16 : 48,
-                        isMobile(context) ? 4 : 48,
-                        isMobile(context) ? 16 : 48,
-                        88,
-                      ),
-                      sliver: _tabIndex == 0
-                          ? SliverList(
-                              delegate: SliverChildListDelegate([
-                                ..._mobileRefreshErrorWidgets(context),
-                                if (!isMobile(context))
-                                  const _SectionTitle('Discography'),
-                                if (!isMobile(context))
-                                  const SizedBox(height: 32),
-                                DiscographyGrid(
-                                  albums: _albums,
-                                  onAlbumTap: (album) {
-                                    if (widget.onAlbumTap != null) {
-                                      widget.onAlbumTap!(album);
-                                    } else {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute<void>(
-                                          builder: (context) =>
-                                              AlbumDetailScreen(
-                                                album: album,
-                                                baseUrl:
-                                                    widget._effectiveBaseUrl,
-                                              ),
-                                        ),
-                                      );
-                                    }
-                                  },
-                                ),
-                              ]),
-                            )
-                          : _tabIndex == 1
-                          ? SliverList(
-                              delegate: SliverChildListDelegate([
-                                ..._mobileRefreshErrorWidgets(context),
-                                if (!isMobile(context))
-                                  const _SectionTitle('All Tracks'),
-                                if (!isMobile(context))
-                                  const SizedBox(height: 8),
-                                ProducerTrackList(
-                                  tracks: _tracks,
-                                  baseUrl: widget._effectiveBaseUrl,
-                                  useMobileLayout: true,
-                                  onPlay:
-                                      (
-                                        track,
-                                        index, {
-                                        intent = PlaybackStartIntent.audio,
-                                      }) => _playTrack(
-                                        track,
-                                        index,
-                                        intent: intent,
-                                      ),
-                                ),
-                              ]),
-                            )
-                          : SliverList(
-                              delegate: SliverChildListDelegate([
-                                ..._mobileRefreshErrorWidgets(context),
-                                if (!isMobile(context))
-                                  const _SectionTitle('Featured MVs'),
-                                if (!isMobile(context))
-                                  const SizedBox(height: 8),
-                                FeaturedMvsGrid(
-                                  tracks: _tracksWithMv,
-                                  baseUrl: widget._effectiveBaseUrl,
-                                  onPlay: (track, index) => _playTrack(
-                                    track,
-                                    index,
-                                    queue: _tracksWithMv,
-                                    intent: PlaybackStartIntent.video,
-                                  ),
-                                ),
-                              ]),
-                            ),
-                    ),
+                  _buildProducerDetailContentSliver(context),
                 ],
               ),
             ),

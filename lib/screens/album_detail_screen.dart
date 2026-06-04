@@ -173,8 +173,137 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
     );
   }
 
+  double _mobileLandscapeHeroWidth(BuildContext context) {
+    return (MediaQuery.sizeOf(context).width * 0.3)
+        .clamp(240.0, 360.0)
+        .toDouble();
+  }
+
+  Widget _buildMobileBackControl(BuildContext context) {
+    if (widget.onBack == null) return const SizedBox.shrink();
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: IconButton(
+        icon: const Icon(Icons.chevron_left, size: 28),
+        color: AppTheme.textPrimary,
+        onPressed: widget.onBack,
+        tooltip: 'Back',
+      ),
+    );
+  }
+
+  Widget _buildMobileHero(BuildContext context) {
+    return AlbumHeroSection(
+      album: widget.album,
+      tracks: _tracks,
+      baseUrl: widget._effectiveBaseUrl,
+      onProducerTap: widget.onProducerTap,
+    );
+  }
+
+  Widget _buildMobilePrimaryActions(BuildContext context) {
+    if (_loading || _error != null) return const SizedBox.shrink();
+    return AlbumActionBar(
+      tracks: _tracks,
+      onPlayAll: () => _playTrack(_tracks.first, 0),
+      onShuffle: _shufflePlay,
+    );
+  }
+
+  Widget _buildMobileLandscapeHeroColumn(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildMobileBackControl(context),
+        const SizedBox(height: 12),
+        _buildMobileHero(context),
+        const SizedBox(height: 14),
+        _buildMobilePrimaryActions(context),
+      ],
+    );
+  }
+
+  Widget _buildMobileScrollableContent(BuildContext context) {
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        if (_loading)
+          const SliverFillRemaining(
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_error != null)
+          SliverFillRemaining(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_error!, textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: _loadAlbum,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+        else
+          AlbumTrackList(
+            tracks: _tracks,
+            isMultiDisc: _isMultiDisc,
+            tracksByDisc: _tracksByDisc,
+            baseUrl: widget._effectiveBaseUrl,
+            onDownloadComplete: _loadAlbum,
+            onPlayTrack: _playTrack,
+            showTopMessage: (message, {required isError}) =>
+                _showTopMessage(context, message, isError: isError),
+            currentPlayingTrackId: widget.currentPlayingTrackId,
+            isPlaying: widget.isPlaying,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMobileLandscapeContentColumn(BuildContext context) {
+    return _buildMobileScrollableContent(context);
+  }
+
+  Widget _buildMobileLandscape(BuildContext context) {
+    return SafeArea(
+      child: Row(
+        key: const ValueKey('album-detail-mobile-landscape'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: _mobileLandscapeHeroWidth(context),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(18, 16, 16, 20),
+              child: _buildMobileLandscapeHeroColumn(context),
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(0, 16, 18, 20),
+              child: _buildMobileLandscapeContentColumn(context),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (isNativePhoneLandscapeSurface(context)) {
+      return Scaffold(
+        backgroundColor: AppTheme.mikuDark,
+        body: _buildMobileLandscape(context),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppTheme.mikuDark,
       body: Column(

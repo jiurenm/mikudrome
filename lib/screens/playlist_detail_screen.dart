@@ -1043,7 +1043,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   }
 
   Widget _buildListModeContent(double? desktopTitleWidth) {
-    final mobile = isMobile(context);
+    final mobile = isMobile(context) || isMobileSurface(context);
     final canQuickEditGroups = _canQuickEditGroups(mobile);
     final groups = _detail?.groups ?? const <PlaylistGroup>[];
     final children = <Widget>[];
@@ -1165,6 +1165,115 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     );
   }
 
+  double _mobileLandscapeHeroWidth(BuildContext context) {
+    return (MediaQuery.sizeOf(context).width * 0.3)
+        .clamp(240.0, 360.0)
+        .toDouble();
+  }
+
+  Widget _buildMobileBackControl(BuildContext context) {
+    return Row(
+      children: [
+        if (widget.onBack != null)
+          IconButton(
+            icon: const Icon(Icons.chevron_left, size: 28),
+            color: AppTheme.textPrimary,
+            onPressed: widget.onBack,
+            tooltip: 'Back',
+          ),
+        const Spacer(),
+        if (_isEditMode)
+          IconButton(
+            key: const ValueKey('playlist-mobile-add-group-button'),
+            icon: const Icon(Icons.create_new_folder_outlined, size: 22),
+            color: AppTheme.textPrimary,
+            onPressed: _createGroup,
+            tooltip: 'Add group',
+          ),
+        IconButton(
+          key: ValueKey(
+            _isEditMode
+                ? 'playlist-mobile-done-button'
+                : 'playlist-mobile-edit-button',
+          ),
+          icon: Icon(_isEditMode ? Icons.check : Icons.edit_outlined, size: 22),
+          color: AppTheme.textPrimary,
+          onPressed: _isEditMode ? _finishEditMode : _toggleEditMode,
+          tooltip: _isEditMode ? 'Done' : 'Edit playlist',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileHero(BuildContext context) {
+    final playlist = _playlist;
+    if (playlist == null) return const SizedBox.shrink();
+    return PlaylistHero(
+      playlist: playlist,
+      client: _client,
+      onPlay: _playAll,
+      canPlay: _items.isNotEmpty,
+    );
+  }
+
+  Widget _buildMobilePrimaryActions(BuildContext context) {
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildMobileLandscapeHeroColumn(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildMobileBackControl(context),
+        const SizedBox(height: 12),
+        _buildMobileHero(context),
+        const SizedBox(height: 14),
+        _buildMobilePrimaryActions(context),
+      ],
+    );
+  }
+
+  Widget _buildMobileScrollableContent(BuildContext context) {
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        _buildContentState(
+          context: context,
+          mobile: true,
+          desktopTitleWidth: null,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileLandscapeContentColumn(BuildContext context) {
+    return _buildMobileScrollableContent(context);
+  }
+
+  Widget _buildMobileLandscape(BuildContext context) {
+    return SafeArea(
+      child: Row(
+        key: const ValueKey('playlist-detail-mobile-landscape'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: _mobileLandscapeHeroWidth(context),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(18, 16, 16, 20),
+              child: _buildMobileLandscapeHeroColumn(context),
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(0, 16, 18, 20),
+              child: _buildMobileLandscapeContentColumn(context),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCoverModeContent() {
     return Column(
       key: const ValueKey('playlist-cover-grid'),
@@ -1197,7 +1306,6 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final mobile = isMobile(context);
-    final desktopTitleWidth = mobile ? null : _desktopTitleColumnWidth(context);
 
     if (_playlist == null && !_loading && _error == null) {
       return Scaffold(
@@ -1217,6 +1325,15 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
         ),
       );
     }
+
+    if (isNativePhoneLandscapeSurface(context)) {
+      return Scaffold(
+        backgroundColor: AppTheme.mikuDark,
+        body: _buildMobileLandscape(context),
+      );
+    }
+
+    final desktopTitleWidth = mobile ? null : _desktopTitleColumnWidth(context);
 
     return Scaffold(
       backgroundColor: AppTheme.mikuDark,

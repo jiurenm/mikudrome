@@ -63,7 +63,10 @@ class _VocalistDetailScreenState extends State<VocalistDetailScreen> {
       _tracks.where((track) => track.videoPath.isNotEmpty).toList();
 
   List<Widget> _mobileRefreshErrorWidgets(BuildContext context) {
-    if (!isMobile(context) || _refreshError == null) return const [];
+    if (!(isMobile(context) || isMobileSurface(context)) ||
+        _refreshError == null) {
+      return const [];
+    }
     return [
       _RefreshErrorBanner(message: _refreshError!),
       const SizedBox(height: 12),
@@ -150,9 +153,126 @@ class _VocalistDetailScreenState extends State<VocalistDetailScreen> {
     _playTrack(shuffled.first, 0, queue: shuffled);
   }
 
+  double _mobileLandscapeHeroWidth(BuildContext context) {
+    return (MediaQuery.sizeOf(context).width * 0.3)
+        .clamp(240.0, 360.0)
+        .toDouble();
+  }
+
+  Widget _buildMobileBackControl(BuildContext context) {
+    if (widget.onBack == null) return const SizedBox.shrink();
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: IconButton(
+        icon: const Icon(Icons.chevron_left),
+        color: AppTheme.textPrimary,
+        onPressed: widget.onBack,
+        tooltip: 'Back',
+      ),
+    );
+  }
+
+  Widget _buildMobileHero(BuildContext context, Color color) {
+    return VocalistHeroSection(
+      name: _displayName,
+      avatarUrl: ApiClient().vocalistAvatarUrl(widget.vocalist.name),
+      color: color,
+      trackCount: _displayTrackCount,
+      albumCount: _displayAlbumCount,
+      mvCount: _tracksWithMv.length,
+      hasTracks: _tracks.isNotEmpty,
+      onPlayAll: _playAll,
+      onShuffle: _shufflePlayWithShuffledQueue,
+    );
+  }
+
+  Widget _buildMobilePrimaryActions(BuildContext context) {
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildMobileLandscapeHeroColumn(BuildContext context, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildMobileBackControl(context),
+        const SizedBox(height: 12),
+        _buildMobileHero(context, color),
+        const SizedBox(height: 14),
+        _buildMobilePrimaryActions(context),
+      ],
+    );
+  }
+
+  Widget _buildMobileScrollableContent(BuildContext context, Color color) {
+    return RefreshIndicator(
+      onRefresh: _refreshData,
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverToBoxAdapter(
+            child: VocalistTabBar(
+              index: _tabIndex,
+              onTap: (i) => setState(() => _tabIndex = i),
+              albumCount: _displayAlbumCount,
+              trackCount: _displayTrackCount,
+              mvCount: _tracksWithMv.length,
+              color: color,
+            ),
+          ),
+          if (_loading)
+            const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_error != null)
+            SliverFillRemaining(
+              child: _MobileInitialError(message: _error!, onRetry: _loadData),
+            )
+          else
+            _buildMobileTabSliver(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileLandscapeContentColumn(BuildContext context, Color color) {
+    return _buildMobileScrollableContent(context, color);
+  }
+
+  Widget _buildMobileLandscape(BuildContext context, Color color) {
+    return Scaffold(
+      backgroundColor: AppTheme.mikuDark,
+      body: SafeArea(
+        child: Row(
+          key: const ValueKey('vocalist-detail-mobile-landscape'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              width: _mobileLandscapeHeroWidth(context),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(18, 16, 16, 20),
+                child: _buildMobileLandscapeHeroColumn(context, color),
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(0, 16, 18, 20),
+                child: _buildMobileLandscapeContentColumn(context, color),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final color = VocalColors.colorForName(widget.vocalist.name);
+
+    if (isNativePhoneLandscapeSurface(context)) {
+      return _buildMobileLandscape(context, color);
+    }
+
     final mobile = isMobile(context);
 
     if (mobile) {
