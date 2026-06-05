@@ -303,6 +303,36 @@ void main() {
   );
 
   testWidgets(
+    'native phone landscape featured banner uses the available width',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+      await tester.binding.setSurfaceSize(const Size(844, 390));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      try {
+        await HttpOverrides.runZoned(() async {
+          await tester.pumpWidget(
+            _harness(const DiscoverScreen(), size: const Size(844, 390)),
+          );
+          await tester.pumpAndSettle();
+        }, createHttpClient: (_) => _DiscoverFakeHttpClient());
+
+        final featuredBanner = find.ancestor(
+          of: find.text('FEATURED'),
+          matching: find.byType(InkWell),
+        );
+        expect(featuredBanner, findsOneWidget);
+        expect(tester.getRect(featuredBanner).width, greaterThan(760));
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+        await tester.binding.setSurfaceSize(null);
+      }
+    },
+  );
+
+  testWidgets(
     'mobile recommendation home renders cached daily recommendations',
     (tester) async {
       DiscoverDataCache.write(

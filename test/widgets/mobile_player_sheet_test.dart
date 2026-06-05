@@ -5,6 +5,44 @@ import 'package:mikudrome/widgets/mobile_mini_player.dart';
 import 'package:mikudrome/widgets/mobile_player_sheet.dart';
 
 void main() {
+  testWidgets('mini player content avoids horizontal safe areas', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(
+            size: Size(844, 390),
+            padding: EdgeInsets.only(left: 72, right: 8),
+          ),
+          child: Scaffold(
+            body: MobileMiniPlayer(
+              track: const Track(
+                id: 1,
+                title: 'Track',
+                audioPath: 'track.flac',
+                videoPath: '',
+              ),
+              coverUrl: '',
+              isPlaying: false,
+              progress: 0,
+              onTap: () {},
+              onPlayPause: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final cover = find.byType(Image);
+
+    expect(cover, findsOneWidget);
+    expect(tester.getRect(cover).left, greaterThanOrEqualTo(84));
+  });
+
   testWidgets('expanded sheet covers the tab bar bottom padding', (
     tester,
   ) async {

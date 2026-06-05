@@ -424,13 +424,9 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
       key: const ValueKey('discover-mobile-landscape-dashboard'),
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-      child: Wrap(
-        spacing: 16,
-        runSpacing: 16,
-        children: _buildMobileHomeSectionWidgets()
-            .where((widget) => widget is! SizedBox)
-            .map((widget) => SizedBox(width: 360, child: widget))
-            .toList(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: _buildMobileHomeSectionWidgets(),
       ),
     );
   }

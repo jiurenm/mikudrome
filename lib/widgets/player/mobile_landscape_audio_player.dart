@@ -62,68 +62,52 @@ class MobileLandscapeAudioPlayer extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        SizedBox(
-                          height: 40,
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: IconButton(
-                              tooltip: '收起',
-                              onPressed: onCollapse,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints.tightFor(
-                                width: 40,
-                                height: 40,
-                              ),
-                              icon: const Icon(
-                                Icons.keyboard_arrow_down,
-                                color: Colors.white,
-                                size: 32,
+                        Expanded(
+                          child: Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 560),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 150,
+                                    child: Center(child: artwork),
+                                  ),
+                                  const SizedBox(width: 22),
+                                  Flexible(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          title,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .headlineSmall
+                                              ?.copyWith(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          subtitle,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(color: Colors.white60),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Expanded(
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 150,
-                                child: Center(child: artwork),
-                              ),
-                              const SizedBox(width: 18),
-                              Expanded(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      title,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .headlineSmall
-                                          ?.copyWith(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      subtitle,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(color: Colors.white60),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    actions,
-                                  ],
-                                ),
-                              ),
-                            ],
                           ),
                         ),
                         progress,
@@ -141,24 +125,32 @@ class MobileLandscapeAudioPlayer extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(child: controls),
-                            IconButton(
-                              tooltip: sidePanelVisible ? '隐藏歌词和队列' : '显示歌词和队列',
-                              onPressed: sidePanelVisible
-                                  ? onHideSidePanel
-                                  : onShowSidePanel,
-                              icon: Icon(
-                                sidePanelVisible
-                                    ? Icons.keyboard_arrow_right
-                                    : Icons.queue_music,
-                                color: sidePanelVisible
-                                    ? Colors.white70
-                                    : AppTheme.mikuGreen,
-                              ),
-                            ),
-                          ],
+                        SizedBox(
+                          height: 64,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Center(child: controls),
+                              if (!sidePanelVisible)
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      actions,
+                                      IconButton(
+                                        tooltip: '显示歌词和队列',
+                                        onPressed: onShowSidePanel,
+                                        icon: const Icon(
+                                          Icons.queue_music,
+                                          color: AppTheme.mikuGreen,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -177,36 +169,61 @@ class MobileLandscapeAudioPlayer extends StatelessWidget {
                         ),
                         child: Column(
                           children: [
-                            Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Row(
-                                children: [
-                                  _PanelTabButton(
-                                    semanticsKey: const ValueKey(
-                                      'mobile-landscape-panel-tab-lyrics',
-                                    ),
-                                    label: '歌词',
-                                    selected:
-                                        selectedPanelTab ==
+                            SizedBox(
+                              height: 36,
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  10,
+                                  4,
+                                  10,
+                                  0,
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    _PanelTabButton(
+                                      semanticsKey: const ValueKey(
+                                        'mobile-landscape-panel-tab-lyrics',
+                                      ),
+                                      label: '歌词',
+                                      selected:
+                                          selectedPanelTab ==
+                                          LandscapePlayerPanelTab.lyrics,
+                                      onPressed: () => onSelectPanelTab(
                                         LandscapePlayerPanelTab.lyrics,
-                                    onPressed: () => onSelectPanelTab(
-                                      LandscapePlayerPanelTab.lyrics,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  _PanelTabButton(
-                                    semanticsKey: const ValueKey(
-                                      'mobile-landscape-panel-tab-queue',
-                                    ),
-                                    label: '队列',
-                                    selected:
-                                        selectedPanelTab ==
+                                    const SizedBox(width: 8),
+                                    _PanelTabButton(
+                                      semanticsKey: const ValueKey(
+                                        'mobile-landscape-panel-tab-queue',
+                                      ),
+                                      label: '队列',
+                                      selected:
+                                          selectedPanelTab ==
+                                          LandscapePlayerPanelTab.queue,
+                                      onPressed: () => onSelectPanelTab(
                                         LandscapePlayerPanelTab.queue,
-                                    onPressed: () => onSelectPanelTab(
-                                      LandscapePlayerPanelTab.queue,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                    const Spacer(),
+                                    IconButton(
+                                      tooltip: '隐藏歌词和队列',
+                                      onPressed: onHideSidePanel,
+                                      constraints:
+                                          const BoxConstraints.tightFor(
+                                            width: 32,
+                                            height: 32,
+                                          ),
+                                      padding: EdgeInsets.zero,
+                                      icon: const Icon(
+                                        Icons.keyboard_arrow_right,
+                                        size: 24,
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                             Expanded(
@@ -252,6 +269,9 @@ class _PanelTabButton extends StatelessWidget {
         onPressed: onPressed,
         style: TextButton.styleFrom(
           foregroundColor: selected ? AppTheme.mikuGreen : Colors.white70,
+          minimumSize: const Size(0, 32),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
         child: Text(label),
       ),

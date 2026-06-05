@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../config/app_config_controller.dart';
 import '../screens/library_home_screen.dart';
 import '../screens/server_setup_screen.dart';
+import '../utils/responsive.dart';
 
 typedef AppHomeBuilder = Widget Function(BuildContext context);
 
@@ -52,6 +56,10 @@ class _AppRootState extends State<AppRoot> {
 
   @override
   Widget build(BuildContext context) {
+    return _NativePhoneLandscapeSystemUi(child: _buildContent(context));
+  }
+
+  Widget _buildContent(BuildContext context) {
     final state = widget.controller.state;
 
     switch (state.status) {
@@ -76,4 +84,65 @@ class _AppRootState extends State<AppRoot> {
             LibraryHomeScreen(appConfigController: widget.controller);
     }
   }
+}
+
+class _NativePhoneLandscapeSystemUi extends StatefulWidget {
+  const _NativePhoneLandscapeSystemUi({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_NativePhoneLandscapeSystemUi> createState() =>
+      _NativePhoneLandscapeSystemUiState();
+}
+
+class _NativePhoneLandscapeSystemUiState
+    extends State<_NativePhoneLandscapeSystemUi> {
+  bool? _statusOverlayHidden;
+
+  bool get _canManageSystemUi {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncSystemUiForSurface();
+  }
+
+  @override
+  void dispose() {
+    if (_statusOverlayHidden == true) {
+      _setSystemUiOverlays(SystemUiOverlay.values);
+    }
+    super.dispose();
+  }
+
+  void _syncSystemUiForSurface() {
+    if (!_canManageSystemUi) return;
+
+    final hideStatusOverlay = isNativePhoneLandscapeSurface(context);
+    if (_statusOverlayHidden == hideStatusOverlay) return;
+
+    _statusOverlayHidden = hideStatusOverlay;
+    _setSystemUiOverlays(
+      hideStatusOverlay
+          ? const <SystemUiOverlay>[SystemUiOverlay.bottom]
+          : SystemUiOverlay.values,
+    );
+  }
+
+  void _setSystemUiOverlays(List<SystemUiOverlay> overlays) {
+    unawaited(
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: overlays,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

@@ -1369,31 +1369,45 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ],
       ),
       controls: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
             onPressed: widget.onToggleShuffle,
-            icon: const Icon(Icons.shuffle),
+            icon: const Icon(Icons.shuffle, size: 28),
             color: widget.shuffleEnabled ? accentColor : Colors.white,
             tooltip: widget.shuffleEnabled ? '恢复顺序' : '随机播放',
+            style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
           ),
+          const SizedBox(width: 14),
           IconButton(
-            icon: const Icon(Icons.skip_previous),
+            icon: const Icon(Icons.skip_previous, size: 38),
             color: Colors.white,
             disabledColor: Colors.white24,
             onPressed: _hasPrevious ? widget.onPrevious : null,
+            style: IconButton.styleFrom(minimumSize: const Size(54, 54)),
           ),
+          const SizedBox(width: 14),
           IconButton(
             onPressed: _togglePlayback,
-            icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
-            color: Colors.white,
+            icon: Icon(
+              _isPlaying ? Icons.pause : Icons.play_arrow,
+              size: 42,
+              color: const Color(0xFF071015),
+            ),
+            style: IconButton.styleFrom(
+              backgroundColor: accentColor,
+              fixedSize: const Size(64, 64),
+            ),
           ),
+          const SizedBox(width: 14),
           IconButton(
-            icon: const Icon(Icons.skip_next),
+            icon: const Icon(Icons.skip_next, size: 38),
             color: Colors.white,
             disabledColor: Colors.white24,
             onPressed: _hasNext ? widget.onNext : null,
+            style: IconButton.styleFrom(minimumSize: const Size(54, 54)),
           ),
+          const SizedBox(width: 14),
           _buildPlaybackOrderButton(
             baseColor: Colors.white,
             accentColor: accentColor,

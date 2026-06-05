@@ -24,6 +24,7 @@ class MobileMiniPlayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final safePadding = MediaQuery.paddingOf(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -33,7 +34,10 @@ class MobileMiniPlayer extends StatelessWidget {
           children: [
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: EdgeInsets.only(
+                  left: 12 + safePadding.left,
+                  right: 12 + safePadding.right,
+                ),
                 child: Row(
                   children: [
                     ClipRRect(
