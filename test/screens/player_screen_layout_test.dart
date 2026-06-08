@@ -1095,7 +1095,7 @@ void main() {
     }
   });
 
-  testWidgets('mobile landscape audio actions sit below the progress area', (
+  testWidgets('mobile landscape audio keeps favorite inside more menu', (
     tester,
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
@@ -1107,11 +1107,15 @@ void main() {
       await _pumpPlayer(tester, surfaceSize: const Size(844, 390));
 
       final sliderRect = tester.getRect(find.byType(Slider));
-      final favoriteRect = tester.getRect(find.byTooltip('Add to favorites'));
       final moreRect = tester.getRect(find.byTooltip('更多'));
 
-      expect(favoriteRect.top, greaterThan(sliderRect.bottom));
+      expect(find.byTooltip('Add to favorites'), findsNothing);
       expect(moreRect.top, greaterThan(sliderRect.bottom));
+
+      await tester.tap(find.byTooltip('更多'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('收藏'), findsOneWidget);
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
@@ -1177,6 +1181,54 @@ void main() {
     }
   });
 
+  testWidgets(
+    'mobile landscape audio player stacks artwork metadata and controls',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      await tester.binding.setSurfaceSize(const Size(844, 390));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      try {
+        await _pumpPlayer(tester, surfaceSize: const Size(844, 390));
+
+        final artworkRect = tester.getRect(
+          find.byKey(const ValueKey('mobile-player-artwork-frame')),
+        );
+        final titleRect = tester.getRect(find.text('ぽかぽかの星'));
+        final subtitleRect = tester.getRect(find.text('はるまきごはん feat. Miku'));
+        final sliderRect = tester.getRect(
+          find.descendant(
+            of: find.byKey(const ValueKey('mobile-landscape-player')),
+            matching: find.byType(Slider),
+          ),
+        );
+        final playButtonRect = tester.getRect(
+          find.ancestor(
+            of: find.byIcon(Icons.play_arrow),
+            matching: find.byType(IconButton),
+          ),
+        );
+
+        expect(
+          (artworkRect.center.dx - titleRect.center.dx).abs(),
+          lessThan(4),
+        );
+        expect(
+          (artworkRect.center.dx - subtitleRect.center.dx).abs(),
+          lessThan(4),
+        );
+        expect(artworkRect.bottom, lessThan(titleRect.top));
+        expect(titleRect.bottom, lessThan(subtitleRect.top));
+        expect(subtitleRect.bottom, lessThan(sliderRect.top));
+        expect(sliderRect.bottom, lessThan(playButtonRect.top));
+        expect(find.text('00:00'), findsNothing);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    },
+  );
+
   testWidgets('mobile landscape audio player opens lyrics and queue panel', (
     tester,
   ) async {
@@ -1199,6 +1251,7 @@ void main() {
         surfaceSize: const Size(844, 390),
         track: timedTrack,
         queue: const [timedTrack],
+        currentCoverUrl: 'https://example.test/cover.png',
       );
 
       await tester.tap(find.byTooltip('显示歌词和队列'));
@@ -1208,8 +1261,12 @@ void main() {
         find.byKey(const ValueKey('mobile-landscape-player-side-panel')),
         findsOneWidget,
       );
-      expect(find.text('歌词'), findsOneWidget);
-      expect(find.text('队列'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('mobile-landscape-cover-atmosphere')),
+        findsOneWidget,
+      );
+      expect(find.text('歌词'), findsNothing);
+      expect(find.text('队列'), findsNothing);
 
       final panelRect = tester.getRect(
         find.byKey(const ValueKey('mobile-landscape-player-side-panel')),
@@ -1217,9 +1274,32 @@ void main() {
       final lyricsRect = tester.getRect(
         find.byKey(const ValueKey<String>('mobile-lyrics-follow-scroll')),
       );
-      expect(lyricsRect.top - panelRect.top, lessThan(64));
-      expect(lyricsRect.height, greaterThan(panelRect.height - 92));
+      expect(lyricsRect.top - panelRect.top, lessThan(24));
+      expect(lyricsRect.top - panelRect.top, greaterThanOrEqualTo(12));
+      expect(panelRect.bottom - lyricsRect.bottom, greaterThanOrEqualTo(12));
+      expect(lyricsRect.height, greaterThan(panelRect.height - 48));
 
+      expect(
+        find.byKey(const ValueKey('mobile-landscape-side-panel-surface')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-landscape-side-panel-content')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('mobile-landscape-side-panel-cover-atmosphere'),
+        ),
+        findsNothing,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('mobile-landscape-player-side-panel')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('歌词'), findsOneWidget);
+      expect(find.text('队列'), findsOneWidget);
       await tester.tap(find.text('队列'));
       await tester.pumpAndSettle();
       expect(find.text('Layout Test'), findsOneWidget);
@@ -1245,6 +1325,11 @@ void main() {
       final sidePanel = find.byKey(
         const ValueKey('mobile-landscape-player-side-panel'),
       );
+      expect(find.byTooltip('隐藏歌词和队列'), findsNothing);
+
+      await tester.tap(sidePanel);
+      await tester.pumpAndSettle();
+
       final panelRect = tester.getRect(sidePanel);
       final hideRect = tester.getRect(find.byTooltip('隐藏歌词和队列'));
 
@@ -1253,6 +1338,37 @@ void main() {
       await tester.tap(find.byTooltip('隐藏歌词和队列'));
       await tester.pumpAndSettle();
       expect(sidePanel, findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('mobile landscape panel chrome auto hides after idle', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.binding.setSurfaceSize(const Size(844, 390));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    try {
+      await _pumpPlayer(tester, surfaceSize: const Size(844, 390));
+
+      await tester.tap(find.byTooltip('显示歌词和队列'));
+      await tester.pumpAndSettle();
+
+      final sidePanel = find.byKey(
+        const ValueKey('mobile-landscape-player-side-panel'),
+      );
+      await tester.tap(sidePanel);
+      await tester.pumpAndSettle();
+      expect(find.text('歌词'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('歌词'), findsNothing);
+      expect(find.text('队列'), findsNothing);
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
@@ -1296,6 +1412,11 @@ void main() {
       await _pumpPlayer(tester, surfaceSize: const Size(844, 390));
 
       await tester.tap(find.byTooltip('显示歌词和队列'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('mobile-landscape-player-side-panel')),
+      );
       await tester.pumpAndSettle();
 
       final lyricsSemantics = find.byKey(

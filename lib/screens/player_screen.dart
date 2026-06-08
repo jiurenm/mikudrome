@@ -13,6 +13,7 @@ import '../services/lrc_parser.dart';
 import '../services/media_session_action_mapper.dart';
 import '../services/media_session_handler_binding.dart';
 import '../services/playback_timeline.dart';
+import '../services/playlist_repository.dart';
 import '../services/web_audio_player.dart';
 import '../services/web_audio_player_contract.dart';
 import '../services/web_media_session.dart';
@@ -1335,9 +1336,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       subtitle: _queueSubtitle,
       artwork: _buildMobileArtwork(
         context,
-        size: 132,
+        size: 124,
         accentColor: accentColor,
       ),
+      coverUrl: _albumCoverUrl,
       progress: SliderTheme(
         data: SliderTheme.of(context).copyWith(
           activeTrackColor: accentColor,
@@ -1355,19 +1357,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
           onChanged: duration == Duration.zero ? null : _seekTo,
         ),
       ),
-      elapsedLabel: _formatDuration(position),
-      durationLabel: _formatDuration(duration),
-      actions: Row(
-        children: [
-          FavoriteButton(trackId: _track.id, client: _api, size: 32),
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.more_vert),
-            color: Colors.white70,
-            tooltip: '更多',
-          ),
-        ],
-      ),
+      actions: _buildMobileLandscapeMoreButton(),
+      accentColor: accentColor,
       controls: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1435,6 +1426,61 @@ class _PlayerScreenState extends State<PlayerScreen> {
         onSelectTrack: widget.onSelectTrack,
       ),
     );
+  }
+
+  Widget _buildMobileLandscapeMoreButton() {
+    return ListenableBuilder(
+      listenable: PlaylistRepository.instance,
+      builder: (context, _) {
+        final isFavorite = PlaylistRepository.instance.isFavorite(_track.id);
+        return PopupMenuButton<String>(
+          tooltip: '更多',
+          icon: const Icon(Icons.more_vert, color: Colors.white70),
+          color: const Color(0xFF102027),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          onSelected: (value) {
+            if (value == 'favorite') {
+              unawaited(_toggleLandscapeFavorite());
+            }
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem<String>(
+              value: 'favorite',
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isFavorite ? Icons.favorite : Icons.favorite_border,
+                    color: isFavorite ? AppTheme.mikuGreen : Colors.white70,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    isFavorite ? '取消收藏' : '收藏',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _toggleLandscapeFavorite() async {
+    try {
+      await PlaylistRepository.instance.toggleFavorite(_track.id, _api);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to update favorite'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      debugPrint('PlayerScreen: toggleFavorite failed: $e');
+    }
   }
 
   Widget _buildMobileLayout(BuildContext context, Color accentColor) {
