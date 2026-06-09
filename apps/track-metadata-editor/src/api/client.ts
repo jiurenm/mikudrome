@@ -1,4 +1,3 @@
-import { buildApiUrl, resolveApiCookie } from "./config";
 import type { TrackMetadataPatch, TrackMetadataRow } from "./types";
 
 export class ApiError extends Error {
@@ -26,25 +25,11 @@ async function throwApiError(response: Response): Promise<never> {
   throw new ApiError(text || response.statusText, response.status);
 }
 
-function buildRequestHeaders(cookie = "", headers: Record<string, string> = {}): HeadersInit {
-  const trimmedCookie = cookie.trim();
-
-  if (!trimmedCookie) {
-    return headers;
-  }
-
-  return {
-    ...headers,
-    Cookie: trimmedCookie
-  };
-}
-
-export function createApiClient(baseUrl?: string, cookie = resolveApiCookie()): ApiClient {
+export function createApiClient(): ApiClient {
   return {
     async listTrackMetadata() {
-      const response = await fetch(buildApiUrl("/api/tracks/metadata", baseUrl), {
-        method: "GET",
-        headers: buildRequestHeaders(cookie)
+      const response = await fetch("/api/tracks/metadata", {
+        method: "GET"
       });
       if (!response.ok) {
         await throwApiError(response);
@@ -55,11 +40,11 @@ export function createApiClient(baseUrl?: string, cookie = resolveApiCookie()): 
     },
 
     async patchTrackMetadata(trackId, patch) {
-      const response = await fetch(buildApiUrl(`/api/tracks/${trackId}/metadata`, baseUrl), {
+      const response = await fetch(`/api/tracks/${trackId}/metadata`, {
         method: "PATCH",
-        headers: buildRequestHeaders(cookie, {
+        headers: {
           "Content-Type": "application/json"
-        }),
+        },
         body: JSON.stringify(patch)
       });
       if (!response.ok) {
@@ -70,7 +55,7 @@ export function createApiClient(baseUrl?: string, cookie = resolveApiCookie()): 
     },
 
     albumCoverUrl(albumId) {
-      return buildApiUrl(`/api/albums/${albumId}/cover`, baseUrl);
+      return `/api/albums/${albumId}/cover`;
     }
   };
 }
