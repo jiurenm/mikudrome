@@ -57,12 +57,17 @@ export async function proxyBackendRequest(
     return Response.json({ error: "API_BASE_URL is not configured." }, { status: 500 });
   }
 
-  const backendResponse = await fetch(backendUrl, {
-    method: options.method,
-    headers: buildRequestHeaders(options.contentType),
-    body: options.body ?? undefined,
-    cache: "no-store"
-  });
+  let backendResponse: Response;
+  try {
+    backendResponse = await fetch(backendUrl, {
+      method: options.method,
+      headers: buildRequestHeaders(options.contentType),
+      body: options.body ?? undefined,
+      cache: "no-store"
+    });
+  } catch {
+    return Response.json({ error: "Failed to reach backend API." }, { status: 502 });
+  }
 
   return new Response(backendResponse.body, {
     status: backendResponse.status,
