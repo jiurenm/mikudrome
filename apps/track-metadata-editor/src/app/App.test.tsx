@@ -88,7 +88,7 @@ describe("App", () => {
   it("loads a track into the editor and saves changes", async () => {
     const row = createRow();
     const savedRow = createRow({ movie: "Mah" });
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const method = init?.method ?? "GET";
       const url = String(input);
       if (method === "GET" && url.endsWith("/api/tracks/metadata")) {
@@ -114,6 +114,16 @@ describe("App", () => {
 
     await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
     expect(screen.getByLabelText("movie")).toHaveValue("Mah");
+    const patchCall = fetchMock.mock.calls.find(([input, init]) => {
+      return String(input).endsWith(`/api/tracks/${row.id}/metadata`) && init?.method === "PATCH";
+    });
+    expect(patchCall?.[1]).toEqual(
+      expect.objectContaining({
+        headers: {
+          "Content-Type": "application/json"
+        }
+      })
+    );
   });
 
   it("renders album cover using album cover API endpoint", async () => {
