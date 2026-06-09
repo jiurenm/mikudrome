@@ -1,24 +1,37 @@
-FROM node:22-alpine AS build
+FROM node:22-alpine AS deps
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY . .
+FROM node:22-alpine AS build
 
-ARG VITE_API_BASE_URL=""
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+WORKDIR /app
+
+ENV NEXT_TELEMETRY_DISABLED=1
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
 
 RUN npm run build
 
-FROM nginx:1.27-alpine
+FROM node:22-alpine AS runner
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
-COPY --from=build /app/dist /usr/share/nginx/html
+WORKDIR /app
 
-EXPOSE 80
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV HOSTNAME=0.0.0.0
+ENV PORT=4173
 
-ENTRYPOINT ["/docker-entrypoint.sh"]
+RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
+
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
+
+USER nextjs
+
+EXPOSE 4173
+
+CMD ["node", "server.js"]

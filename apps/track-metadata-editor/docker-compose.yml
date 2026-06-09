@@ -3,7 +3,7 @@ services:
     build:
       context: .
     environment:
-      API_BASE_URL: ${API_BASE_URL:-}
+      API_BASE_URL: ${API_BASE_URL:?Set API_BASE_URL to the backend API origin}
       API_COOKIE: ${API_COOKIE:-}
     ports:
-      - "4173:80"
+      - "4173:4173"
