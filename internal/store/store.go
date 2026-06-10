@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -224,6 +225,20 @@ type TrackMetadataPatch struct {
 	Illustrator      *string `json:"illustrator,omitempty"`
 	Movie            *string `json:"movie,omitempty"`
 	Source           *string `json:"source,omitempty"`
+}
+
+var (
+	ErrTrackMetadataBatchEmpty       = errors.New("track metadata batch is empty")
+	ErrTrackMetadataInvalidTrackID   = errors.New("track metadata track id is invalid")
+	ErrTrackMetadataDuplicateTrackID = errors.New("track metadata batch has duplicate track id")
+	ErrTrackMetadataEmptyPatch       = errors.New("track metadata patch is empty")
+	ErrTrackMetadataTrackNotFound    = errors.New("track metadata track not found")
+)
+
+// TrackMetadataBatchUpdate holds one track metadata update in a batch.
+type TrackMetadataBatchUpdate struct {
+	TrackID int64
+	Patch   TrackMetadataPatch
 }
 
 // Store provides SQLite persistence for tracks.
@@ -813,8 +828,7 @@ func (s *Store) GetTrackMetadataByID(id int64) (TrackMetadataRow, bool, error) {
 	return r, true, nil
 }
 
-// UpdateTrackMetadata applies partial updates to editable metadata fields.
-func (s *Store) UpdateTrackMetadata(trackID int64, patch TrackMetadataPatch) error {
+func buildTrackMetadataAssignments(patch TrackMetadataPatch) ([]string, []any) {
 	var (
 		sets []string
 		args []any
@@ -855,6 +869,12 @@ func (s *Store) UpdateTrackMetadata(trackID int64, patch TrackMetadataPatch) err
 		sets = append(sets, "source = ?")
 		args = append(args, strings.TrimSpace(*patch.Source))
 	}
+	return sets, args
+}
+
+// UpdateTrackMetadata applies partial updates to editable metadata fields.
+func (s *Store) UpdateTrackMetadata(trackID int64, patch TrackMetadataPatch) error {
+	sets, args := buildTrackMetadataAssignments(patch)
 	if len(sets) == 0 {
 		return nil
 	}
@@ -862,6 +882,85 @@ func (s *Store) UpdateTrackMetadata(trackID int64, patch TrackMetadataPatch) err
 	args = append(args, trackID)
 	_, err := s.db.Exec(fmt.Sprintf("UPDATE tracks SET %s WHERE id = ?", strings.Join(sets, ", ")), args...)
 	return err
+}
+
+// UpdateTrackMetadataBatch applies multiple metadata updates in one transaction.
+func (s *Store) UpdateTrackMetadataBatch(updates []TrackMetadataBatchUpdate) ([]TrackMetadataRow, error) {
+	if len(updates) == 0 {
+		return nil, ErrTrackMetadataBatchEmpty
+	}
+
+	type preparedUpdate struct {
+		trackID int64
+		sets    []string
+		args    []any
+	}
+
+	seen := make(map[int64]bool, len(updates))
+	prepared := make([]preparedUpdate, 0, len(updates))
+	for _, update := range updates {
+		if update.TrackID <= 0 {
+			return nil, ErrTrackMetadataInvalidTrackID
+		}
+		if seen[update.TrackID] {
+			return nil, ErrTrackMetadataDuplicateTrackID
+		}
+		seen[update.TrackID] = true
+
+		sets, args := buildTrackMetadataAssignments(update.Patch)
+		if len(sets) == 0 {
+			return nil, ErrTrackMetadataEmptyPatch
+		}
+		prepared = append(prepared, preparedUpdate{
+			trackID: update.TrackID,
+			sets:    sets,
+			args:    args,
+		})
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	for _, update := range prepared {
+		args := append(update.args, update.trackID)
+		result, err := tx.Exec(fmt.Sprintf("UPDATE tracks SET %s WHERE id = ?", strings.Join(update.sets, ", ")), args...)
+		if err != nil {
+			return nil, err
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return nil, err
+		}
+		if affected == 0 {
+			return nil, ErrTrackMetadataTrackNotFound
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	committed = true
+
+	rows := make([]TrackMetadataRow, 0, len(updates))
+	for _, update := range updates {
+		row, ok, err := s.GetTrackMetadataByID(update.TrackID)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, ErrTrackMetadataTrackNotFound
+		}
+		rows = append(rows, row)
+	}
+	return rows, nil
 }
 
 // ListProducers returns all distinct producers from albums with track and album counts.
