@@ -64,6 +64,40 @@ describe("api client", () => {
     );
   });
 
+  it("patchTrackMetadataBatch sends selected updates to the same-origin collection endpoint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ tracks: [] }), { status: 200 })
+    );
+
+    const client = createApiClient();
+    await client.patchTrackMetadataBatch({
+      updates: [
+        {
+          track_id: 7,
+          patch: { composer: "ryo", lyricist: "ryo" }
+        }
+      ]
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/tracks/metadata",
+      expect.objectContaining({
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          updates: [
+            {
+              track_id: 7,
+              patch: { composer: "ryo", lyricist: "ryo" }
+            }
+          ]
+        })
+      })
+    );
+  });
+
   it("albumCoverUrl returns the same-origin cover proxy endpoint", () => {
     const client = createApiClient();
 

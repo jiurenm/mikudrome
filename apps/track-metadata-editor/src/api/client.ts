@@ -1,4 +1,9 @@
-import type { TrackMetadataPatch, TrackMetadataRow } from "./types";
+import type {
+  TrackMetadataBatchPatch,
+  TrackMetadataBatchResponse,
+  TrackMetadataPatch,
+  TrackMetadataRow
+} from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -13,6 +18,7 @@ export class ApiError extends Error {
 export interface ApiClient {
   listTrackMetadata(): Promise<TrackMetadataRow[]>;
   patchTrackMetadata(trackId: number, patch: TrackMetadataPatch): Promise<TrackMetadataRow>;
+  patchTrackMetadataBatch(patch: TrackMetadataBatchPatch): Promise<TrackMetadataRow[]>;
   albumCoverUrl(albumId: number): string;
 }
 
@@ -52,6 +58,22 @@ export function createApiClient(): ApiClient {
       }
 
       return (await response.json()) as TrackMetadataRow;
+    },
+
+    async patchTrackMetadataBatch(patch) {
+      const response = await fetch("/api/tracks/metadata", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(patch)
+      });
+      if (!response.ok) {
+        await throwApiError(response);
+      }
+
+      const data = (await response.json()) as TrackMetadataBatchResponse;
+      return data.tracks;
     },
 
     albumCoverUrl(albumId) {

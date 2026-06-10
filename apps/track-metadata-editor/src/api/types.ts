@@ -34,3 +34,16 @@ export interface TrackMetadataPatch {
   movie?: string;
   source?: string;
 }
+
+export interface TrackMetadataBatchUpdate {
+  track_id: number;
+  patch: TrackMetadataPatch;
+}
+
+export interface TrackMetadataBatchPatch {
+  updates: TrackMetadataBatchUpdate[];
+}
+
+export interface TrackMetadataBatchResponse {
+  tracks: TrackMetadataRow[];
+}
