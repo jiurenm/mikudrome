@@ -1,4 +1,13 @@
-import type { TrackMetadataPatch, TrackMetadataRow } from "./types";
+import type {
+  TrackMetadataBatchPatch,
+  TrackMetadataBatchResponse,
+  TrackMetadataPatch,
+  TrackMetadataRow,
+  VocaDbAlbumCandidate,
+  VocaDbAlbumDetail,
+  VocaDbAlbumDetailResponse,
+  VocaDbAlbumSearchResponse
+} from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -13,7 +22,10 @@ export class ApiError extends Error {
 export interface ApiClient {
   listTrackMetadata(): Promise<TrackMetadataRow[]>;
   patchTrackMetadata(trackId: number, patch: TrackMetadataPatch): Promise<TrackMetadataRow>;
+  patchTrackMetadataBatch(patch: TrackMetadataBatchPatch): Promise<TrackMetadataRow[]>;
   albumCoverUrl(albumId: number): string;
+  searchVocaDbAlbums(query: string): Promise<VocaDbAlbumCandidate[]>;
+  getVocaDbAlbum(albumId: number): Promise<VocaDbAlbumDetail>;
 }
 
 interface TrackListResponse {
@@ -54,8 +66,49 @@ export function createApiClient(): ApiClient {
       return (await response.json()) as TrackMetadataRow;
     },
 
+    async patchTrackMetadataBatch(patch) {
+      const response = await fetch("/api/tracks/metadata", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(patch)
+      });
+      if (!response.ok) {
+        await throwApiError(response);
+      }
+
+      const data = (await response.json()) as TrackMetadataBatchResponse;
+      return data.tracks;
+    },
+
     albumCoverUrl(albumId) {
       return `/api/albums/${albumId}/cover`;
+    },
+
+    async searchVocaDbAlbums(query) {
+      const params = new URLSearchParams({ query });
+      const response = await fetch(`/api/vocadb/albums/search?${params.toString()}`, {
+        method: "GET"
+      });
+      if (!response.ok) {
+        await throwApiError(response);
+      }
+
+      const data = (await response.json()) as VocaDbAlbumSearchResponse;
+      return data.albums;
+    },
+
+    async getVocaDbAlbum(albumId) {
+      const response = await fetch(`/api/vocadb/albums/${albumId}`, {
+        method: "GET"
+      });
+      if (!response.ok) {
+        await throwApiError(response);
+      }
+
+      const data = (await response.json()) as VocaDbAlbumDetailResponse;
+      return data.album;
     }
   };
 }

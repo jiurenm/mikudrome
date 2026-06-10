@@ -30,6 +30,19 @@ API_BASE_URL=http://127.0.0.1:8080 API_COOKIE='session=YOUR_SESSION' npm run dev
 
 `API_COOKIE` is not exposed to browser JavaScript.
 
+## VocaDB matching
+
+The editor can match a local album against VocaDB from the album explorer.
+
+- Use `Match VocaDB` on an album row.
+- Select a search result, or paste a VocaDB album URL/ID.
+- Review per-track field suggestions.
+- Empty local fields are selected by default.
+- Existing local values are shown but not selected for overwrite by default.
+- Confirmed album changes are saved with one backend batch PATCH.
+
+The Next server calls VocaDB through same-origin `/api/vocadb/*` routes. Browser JavaScript does not call VocaDB directly.
+
 ## Test
 
 Run tests once:

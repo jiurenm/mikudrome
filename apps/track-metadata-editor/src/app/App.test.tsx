@@ -31,11 +31,15 @@ function createRow(overrides: Partial<TrackMetadataRow> = {}): TrackMetadataRow 
 }
 
 async function expandAlbum(user: ReturnType<typeof userEvent.setup>, albumTitle: string) {
-  const albumButton = await screen.findByRole("button", { name: new RegExp(albumTitle, "i") });
+  const albumButton = await screen.findByRole("button", { name: albumToggleName(albumTitle) });
   if (albumButton.getAttribute("aria-expanded") === "false") {
     await user.click(albumButton);
   }
   return albumButton;
+}
+
+function albumToggleName(albumTitle: string): RegExp {
+  return new RegExp(`^[▸▾]\\s*${albumTitle}$`, "i");
 }
 
 describe("App", () => {
@@ -57,7 +61,7 @@ describe("App", () => {
 
     render(<App />);
 
-    await screen.findByRole("button", { name: /miku works/i });
+    await screen.findByRole("button", { name: albumToggleName("Miku Works") });
     expect(screen.getByText("Select a track to edit its metadata.")).toBeInTheDocument();
   });
 
@@ -75,7 +79,7 @@ describe("App", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const albumButton = await screen.findByRole("button", { name: /miku works/i });
+    const albumButton = await screen.findByRole("button", { name: albumToggleName("Miku Works") });
     expect(albumButton).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("button", { name: /01 glow/i })).not.toBeInTheDocument();
 
@@ -83,6 +87,30 @@ describe("App", () => {
 
     expect(albumButton).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("button", { name: /01 glow/i })).toBeInTheDocument();
+  });
+
+  it("gives album match buttons unique accessible names", async () => {
+    const firstRow = createRow();
+    const secondRow = createRow({
+      id: 2,
+      title: "Spark",
+      album_id: 11,
+      album_title: "Miku Works",
+      album_cover_path: "/covers/future-sound.jpg"
+    });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const method = init?.method ?? "GET";
+      const url = String(input);
+      if (method === "GET" && url.endsWith("/api/tracks/metadata")) {
+        return new Response(JSON.stringify({ tracks: [firstRow, secondRow] }), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+
+    render(<App />);
+
+    expect(await screen.findByRole("button", { name: "Match VocaDB for Miku Works album 10" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Match VocaDB for Miku Works album 11" })).toBeInTheDocument();
   });
 
   it("loads a track into the editor and saves changes", async () => {
@@ -297,5 +325,385 @@ describe("App", () => {
 
     resolvePatch?.(new Response(JSON.stringify(savedRow), { status: 200 }));
     await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
+  });
+
+  it("matches an album with VocaDB and saves selected batch metadata", async () => {
+    const row = createRow({
+      composer: "",
+      lyricist: "",
+      vocal: "",
+      source: ""
+    });
+    const savedRow = createRow({
+      composer: "ryo",
+      lyricist: "ryo",
+      vocal: "Hatsune Miku",
+      source: "https://vocadb.net/S/100"
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const method = init?.method ?? "GET";
+      const url = String(input);
+      if (method === "GET" && url.endsWith("/api/tracks/metadata")) {
+        return new Response(JSON.stringify({ tracks: [row] }), { status: 200 });
+      }
+      if (method === "GET" && url.includes("/api/vocadb/albums/search")) {
+        return new Response(
+          JSON.stringify({
+            albums: [{ id: 42, name: "Miku Works", artistString: "ryo", url: "https://vocadb.net/Al/42", releaseDate: "" }]
+          }),
+          { status: 200 }
+        );
+      }
+      if (method === "GET" && url.endsWith("/api/vocadb/albums/42")) {
+        return new Response(
+          JSON.stringify({
+            album: {
+              id: 42,
+              name: "Miku Works",
+              artistString: "ryo",
+              url: "https://vocadb.net/Al/42",
+              tracks: [
+                {
+                  discNumber: 1,
+                  trackNumber: 1,
+                  title: "Glow",
+                  songId: 100,
+                  url: "https://vocadb.net/S/100",
+                  producers: ["ryo"],
+                  vocalists: ["Hatsune Miku V6"],
+                  artists: []
+                }
+              ]
+            }
+          }),
+          { status: 200 }
+        );
+      }
+      if (method === "PATCH" && url.endsWith("/api/tracks/metadata")) {
+        return new Response(JSON.stringify({ tracks: [savedRow] }), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+
+    const user = userEvent.setup();
+    render(<App />);
+
+    await screen.findByRole("button", { name: albumToggleName("Miku Works") });
+    await user.click(screen.getByRole("button", { name: /match vocadb/i }));
+    await user.click(await screen.findByRole("button", { name: /miku works.*ryo/i }));
+    await screen.findByText(/Hatsune Miku V6 -> Hatsune Miku/i);
+    await user.click(screen.getByRole("button", { name: "Save VocaDB metadata" }));
+
+    await waitFor(() => expect(screen.getByText("Saved VocaDB metadata.")).toBeInTheDocument());
+    const patchCall = fetchMock.mock.calls.find(([input, init]) => {
+      return String(input).endsWith("/api/tracks/metadata") && init?.method === "PATCH";
+    });
+    expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({
+      updates: [
+        {
+          track_id: row.id,
+          patch: {
+            composer: "ryo",
+            lyricist: "ryo",
+            vocal: "Hatsune Miku",
+            source: "https://vocadb.net/S/100"
+          }
+        }
+      ]
+    });
+  });
+
+  it("shows local track context for VocaDB suggestions", async () => {
+    const firstRow = createRow({
+      composer: "",
+      lyricist: "",
+      vocal: "",
+      source: ""
+    });
+    const secondRow = createRow({
+      id: 2,
+      title: "Spark",
+      track_number: 2,
+      composer: "",
+      lyricist: "",
+      vocal: "",
+      source: ""
+    });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const method = init?.method ?? "GET";
+      const url = String(input);
+      if (method === "GET" && url.endsWith("/api/tracks/metadata")) {
+        return new Response(JSON.stringify({ tracks: [firstRow, secondRow] }), { status: 200 });
+      }
+      if (method === "GET" && url.includes("/api/vocadb/albums/search")) {
+        return new Response(
+          JSON.stringify({
+            albums: [{ id: 42, name: "Miku Works", artistString: "ryo", url: "https://vocadb.net/Al/42", releaseDate: "" }]
+          }),
+          { status: 200 }
+        );
+      }
+      if (method === "GET" && url.endsWith("/api/vocadb/albums/42")) {
+        return new Response(
+          JSON.stringify({
+            album: {
+              id: 42,
+              name: "Miku Works",
+              artistString: "ryo",
+              url: "https://vocadb.net/Al/42",
+              tracks: [
+                {
+                  discNumber: 1,
+                  trackNumber: 1,
+                  title: "Glow",
+                  songId: 100,
+                  url: "https://vocadb.net/S/100",
+                  producers: ["ryo"],
+                  vocalists: ["Hatsune Miku V6"],
+                  artists: []
+                },
+                {
+                  discNumber: 1,
+                  trackNumber: 2,
+                  title: "Spark",
+                  songId: 101,
+                  url: "https://vocadb.net/S/101",
+                  producers: ["ryo"],
+                  vocalists: ["Hatsune Miku V6"],
+                  artists: []
+                }
+              ]
+            }
+          }),
+          { status: 200 }
+        );
+      }
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+
+    const user = userEvent.setup();
+    render(<App />);
+
+    await screen.findByRole("button", { name: albumToggleName("Miku Works") });
+    await user.click(screen.getByRole("button", { name: /match vocadb/i }));
+    await user.click(await screen.findByRole("button", { name: /miku works.*ryo/i }));
+
+    expect(await screen.findAllByText("01 Glow")).not.toHaveLength(0);
+    expect(screen.getAllByText("02 Spark")).not.toHaveLength(0);
+  });
+
+  it("confirms before discarding selected VocaDB suggestions", async () => {
+    const firstRow = createRow({
+      composer: "",
+      lyricist: "",
+      vocal: "",
+      source: ""
+    });
+    const secondRow = createRow({
+      id: 2,
+      title: "Spark",
+      album_id: 11,
+      album_title: "Future Sound",
+      album_cover_path: "/covers/future-sound.jpg"
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const method = init?.method ?? "GET";
+      const url = String(input);
+      if (method === "GET" && url.endsWith("/api/tracks/metadata")) {
+        return Promise.resolve(new Response(JSON.stringify({ tracks: [firstRow, secondRow] }), { status: 200 }));
+      }
+      if (method === "GET" && url.includes("/api/vocadb/albums/search")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              albums: [
+                { id: 42, name: "Miku Works", artistString: "ryo", url: "https://vocadb.net/Al/42", releaseDate: "" },
+                { id: 99, name: "Other Works", artistString: "kz", url: "https://vocadb.net/Al/99", releaseDate: "" }
+              ]
+            }),
+            { status: 200 }
+          )
+        );
+      }
+      if (method === "GET" && url.endsWith("/api/vocadb/albums/42")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              album: {
+                id: 42,
+                name: "Miku Works",
+                artistString: "ryo",
+                url: "https://vocadb.net/Al/42",
+                tracks: [
+                  {
+                    discNumber: 1,
+                    trackNumber: 1,
+                    title: "Glow",
+                    songId: 100,
+                    url: "https://vocadb.net/S/100",
+                    producers: ["ryo"],
+                    vocalists: ["Hatsune Miku V6"],
+                    artists: []
+                  }
+                ]
+              }
+            }),
+            { status: 200 }
+          )
+        );
+      }
+      if (method === "GET" && url.endsWith("/api/vocadb/albums/99")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              album: {
+                id: 99,
+                name: "Other Works",
+                artistString: "kz",
+                url: "https://vocadb.net/Al/99",
+                tracks: []
+              }
+            }),
+            { status: 200 }
+          )
+        );
+      }
+      return Promise.reject(new Error(`Unexpected request: ${method} ${url}`));
+    });
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Match VocaDB for Miku Works album 10" }));
+    await user.click(await screen.findByRole("button", { name: /miku works.*ryo/i }));
+    await screen.findByText(/Hatsune Miku V6 -> Hatsune Miku/i);
+
+    const beforeUnloadEvent = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(beforeUnloadEvent);
+    expect(beforeUnloadEvent.defaultPrevented).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: /other works.*kz/i }));
+    expect(confirmSpy).toHaveBeenCalledWith("Discard unsaved changes?");
+    expect(screen.getByText(/Hatsune Miku V6 -> Hatsune Miku/i)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/api/vocadb/albums/99"))).toBe(false);
+
+    const albumInput = screen.getByLabelText("VocaDB album URL or ID");
+    await user.clear(albumInput);
+    await user.type(albumInput, "99");
+    await user.click(screen.getByRole("button", { name: "Load" }));
+    expect(confirmSpy).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(/Hatsune Miku V6 -> Hatsune Miku/i)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/api/vocadb/albums/99"))).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(confirmSpy).toHaveBeenCalledTimes(3);
+    expect(screen.getByRole("button", { name: "Save VocaDB metadata" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Match VocaDB for Future Sound album 11" }));
+    expect(confirmSpy).toHaveBeenCalledTimes(4);
+    expect(screen.getByRole("heading", { name: "Miku Works", level: 2 })).toBeInTheDocument();
+  });
+
+  it("locks VocaDB workflow controls while batch save is in flight", async () => {
+    const firstRow = createRow({
+      composer: "",
+      lyricist: "",
+      vocal: "",
+      source: ""
+    });
+    const secondRow = createRow({
+      id: 2,
+      title: "Spark",
+      album_id: 11,
+      album_title: "Future Sound",
+      album_cover_path: "/covers/future-sound.jpg",
+      composer: "",
+      lyricist: "",
+      vocal: "",
+      source: ""
+    });
+    const savedRow = createRow({
+      composer: "ryo",
+      lyricist: "ryo",
+      vocal: "Hatsune Miku",
+      source: "https://vocadb.net/S/100"
+    });
+    let resolvePatch: ((response: Response) => void) | null = null;
+
+    vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const method = init?.method ?? "GET";
+      const url = String(input);
+      if (method === "GET" && url.endsWith("/api/tracks/metadata")) {
+        return Promise.resolve(new Response(JSON.stringify({ tracks: [firstRow, secondRow] }), { status: 200 }));
+      }
+      if (method === "GET" && url.includes("/api/vocadb/albums/search")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              albums: [{ id: 42, name: "Miku Works", artistString: "ryo", url: "https://vocadb.net/Al/42", releaseDate: "" }]
+            }),
+            { status: 200 }
+          )
+        );
+      }
+      if (method === "GET" && url.endsWith("/api/vocadb/albums/42")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              album: {
+                id: 42,
+                name: "Miku Works",
+                artistString: "ryo",
+                url: "https://vocadb.net/Al/42",
+                tracks: [
+                  {
+                    discNumber: 1,
+                    trackNumber: 1,
+                    title: "Glow",
+                    songId: 100,
+                    url: "https://vocadb.net/S/100",
+                    producers: ["ryo"],
+                    vocalists: ["Hatsune Miku V6"],
+                    artists: []
+                  }
+                ]
+              }
+            }),
+            { status: 200 }
+          )
+        );
+      }
+      if (method === "PATCH" && url.endsWith("/api/tracks/metadata")) {
+        return new Promise<Response>((resolve) => {
+          resolvePatch = resolve;
+        });
+      }
+      return Promise.reject(new Error(`Unexpected request: ${method} ${url}`));
+    });
+
+    const user = userEvent.setup();
+    render(<App />);
+
+    await expandAlbum(user, "Future Sound");
+    await user.click(await screen.findByRole("button", { name: "Match VocaDB for Miku Works album 10" }));
+    const candidateButton = await screen.findByRole("button", { name: /miku works.*ryo/i });
+    await user.click(candidateButton);
+    await screen.findByText(/Hatsune Miku V6 -> Hatsune Miku/i);
+    await user.click(screen.getByRole("button", { name: "Save VocaDB metadata" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Close" })).toBeDisabled());
+    expect(screen.getByLabelText("VocaDB album URL or ID")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Load" })).toBeDisabled();
+    expect(candidateButton).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Match VocaDB for Future Sound album 11" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /01 spark/i })).toBeDisabled();
+
+    const beforeUnloadEvent = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(beforeUnloadEvent);
+    expect(beforeUnloadEvent.defaultPrevented).toBe(true);
+
+    resolvePatch?.(new Response(JSON.stringify({ tracks: [savedRow] }), { status: 200 }));
+    await waitFor(() => expect(screen.getByText("Saved VocaDB metadata.")).toBeInTheDocument());
   });
 });

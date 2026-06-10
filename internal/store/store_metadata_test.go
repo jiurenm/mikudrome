@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"path/filepath"
 	"testing"
 )
@@ -297,5 +298,169 @@ func TestGetTracksByAlbumIDUsesEffectiveComposerAndLyricist(t *testing.T) {
 	}
 	if tracks[0].Lyricist != "manual lyricist" {
 		t.Fatalf("lyricist = %q, want %q", tracks[0].Lyricist, "manual lyricist")
+	}
+}
+
+func TestUpdateTrackMetadataBatchAppliesAllUpdates(t *testing.T) {
+	st := newTestStore(t)
+
+	_, err := st.db.Exec(`
+		INSERT INTO tracks (id, title, audio_path, composer, lyricist, vocal)
+		VALUES
+			(1, 'Track 1', '/tmp/track-1.flac', '', '', ''),
+			(2, 'Track 2', '/tmp/track-2.flac', '', '', '');
+	`)
+	if err != nil {
+		t.Fatalf("seed tracks: %v", err)
+	}
+
+	composer := "ryo"
+	lyricist := "ryo"
+	vocal := "Hatsune Miku"
+	rows, err := st.UpdateTrackMetadataBatch([]TrackMetadataBatchUpdate{
+		{
+			TrackID: 1,
+			Patch: TrackMetadataPatch{
+				Composer: &composer,
+				Lyricist: &lyricist,
+			},
+		},
+		{
+			TrackID: 2,
+			Patch: TrackMetadataPatch{
+				Vocal: &vocal,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateTrackMetadataBatch: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want 2", len(rows))
+	}
+	if rows[0].ID != 1 || rows[0].Composer != "ryo" || rows[0].Lyricist != "ryo" {
+		t.Fatalf("unexpected first row: %+v", rows[0])
+	}
+	if rows[1].ID != 2 || rows[1].Vocal != "Hatsune Miku" {
+		t.Fatalf("unexpected second row: %+v", rows[1])
+	}
+}
+
+func TestUpdateTrackMetadataBatchRollsBackWhenTrackMissing(t *testing.T) {
+	st := newTestStore(t)
+
+	_, err := st.db.Exec(`
+		INSERT INTO tracks (id, title, audio_path, composer)
+		VALUES (1, 'Track 1', '/tmp/track-1.flac', 'original');
+	`)
+	if err != nil {
+		t.Fatalf("seed track: %v", err)
+	}
+
+	composer := "changed"
+	vocal := "Hatsune Miku"
+	_, err = st.UpdateTrackMetadataBatch([]TrackMetadataBatchUpdate{
+		{
+			TrackID: 1,
+			Patch: TrackMetadataPatch{
+				Composer: &composer,
+			},
+		},
+		{
+			TrackID: 999,
+			Patch: TrackMetadataPatch{
+				Vocal: &vocal,
+			},
+		},
+	})
+	if !errors.Is(err, ErrTrackMetadataTrackNotFound) {
+		t.Fatalf("err = %v, want ErrTrackMetadataTrackNotFound", err)
+	}
+
+	row, ok, err := st.GetTrackMetadataByID(1)
+	if err != nil || !ok {
+		t.Fatalf("GetTrackMetadataByID ok=%v err=%v", ok, err)
+	}
+	if row.Composer != "original" {
+		t.Fatalf("composer = %q, want original", row.Composer)
+	}
+}
+
+func TestUpdateTrackMetadataBatchAllowsSameValueUpdates(t *testing.T) {
+	st := newTestStore(t)
+
+	_, err := st.db.Exec(`
+		INSERT INTO tracks (id, title, audio_path, composer)
+		VALUES (1, 'Track 1', '/tmp/track-1.flac', 'ryo');
+	`)
+	if err != nil {
+		t.Fatalf("seed track: %v", err)
+	}
+
+	composer := "ryo"
+	rows, err := st.UpdateTrackMetadataBatch([]TrackMetadataBatchUpdate{
+		{
+			TrackID: 1,
+			Patch: TrackMetadataPatch{
+				Composer: &composer,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateTrackMetadataBatch: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows = %d, want 1", len(rows))
+	}
+	if rows[0].Composer != "ryo" {
+		t.Fatalf("composer = %q, want ryo", rows[0].Composer)
+	}
+}
+
+func TestUpdateTrackMetadataBatchRejectsInvalidInput(t *testing.T) {
+	st := newTestStore(t)
+
+	value := "value"
+	cases := []struct {
+		name    string
+		updates []TrackMetadataBatchUpdate
+		wantErr error
+	}{
+		{
+			name:    "empty",
+			updates: nil,
+			wantErr: ErrTrackMetadataBatchEmpty,
+		},
+		{
+			name: "non-positive id",
+			updates: []TrackMetadataBatchUpdate{
+				{TrackID: 0, Patch: TrackMetadataPatch{Composer: &value}},
+			},
+			wantErr: ErrTrackMetadataInvalidTrackID,
+		},
+		{
+			name: "duplicate id",
+			updates: []TrackMetadataBatchUpdate{
+				{TrackID: 1, Patch: TrackMetadataPatch{Composer: &value}},
+				{TrackID: 1, Patch: TrackMetadataPatch{Lyricist: &value}},
+			},
+			wantErr: ErrTrackMetadataDuplicateTrackID,
+		},
+		{
+			name: "empty patch",
+			updates: []TrackMetadataBatchUpdate{
+				{TrackID: 1, Patch: TrackMetadataPatch{}},
+			},
+			wantErr: ErrTrackMetadataEmptyPatch,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := st.UpdateTrackMetadataBatch(tc.updates)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+		})
 	}
 }

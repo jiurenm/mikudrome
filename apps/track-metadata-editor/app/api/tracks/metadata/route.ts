@@ -8,3 +8,11 @@ export async function GET(): Promise<Response> {
     method: "GET"
   });
 }
+
+export async function PATCH(request: Request): Promise<Response> {
+  return proxyBackendRequest("/api/tracks/metadata", {
+    method: "PATCH",
+    contentType: request.headers.get("content-type") ?? "application/json",
+    body: await request.text()
+  });
+}

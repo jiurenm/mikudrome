@@ -12,6 +12,7 @@ import {
 } from "./model";
 
 interface TrackMetadataEditorState {
+  allRows: TrackMetadataRow[];
   rows: TrackMetadataRow[];
   albumGroups: AlbumGroup[];
   search: string;
@@ -26,6 +27,7 @@ interface TrackMetadataEditorState {
   saveError: string | null;
   successMessage: string | null;
   reload: () => Promise<void>;
+  replaceRows: (rows: TrackMetadataRow[]) => void;
   selectTrack: (trackId: number, force?: boolean) => boolean;
   updateDraft: (field: keyof TrackMetadataDraft, value: string) => void;
   save: () => Promise<void>;
@@ -92,6 +94,22 @@ export function useTrackMetadataEditor(apiClient: ApiClient): TrackMetadataEdito
   const reload = useCallback(async () => {
     await loadRows();
   }, [loadRows]);
+
+  const replaceRows = useCallback((rowsToReplace: TrackMetadataRow[]) => {
+    const replacementById = new Map(rowsToReplace.map((row) => [row.id, row]));
+    setAllRows((currentRows) =>
+      currentRows.map((row) => replacementById.get(row.id) ?? row)
+    );
+    setDraft((currentDraft) => {
+      if (currentDraft == null || selectedTrackId == null) {
+        return currentDraft;
+      }
+
+      const replacement = replacementById.get(selectedTrackId);
+      return replacement == null ? currentDraft : createDraftFromRow(replacement);
+    });
+    setSaveError(null);
+  }, [selectedTrackId]);
 
   const selectTrack = useCallback(
     (trackId: number, force = false) => {
@@ -166,6 +184,7 @@ export function useTrackMetadataEditor(apiClient: ApiClient): TrackMetadataEdito
   }, [selectedRow]);
 
   return {
+    allRows,
     rows,
     albumGroups,
     search,
@@ -180,6 +199,7 @@ export function useTrackMetadataEditor(apiClient: ApiClient): TrackMetadataEdito
     saveError,
     successMessage,
     reload,
+    replaceRows,
     selectTrack,
     updateDraft,
     save,

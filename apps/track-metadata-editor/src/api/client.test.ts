@@ -64,9 +64,82 @@ describe("api client", () => {
     );
   });
 
+  it("patchTrackMetadataBatch sends selected updates to the same-origin collection endpoint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ tracks: [] }), { status: 200 })
+    );
+
+    const client = createApiClient();
+    await client.patchTrackMetadataBatch({
+      updates: [
+        {
+          track_id: 7,
+          patch: { composer: "ryo", lyricist: "ryo" }
+        }
+      ]
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/tracks/metadata",
+      expect.objectContaining({
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          updates: [
+            {
+              track_id: 7,
+              patch: { composer: "ryo", lyricist: "ryo" }
+            }
+          ]
+        })
+      })
+    );
+  });
+
   it("albumCoverUrl returns the same-origin cover proxy endpoint", () => {
     const client = createApiClient();
 
     expect(client.albumCoverUrl(42)).toBe("/api/albums/42/cover");
+  });
+
+  it("searchVocaDbAlbums calls the same-origin VocaDB search proxy", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify({ albums: [] }), { status: 200 }));
+
+    const client = createApiClient();
+    await client.searchVocaDbAlbums("Miku Expo");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/vocadb/albums/search?query=Miku+Expo",
+      expect.objectContaining({ method: "GET" })
+    );
+  });
+
+  it("getVocaDbAlbum calls the same-origin VocaDB album proxy", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          album: {
+            id: 42,
+            name: "Album",
+            artistString: "Artist",
+            url: "https://vocadb.net/Al/42",
+            tracks: []
+          }
+        }),
+        { status: 200 }
+      )
+    );
+
+    const client = createApiClient();
+    await client.getVocaDbAlbum(42);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/vocadb/albums/42",
+      expect.objectContaining({ method: "GET" })
+    );
   });
 });

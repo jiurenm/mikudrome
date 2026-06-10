@@ -118,6 +118,100 @@ func TestTrackMetadataHTTP_PatchRejectsNonPositiveID(t *testing.T) {
 	}
 }
 
+func TestTrackMetadataHTTP_BatchPatchUpdatesMultipleTracks(t *testing.T) {
+	h := newTestHandler(t)
+
+	firstID := seedMetadataTrack(t, h, store.Track{
+		Title:     "Track 1",
+		AudioPath: "/tmp/batch-1.flac",
+	}, store.Album{Title: "Batch Album"}, store.Producer{Name: "batch producer"})
+	secondID := seedMetadataTrack(t, h, store.Track{
+		Title:     "Track 2",
+		AudioPath: "/tmp/batch-2.flac",
+	}, store.Album{Title: "Batch Album"}, store.Producer{Name: "batch producer"})
+
+	body := `{"updates":[` +
+		`{"track_id":` + strconv.FormatInt(firstID, 10) + `,"patch":{"composer":"ryo","lyricist":"ryo"}},` +
+		`{"track_id":` + strconv.FormatInt(secondID, 10) + `,"patch":{"vocal":"Hatsune Miku"}}` +
+		`]}`
+	rr := doReq(h, http.MethodPatch, "/api/tracks/metadata", body)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+
+	var resp struct {
+		Tracks []struct {
+			ID       int64  `json:"id"`
+			Composer string `json:"composer"`
+			Lyricist string `json:"lyricist"`
+			Vocal    string `json:"vocal"`
+		} `json:"tracks"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Tracks) != 2 {
+		t.Fatalf("tracks = %d, want 2", len(resp.Tracks))
+	}
+	if resp.Tracks[0].ID != firstID || resp.Tracks[0].Composer != "ryo" || resp.Tracks[0].Lyricist != "ryo" {
+		t.Fatalf("unexpected first track: %+v", resp.Tracks[0])
+	}
+	if resp.Tracks[1].ID != secondID || resp.Tracks[1].Vocal != "Hatsune Miku" {
+		t.Fatalf("unexpected second track: %+v", resp.Tracks[1])
+	}
+}
+
+func TestTrackMetadataHTTP_BatchPatchRejectsInvalidPayloads(t *testing.T) {
+	h := newTestHandler(t)
+
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "empty updates", body: `{"updates":[]}`},
+		{name: "non-positive id", body: `{"updates":[{"track_id":0,"patch":{"composer":"ryo"}}]}`},
+		{name: "duplicate id", body: `{"updates":[{"track_id":1,"patch":{"composer":"ryo"}},{"track_id":1,"patch":{"lyricist":"ryo"}}]}`},
+		{name: "empty patch", body: `{"updates":[{"track_id":1,"patch":{}}]}`},
+		{name: "unknown field", body: `{"updates":[{"track_id":1,"patch":{"unknown":"ryo"}}]}`},
+		{name: "trailing content", body: `{"updates":[{"track_id":1,"patch":{"composer":"ryo"}}]} {"unexpected":true}`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := doReq(h, http.MethodPatch, "/api/tracks/metadata", tc.body)
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d: %s", rr.Code, http.StatusBadRequest, rr.Body.String())
+			}
+		})
+	}
+}
+
+func TestTrackMetadataHTTP_BatchPatchRollsBackWhenTrackMissing(t *testing.T) {
+	h := newTestHandler(t)
+
+	id := seedMetadataTrack(t, h, store.Track{
+		Title:     "Track",
+		AudioPath: "/tmp/batch-rollback.flac",
+	}, store.Album{Title: "Rollback Album"}, store.Producer{Name: "rollback producer"})
+
+	body := `{"updates":[` +
+		`{"track_id":` + strconv.FormatInt(id, 10) + `,"patch":{"composer":"changed"}},` +
+		`{"track_id":999999,"patch":{"vocal":"Hatsune Miku"}}` +
+		`]}`
+	rr := doReq(h, http.MethodPatch, "/api/tracks/metadata", body)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d: %s", rr.Code, http.StatusNotFound, rr.Body.String())
+	}
+
+	row, ok, err := h.store.GetTrackMetadataByID(id)
+	if err != nil || !ok {
+		t.Fatalf("GetTrackMetadataByID ok=%v err=%v", ok, err)
+	}
+	if row.Composer != "" {
+		t.Fatalf("composer = %q, want empty after rollback", row.Composer)
+	}
+}
+
 func seedMetadataTrack(t *testing.T, h *Handler, track store.Track, album store.Album, producer store.Producer) int64 {
 	t.Helper()
 

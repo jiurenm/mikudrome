@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GET as getAlbumCover } from "./albums/[albumId]/cover/route";
 import { PATCH as patchTrackMetadata } from "./tracks/[trackId]/metadata/route";
-import { GET as getTrackMetadata } from "./tracks/metadata/route";
+import { GET as getTrackMetadata, PATCH as patchTrackMetadataBatch } from "./tracks/metadata/route";
 
 describe("Next API proxy routes", () => {
   afterEach(() => {
@@ -95,6 +95,38 @@ describe("Next API proxy routes", () => {
     expect(headers.get("cookie")).toBe("session=abc");
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(savedRow);
+  });
+
+  it("forwards batch metadata patch requests to the configured backend", async () => {
+    vi.stubEnv("API_BASE_URL", "http://backend.test");
+    vi.stubEnv("API_COOKIE", "session=abc");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ tracks: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+    );
+    const body = JSON.stringify({
+      updates: [{ track_id: 7, patch: { composer: "ryo" } }]
+    });
+    const request = new Request("http://localhost/api/tracks/metadata", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body
+    });
+
+    const response = await patchTrackMetadataBatch(request);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://backend.test/api/tracks/metadata",
+      expect.objectContaining({ method: "PATCH", body, cache: "no-store" })
+    );
+    const init = fetchMock.mock.calls[0]?.[1];
+    const headers = init?.headers as Headers;
+    expect(headers.get("content-type")).toBe("application/json");
+    expect(headers.get("cookie")).toBe("session=abc");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ tracks: [] });
   });
 
   it("forwards album cover responses with image content type", async () => {

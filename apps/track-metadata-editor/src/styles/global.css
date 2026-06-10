@@ -91,15 +91,39 @@ body {
   width: 100%;
   border: 0;
   background: transparent;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.album-row__toggle,
+.album-row__match {
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.album-row__toggle {
   text-align: left;
-  padding: 12px;
+  padding: 8px 6px;
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 8px;
-  cursor: pointer;
-  font: inherit;
   font-weight: 600;
-  color: inherit;
+}
+
+.album-row__match {
+  padding: 7px 10px;
+  border-color: rgba(79, 54, 31, 0.18);
+  background: #fff7eb;
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .track-list {
@@ -248,6 +272,124 @@ body {
 .editor-actions button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.vocadb-panel {
+  align-content: start;
+}
+
+.vocadb-panel__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.vocadb-panel__header button,
+.vocadb-direct-load button {
+  border-radius: 10px;
+  border: 1px solid rgba(79, 54, 31, 0.24);
+  background: #fff7eb;
+  color: inherit;
+  padding: 8px 12px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vocadb-direct-load {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.vocadb-candidates {
+  display: grid;
+  gap: 8px;
+}
+
+.vocadb-candidates button {
+  border: 1px solid rgba(79, 54, 31, 0.16);
+  border-radius: 10px;
+  background: rgba(247, 240, 228, 0.7);
+  color: inherit;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.vocadb-candidates button span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.vocadb-candidates button span:first-child {
+  font-weight: 600;
+}
+
+.vocadb-panel button:disabled,
+.vocadb-panel input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.vocadb-preview {
+  border: 1px solid rgba(79, 54, 31, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vocadb-preview h3,
+.vocadb-preview p {
+  margin: 0;
+}
+
+.vocadb-preview p,
+.vocadb-preview a {
+  color: rgba(48, 33, 18, 0.75);
+}
+
+.vocadb-suggestion-list {
+  display: grid;
+  gap: 8px;
+}
+
+.vocadb-suggestion {
+  border: 1px solid rgba(79, 54, 31, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.68);
+  padding: 10px;
+  display: grid;
+  grid-template-columns: auto minmax(92px, 140px) 130px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.vocadb-suggestion__track,
+.vocadb-suggestion__field {
+  font-weight: 600;
+}
+
+.vocadb-suggestion__track,
+.vocadb-suggestion__value,
+.vocadb-suggestion__normalization {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.vocadb-suggestion__normalization {
+  grid-column: 4;
+  color: rgba(48, 33, 18, 0.72);
+  font-size: 0.9rem;
 }
 
 .status-banner {
