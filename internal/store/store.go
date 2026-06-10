@@ -940,7 +940,14 @@ func (s *Store) UpdateTrackMetadataBatch(updates []TrackMetadataBatchUpdate) ([]
 			return nil, err
 		}
 		if affected == 0 {
-			return nil, ErrTrackMetadataTrackNotFound
+			var exists int
+			err := tx.QueryRow("SELECT 1 FROM tracks WHERE id = ?", update.trackID).Scan(&exists)
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, ErrTrackMetadataTrackNotFound
+			}
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 

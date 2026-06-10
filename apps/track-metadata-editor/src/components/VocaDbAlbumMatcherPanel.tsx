@@ -11,6 +11,10 @@ function emptyLabel(value: string): string {
   return value.trim() === "" ? "(empty)" : value;
 }
 
+function trackLabel(trackNumber: number, title: string): string {
+  return `${String(trackNumber).padStart(2, "0")} ${title}`;
+}
+
 export function VocaDbAlbumMatcherPanel({
   matcher,
   onClose,
@@ -22,6 +26,9 @@ export function VocaDbAlbumMatcherPanel({
   }
 
   const albumTitle = matcher.activeRows[0]?.album_title ?? "Album";
+  const trackLabels = new Map(
+    matcher.activeRows.map((row) => [row.id, trackLabel(row.track_number, row.title)])
+  );
   const selectedSuggestionCount = matcher.suggestions.filter((suggestion) => suggestion.selected).length;
   const isWorkflowLocked = matcher.isSearching || matcher.isLoadingAlbum || matcher.isSaving;
 
@@ -108,6 +115,9 @@ export function VocaDbAlbumMatcherPanel({
                 onChange={() => matcher.toggleSuggestion(suggestion.id)}
                 disabled={matcher.isSaving}
               />
+              <span className="vocadb-suggestion__track">
+                {trackLabels.get(suggestion.trackId) ?? `Track ${suggestion.trackId}`}
+              </span>
               <span className="vocadb-suggestion__field">{suggestion.field}</span>
               <span className="vocadb-suggestion__value">
                 {`${emptyLabel(suggestion.currentValue)} -> ${suggestion.suggestedValue}`}

@@ -386,6 +386,37 @@ func TestUpdateTrackMetadataBatchRollsBackWhenTrackMissing(t *testing.T) {
 	}
 }
 
+func TestUpdateTrackMetadataBatchAllowsSameValueUpdates(t *testing.T) {
+	st := newTestStore(t)
+
+	_, err := st.db.Exec(`
+		INSERT INTO tracks (id, title, audio_path, composer)
+		VALUES (1, 'Track 1', '/tmp/track-1.flac', 'ryo');
+	`)
+	if err != nil {
+		t.Fatalf("seed track: %v", err)
+	}
+
+	composer := "ryo"
+	rows, err := st.UpdateTrackMetadataBatch([]TrackMetadataBatchUpdate{
+		{
+			TrackID: 1,
+			Patch: TrackMetadataPatch{
+				Composer: &composer,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateTrackMetadataBatch: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows = %d, want 1", len(rows))
+	}
+	if rows[0].Composer != "ryo" {
+		t.Fatalf("composer = %q, want ryo", rows[0].Composer)
+	}
+}
+
 func TestUpdateTrackMetadataBatchRejectsInvalidInput(t *testing.T) {
 	st := newTestStore(t)
 

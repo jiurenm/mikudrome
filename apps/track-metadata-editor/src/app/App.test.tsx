@@ -413,6 +413,85 @@ describe("App", () => {
     });
   });
 
+  it("shows local track context for VocaDB suggestions", async () => {
+    const firstRow = createRow({
+      composer: "",
+      lyricist: "",
+      vocal: "",
+      source: ""
+    });
+    const secondRow = createRow({
+      id: 2,
+      title: "Spark",
+      track_number: 2,
+      composer: "",
+      lyricist: "",
+      vocal: "",
+      source: ""
+    });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const method = init?.method ?? "GET";
+      const url = String(input);
+      if (method === "GET" && url.endsWith("/api/tracks/metadata")) {
+        return new Response(JSON.stringify({ tracks: [firstRow, secondRow] }), { status: 200 });
+      }
+      if (method === "GET" && url.includes("/api/vocadb/albums/search")) {
+        return new Response(
+          JSON.stringify({
+            albums: [{ id: 42, name: "Miku Works", artistString: "ryo", url: "https://vocadb.net/Al/42", releaseDate: "" }]
+          }),
+          { status: 200 }
+        );
+      }
+      if (method === "GET" && url.endsWith("/api/vocadb/albums/42")) {
+        return new Response(
+          JSON.stringify({
+            album: {
+              id: 42,
+              name: "Miku Works",
+              artistString: "ryo",
+              url: "https://vocadb.net/Al/42",
+              tracks: [
+                {
+                  discNumber: 1,
+                  trackNumber: 1,
+                  title: "Glow",
+                  songId: 100,
+                  url: "https://vocadb.net/S/100",
+                  producers: ["ryo"],
+                  vocalists: ["Hatsune Miku V6"],
+                  artists: []
+                },
+                {
+                  discNumber: 1,
+                  trackNumber: 2,
+                  title: "Spark",
+                  songId: 101,
+                  url: "https://vocadb.net/S/101",
+                  producers: ["ryo"],
+                  vocalists: ["Hatsune Miku V6"],
+                  artists: []
+                }
+              ]
+            }
+          }),
+          { status: 200 }
+        );
+      }
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+
+    const user = userEvent.setup();
+    render(<App />);
+
+    await screen.findByRole("button", { name: albumToggleName("Miku Works") });
+    await user.click(screen.getByRole("button", { name: /match vocadb/i }));
+    await user.click(await screen.findByRole("button", { name: /miku works.*ryo/i }));
+
+    expect(await screen.findAllByText("01 Glow")).not.toHaveLength(0);
+    expect(screen.getAllByText("02 Spark")).not.toHaveLength(0);
+  });
+
   it("confirms before discarding selected VocaDB suggestions", async () => {
     const firstRow = createRow({
       composer: "",

@@ -105,11 +105,7 @@ function expectString(value: unknown): string {
   return value;
 }
 
-function expectOptionalNumber(value: unknown): number | undefined {
-  if (value == null) {
-    return undefined;
-  }
-
+function expectNumber(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     malformedVocaDbResponse();
   }
@@ -179,7 +175,7 @@ function trackKey(discNumber: number, trackNumber: number): string {
 
 function normalizeSearchItem(item: unknown): VocaDbAlbumCandidate {
   const itemRecord = expectRecord(item);
-  const id = expectOptionalNumber(itemRecord.id) ?? 0;
+  const id = expectNumber(itemRecord.id);
 
   return {
     id,
@@ -192,11 +188,11 @@ function normalizeSearchItem(item: unknown): VocaDbAlbumCandidate {
 
 function normalizeTrack(rawSong: unknown, fieldsByTrack: Map<string, JsonRecord>): VocaDbAlbumTrack {
   const songTrackRecord = expectRecord(rawSong);
-  const discNumber = expectOptionalNumber(songTrackRecord.discNumber) ?? 0;
-  const trackNumber = expectOptionalNumber(songTrackRecord.trackNumber) ?? 0;
+  const discNumber = expectNumber(songTrackRecord.discNumber);
+  const trackNumber = expectNumber(songTrackRecord.trackNumber);
   const field = fieldsByTrack.get(trackKey(discNumber, trackNumber));
   const songRecord = songTrackRecord.song == null ? undefined : expectRecord(songTrackRecord.song);
-  const songId = songRecord == null ? null : expectOptionalNumber(songRecord.id) ?? null;
+  const songId = songRecord == null ? null : expectNumber(songRecord.id);
 
   return {
     discNumber,
@@ -226,7 +222,7 @@ export async function searchVocaDbAlbums(query: string): Promise<VocaDbAlbumCand
     })
   ));
 
-  const items = expectOptionalArray(data.items);
+  const items = expectArray(data.items);
 
   return items.map((item) => normalizeSearchItem(item));
 }
@@ -248,7 +244,8 @@ export async function getVocaDbAlbum(albumId: number): Promise<VocaDbAlbumDetail
   ]);
 
   const album = expectRecord(albumResponse);
-  const songs = expectOptionalArray(album.songs);
+  const albumIdFromResponse = expectNumber(album.id);
+  const songs = expectArray(album.songs);
   const fields = expectArray(trackFieldsResponse);
 
   const fieldsByTrack = new Map(
@@ -256,8 +253,8 @@ export async function getVocaDbAlbum(albumId: number): Promise<VocaDbAlbumDetail
       const fieldRecord = expectRecord(field);
       return [
         trackKey(
-          expectOptionalNumber(fieldRecord.discNumber) ?? 0,
-          expectOptionalNumber(fieldRecord.trackNumber) ?? 0
+          expectNumber(fieldRecord.discNumber),
+          expectNumber(fieldRecord.trackNumber)
         ),
         fieldRecord
       ];
@@ -265,10 +262,10 @@ export async function getVocaDbAlbum(albumId: number): Promise<VocaDbAlbumDetail
   );
 
   return {
-    id: expectOptionalNumber(album.id) ?? albumId,
+    id: albumIdFromResponse,
     name: normalizeString(album.name),
     artistString: normalizeString(album.artistString),
-    url: albumUrl(expectOptionalNumber(album.id) ?? albumId),
+    url: albumUrl(albumIdFromResponse),
     tracks: songs.map((rawSong) => normalizeTrack(rawSong, fieldsByTrack))
   };
 }

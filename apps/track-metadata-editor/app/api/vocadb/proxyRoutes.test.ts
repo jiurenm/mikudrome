@@ -243,6 +243,38 @@ describe("VocaDB API proxy routes", () => {
     expect(await response.json()).toEqual({ error: "Malformed VocaDB response." });
   });
 
+  it("returns 502 when VocaDB search response omits items", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+    );
+
+    const response = await searchVocaDbAlbums(
+      new Request("http://localhost/api/vocadb/albums/search?query=Miku")
+    );
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: "Malformed VocaDB response." });
+  });
+
+  it("returns 502 when VocaDB search item id is missing", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ items: [{ name: "Miku Expo", artistString: "Hatsune Miku" }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+    );
+
+    const response = await searchVocaDbAlbums(
+      new Request("http://localhost/api/vocadb/albums/search?query=Miku")
+    );
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: "Malformed VocaDB response." });
+  });
+
   it("returns 502 when VocaDB album track fields is not an array", async () => {
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
@@ -258,6 +290,62 @@ describe("VocaDB API proxy routes", () => {
       )
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ tracks: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      );
+
+    const response = await getVocaDbAlbum(
+      new Request("http://localhost/api/vocadb/albums/42"),
+      { params: Promise.resolve({ albumId: "42" }) }
+    );
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: "Malformed VocaDB response." });
+  });
+
+  it("returns 502 when VocaDB album id is missing", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            name: "Miku Expo",
+            artistString: "Hatsune Miku",
+            songs: []
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      );
+
+    const response = await getVocaDbAlbum(
+      new Request("http://localhost/api/vocadb/albums/42"),
+      { params: Promise.resolve({ albumId: "42" }) }
+    );
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: "Malformed VocaDB response." });
+  });
+
+  it("returns 502 when VocaDB album songs is missing", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 42,
+            name: "Miku Expo",
+            artistString: "Hatsune Miku"
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([]), {
           status: 200,
           headers: { "content-type": "application/json" }
         })
@@ -301,6 +389,35 @@ describe("VocaDB API proxy routes", () => {
     expect(await response.json()).toEqual({ error: "Malformed VocaDB response." });
   });
 
+  it("returns 502 when VocaDB album song track numbers are missing", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 42,
+            name: "Miku Expo",
+            artistString: "Hatsune Miku",
+            songs: [{ song: null }]
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      );
+
+    const response = await getVocaDbAlbum(
+      new Request("http://localhost/api/vocadb/albums/42"),
+      { params: Promise.resolve({ albumId: "42" }) }
+    );
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: "Malformed VocaDB response." });
+  });
+
   it("returns 502 when VocaDB album track field elements are malformed", async () => {
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
@@ -316,6 +433,35 @@ describe("VocaDB API proxy routes", () => {
       )
       .mockResolvedValueOnce(
         new Response(JSON.stringify([null]), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      );
+
+    const response = await getVocaDbAlbum(
+      new Request("http://localhost/api/vocadb/albums/42"),
+      { params: Promise.resolve({ albumId: "42" }) }
+    );
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: "Malformed VocaDB response." });
+  });
+
+  it("returns 502 when VocaDB album track field numbers are missing", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 42,
+            name: "Miku Expo",
+            artistString: "Hatsune Miku",
+            songs: []
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ title: "Sharing The World" }]), {
           status: 200,
           headers: { "content-type": "application/json" }
         })
