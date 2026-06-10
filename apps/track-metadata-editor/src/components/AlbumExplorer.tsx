@@ -6,6 +6,9 @@ interface AlbumExplorerProps {
   selectedTrackId: number | null;
   dirtyTrackId: number | null;
   onSelectTrack: (trackId: number) => void;
+  onMatchAlbum: (albumId: number) => void;
+  isMatchDisabled: boolean;
+  isTrackSelectionDisabled: boolean;
   search: string;
   onSearchChange: (value: string) => void;
 }
@@ -27,6 +30,9 @@ export function AlbumExplorer({
   selectedTrackId,
   dirtyTrackId,
   onSelectTrack,
+  onMatchAlbum,
+  isMatchDisabled,
+  isTrackSelectionDisabled,
   search,
   onSearchChange
 }: AlbumExplorerProps) {
@@ -64,15 +70,26 @@ export function AlbumExplorer({
           const isCollapsed = collapsedAlbumIds.has(group.album.id);
           return (
             <section className="album-card" key={group.album.id}>
-              <button
-                type="button"
-                className="album-row"
-                aria-expanded={!isCollapsed}
-                onClick={() => toggleAlbum(group.album.id)}
-              >
-                <span>{isCollapsed ? "▸" : "▾"}</span>
-                <span>{group.album.title}</span>
-              </button>
+              <div className="album-row">
+                <button
+                  type="button"
+                  className="album-row__toggle"
+                  aria-expanded={!isCollapsed}
+                  onClick={() => toggleAlbum(group.album.id)}
+                >
+                  <span>{isCollapsed ? "▸" : "▾"}</span>
+                  <span>{group.album.title}</span>
+                </button>
+                <button
+                  type="button"
+                  className="album-row__match"
+                  aria-label={`Match VocaDB for ${group.album.title} album ${group.album.id}`}
+                  onClick={() => onMatchAlbum(group.album.id)}
+                  disabled={isMatchDisabled}
+                >
+                  Match VocaDB
+                </button>
+              </div>
               {!isCollapsed && (
                 <div className="track-list">
                   {group.tracks.map((track) => {
@@ -84,6 +101,7 @@ export function AlbumExplorer({
                         className={`track-row${isSelected ? " track-row--selected" : ""}`}
                         key={track.id}
                         onClick={() => onSelectTrack(track.id)}
+                        disabled={isTrackSelectionDisabled}
                       >
                         <span className="track-row__title">
                           {padTrackNumber(track.track_number)} {track.title}

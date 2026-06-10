@@ -43,6 +43,9 @@ function createApiClientMock(rows: TrackMetadataRow[]) {
   const apiClient: ApiClient = {
     listTrackMetadata,
     patchTrackMetadata,
+    patchTrackMetadataBatch: vi.fn(),
+    searchVocaDbAlbums: vi.fn(),
+    getVocaDbAlbum: vi.fn(),
     albumCoverUrl: (albumId: number) => `/api/albums/${albumId}/cover`
   };
 
@@ -65,6 +68,7 @@ describe("useTrackMetadataEditor", () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(listTrackMetadata).toHaveBeenCalledTimes(1);
+    expect(result.current.allRows).toEqual([row]);
     expect(result.current.rows).toEqual([row]);
     expect(result.current.selectedTrackId).toBeNull();
   });
@@ -118,6 +122,33 @@ describe("useTrackMetadataEditor", () => {
     expect(result.current.draft).toEqual(createDraftFromRow(savedRow));
     expect(result.current.isDirty).toBe(false);
     expect(result.current.successMessage).toBe("Saved.");
+  });
+
+  it("replaces rows in memory and refreshes the selected draft", async () => {
+    const selectedRow = createRow();
+    const otherRow = createRow({ id: 102, title: "Packaged", track_number: 10 });
+    const savedSelectedRow = createRow({ composer: "ryo", lyricist: "ryo" });
+    const savedOtherRow = createRow({ id: 102, title: "Packaged", track_number: 10, composer: "kz" });
+    const { apiClient } = createApiClientMock([selectedRow, otherRow]);
+
+    const { result } = renderHook(() => useTrackMetadataEditor(apiClient));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    act(() => {
+      expect(result.current.selectTrack(selectedRow.id)).toBe(true);
+      result.current.updateDraft("composer", "draft change");
+    });
+    expect(result.current.isDirty).toBe(true);
+
+    act(() => {
+      result.current.replaceRows([savedSelectedRow, savedOtherRow]);
+    });
+
+    expect(result.current.allRows).toEqual([savedSelectedRow, savedOtherRow]);
+    expect(result.current.rows).toEqual([savedSelectedRow, savedOtherRow]);
+    expect(result.current.selectedRow).toEqual(savedSelectedRow);
+    expect(result.current.draft).toEqual(createDraftFromRow(savedSelectedRow));
+    expect(result.current.isDirty).toBe(false);
   });
 
   it("reload refreshes selected draft from latest server row and keeps clean state", async () => {

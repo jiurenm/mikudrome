@@ -2,14 +2,19 @@ import { useEffect, useMemo } from "react";
 import { createApiClient } from "../api/client";
 import { AlbumExplorer } from "../components/AlbumExplorer";
 import { TrackEditorPanel } from "../components/TrackEditorPanel";
+import { VocaDbAlbumMatcherPanel } from "../components/VocaDbAlbumMatcherPanel";
 import { useTrackMetadataEditor } from "../features/tracks/useTrackMetadataEditor";
+import { useVocaDbAlbumMatcher } from "../features/vocadb/useVocaDbAlbumMatcher";
 
 export default function App() {
   const client = useMemo(() => createApiClient(), []);
   const editor = useTrackMetadataEditor(client);
+  const matcher = useVocaDbAlbumMatcher(client, editor.allRows, editor.replaceRows);
+  const isMatcherDirty =
+    matcher.successMessage == null && matcher.suggestions.some((suggestion) => suggestion.selected);
 
   useEffect(() => {
-    if (!editor.isDirty) {
+    if (!editor.isDirty && !matcher.isSaving && !isMatcherDirty) {
       return;
     }
 
@@ -22,9 +27,13 @@ export default function App() {
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [editor.isDirty]);
+  }, [editor.isDirty, matcher.isSaving, isMatcherDirty]);
 
   const handleSelectTrack = (trackId: number) => {
+    if (matcher.isSaving) {
+      return;
+    }
+
     if (trackId === editor.selectedTrackId) {
       return;
     }
@@ -33,6 +42,56 @@ export default function App() {
       return;
     }
     editor.selectTrack(trackId, true);
+  };
+
+  const handleMatchAlbum = (albumId: number) => {
+    if (matcher.isSaving) {
+      return;
+    }
+
+    if (editor.isDirty || isMatcherDirty) {
+      if (!window.confirm("Discard unsaved changes?")) {
+        return;
+      }
+    }
+
+    if (editor.isDirty) {
+      editor.resetDraft();
+    }
+
+    void matcher.start(albumId);
+  };
+
+  const handleCloseMatcher = () => {
+    if (matcher.isSaving) {
+      return;
+    }
+
+    if (isMatcherDirty && !window.confirm("Discard unsaved changes?")) {
+      return;
+    }
+
+    matcher.cancel();
+  };
+
+  const canDiscardMatcherChanges = () => {
+    return !isMatcherDirty || window.confirm("Discard unsaved changes?");
+  };
+
+  const handleLoadMatcherAlbum = (albumId: number) => {
+    if (matcher.isSaving || !canDiscardMatcherChanges()) {
+      return;
+    }
+
+    void matcher.loadAlbum(albumId);
+  };
+
+  const handleLoadMatcherAlbumFromInput = () => {
+    if (matcher.isSaving || !canDiscardMatcherChanges()) {
+      return;
+    }
+
+    void matcher.loadAlbumFromInput();
   };
 
   if (editor.isLoading) {
@@ -70,23 +129,35 @@ export default function App() {
         selectedTrackId={editor.selectedTrackId}
         dirtyTrackId={dirtyTrackId}
         onSelectTrack={handleSelectTrack}
+        onMatchAlbum={handleMatchAlbum}
+        isMatchDisabled={matcher.isSaving}
+        isTrackSelectionDisabled={matcher.isSaving}
         search={editor.search}
         onSearchChange={editor.setSearch}
       />
-      <TrackEditorPanel
-        row={editor.selectedRow}
-        draft={editor.draft}
-        getAlbumCoverUrl={client.albumCoverUrl}
-        isDirty={editor.isDirty}
-        isSaving={editor.isSaving}
-        saveError={editor.saveError}
-        successMessage={editor.successMessage}
-        onChange={editor.updateDraft}
-        onReset={editor.resetDraft}
-        onSave={() => {
-          void editor.save();
-        }}
-      />
+      {matcher.activeAlbumId == null ? (
+        <TrackEditorPanel
+          row={editor.selectedRow}
+          draft={editor.draft}
+          getAlbumCoverUrl={client.albumCoverUrl}
+          isDirty={editor.isDirty}
+          isSaving={editor.isSaving}
+          saveError={editor.saveError}
+          successMessage={editor.successMessage}
+          onChange={editor.updateDraft}
+          onReset={editor.resetDraft}
+          onSave={() => {
+            void editor.save();
+          }}
+        />
+      ) : (
+        <VocaDbAlbumMatcherPanel
+          matcher={matcher}
+          onClose={handleCloseMatcher}
+          onLoadAlbum={handleLoadMatcherAlbum}
+          onLoadAlbumFromInput={handleLoadMatcherAlbumFromInput}
+        />
+      )}
     </main>
   );
 }

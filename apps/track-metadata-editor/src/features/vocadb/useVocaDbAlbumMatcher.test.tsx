@@ -140,6 +140,15 @@ describe("useVocaDbAlbumMatcher", () => {
     });
     expect(onRowsSaved).toHaveBeenCalledWith([{ ...row, composer: "ryo", lyricist: "ryo" }]);
     expect(result.current.successMessage).toBe("Saved VocaDB metadata.");
+    expect(result.current.suggestions).toEqual([]);
+
+    await act(async () => {
+      await result.current.save();
+    });
+
+    expect(client.patchTrackMetadataBatch).toHaveBeenCalledTimes(1);
+    expect(result.current.saveError).toBeNull();
+    expect(result.current.successMessage).toBe("Saved VocaDB metadata.");
   });
 
   it("keeps preview state when save fails", async () => {

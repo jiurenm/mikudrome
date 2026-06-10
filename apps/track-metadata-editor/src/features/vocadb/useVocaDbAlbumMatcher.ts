@@ -212,6 +212,9 @@ export function useVocaDbAlbumMatcher(
   const save = useCallback(async () => {
     const batchPatch = buildBatchPatchFromSelections(suggestionsRef.current);
     if (batchPatch.updates.length === 0) {
+      if (successMessage != null) {
+        return;
+      }
       setSaveError("Select at least one VocaDB metadata field.");
       setSuccessMessage(null);
       return;
@@ -228,6 +231,8 @@ export function useVocaDbAlbumMatcher(
         return;
       }
       onRowsSaved(savedRows);
+      suggestionsRef.current = [];
+      setSuggestions([]);
       setSuccessMessage("Saved VocaDB metadata.");
     } catch {
       if (workflowTokenRef.current !== workflowToken || saveRequestIdRef.current !== requestId) {
@@ -239,7 +244,7 @@ export function useVocaDbAlbumMatcher(
         setIsSaving(false);
       }
     }
-  }, [apiClient, onRowsSaved]);
+  }, [apiClient, onRowsSaved, successMessage]);
 
   return {
     activeAlbumId,
