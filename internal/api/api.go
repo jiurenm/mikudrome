@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -92,8 +93,15 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.listTracks(w, r)
 		return
 	}
-	if r.URL.Path == "/api/tracks/metadata" && r.Method == http.MethodGet {
-		h.listTrackMetadata(w, r)
+	if r.URL.Path == "/api/tracks/metadata" {
+		switch r.Method {
+		case http.MethodGet:
+			h.listTrackMetadata(w, r)
+		case http.MethodPatch:
+			h.patchTrackMetadataBatch(w, r)
+		default:
+			jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/tracks/") {
@@ -440,6 +448,15 @@ func (h *Handler) getTrack(w http.ResponseWriter, _ *http.Request, idStr string)
 	_ = json.NewEncoder(w).Encode(TrackDTO{Track: track, IsFavorite: h.loadFavSet()[track.ID]})
 }
 
+type trackMetadataBatchPatchRequest struct {
+	Updates []trackMetadataBatchPatchItem `json:"updates"`
+}
+
+type trackMetadataBatchPatchItem struct {
+	TrackID int64                    `json:"track_id"`
+	Patch   store.TrackMetadataPatch `json:"patch"`
+}
+
 func (h *Handler) patchTrackMetadata(w http.ResponseWriter, r *http.Request, idStr string) {
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
@@ -468,6 +485,47 @@ func (h *Handler) patchTrackMetadata(w http.ResponseWriter, r *http.Request, idS
 		return
 	}
 	writeJSON(w, http.StatusOK, row)
+}
+
+func (h *Handler) patchTrackMetadataBatch(w http.ResponseWriter, r *http.Request) {
+	var body trackMetadataBatchPatchRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&body); err != nil {
+		jsonError(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+	var trailing struct{}
+	if err := dec.Decode(&trailing); err != io.EOF {
+		jsonError(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+
+	updates := make([]store.TrackMetadataBatchUpdate, 0, len(body.Updates))
+	for _, item := range body.Updates {
+		updates = append(updates, store.TrackMetadataBatchUpdate{
+			TrackID: item.TrackID,
+			Patch:   item.Patch,
+		})
+	}
+
+	rows, err := h.store.UpdateTrackMetadataBatch(updates)
+	if err != nil {
+		switch {
+		case errors.Is(err, store.ErrTrackMetadataTrackNotFound):
+			jsonError(w, "track not found", http.StatusNotFound)
+		case errors.Is(err, store.ErrTrackMetadataBatchEmpty),
+			errors.Is(err, store.ErrTrackMetadataInvalidTrackID),
+			errors.Is(err, store.ErrTrackMetadataDuplicateTrackID),
+			errors.Is(err, store.ErrTrackMetadataEmptyPatch):
+			jsonError(w, "invalid batch metadata patch", http.StatusBadRequest)
+		default:
+			jsonError(w, "internal", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"tracks": rows})
 }
 
 func (h *Handler) downloadTrackMV(w http.ResponseWriter, r *http.Request, idStr string) {
