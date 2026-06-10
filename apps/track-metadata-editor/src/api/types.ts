@@ -47,3 +47,43 @@ export interface TrackMetadataBatchPatch {
 export interface TrackMetadataBatchResponse {
   tracks: TrackMetadataRow[];
 }
+
+export interface VocaDbAlbumCandidate {
+  id: number;
+  name: string;
+  artistString: string;
+  url: string;
+  releaseDate: string;
+}
+
+export interface VocaDbArtistRoleCredit {
+  name: string;
+  roles: string[];
+}
+
+export interface VocaDbAlbumTrack {
+  discNumber: number;
+  trackNumber: number;
+  title: string;
+  songId: number | null;
+  url: string;
+  producers: string[];
+  vocalists: string[];
+  artists: VocaDbArtistRoleCredit[];
+}
+
+export interface VocaDbAlbumDetail {
+  id: number;
+  name: string;
+  artistString: string;
+  url: string;
+  tracks: VocaDbAlbumTrack[];
+}
+
+export interface VocaDbAlbumSearchResponse {
+  albums: VocaDbAlbumCandidate[];
+}
+
+export interface VocaDbAlbumDetailResponse {
+  album: VocaDbAlbumDetail;
+}

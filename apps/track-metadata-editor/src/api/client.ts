@@ -2,7 +2,11 @@ import type {
   TrackMetadataBatchPatch,
   TrackMetadataBatchResponse,
   TrackMetadataPatch,
-  TrackMetadataRow
+  TrackMetadataRow,
+  VocaDbAlbumCandidate,
+  VocaDbAlbumDetail,
+  VocaDbAlbumDetailResponse,
+  VocaDbAlbumSearchResponse
 } from "./types";
 
 export class ApiError extends Error {
@@ -20,6 +24,8 @@ export interface ApiClient {
   patchTrackMetadata(trackId: number, patch: TrackMetadataPatch): Promise<TrackMetadataRow>;
   patchTrackMetadataBatch(patch: TrackMetadataBatchPatch): Promise<TrackMetadataRow[]>;
   albumCoverUrl(albumId: number): string;
+  searchVocaDbAlbums(query: string): Promise<VocaDbAlbumCandidate[]>;
+  getVocaDbAlbum(albumId: number): Promise<VocaDbAlbumDetail>;
 }
 
 interface TrackListResponse {
@@ -78,6 +84,31 @@ export function createApiClient(): ApiClient {
 
     albumCoverUrl(albumId) {
       return `/api/albums/${albumId}/cover`;
+    },
+
+    async searchVocaDbAlbums(query) {
+      const params = new URLSearchParams({ query });
+      const response = await fetch(`/api/vocadb/albums/search?${params.toString()}`, {
+        method: "GET"
+      });
+      if (!response.ok) {
+        await throwApiError(response);
+      }
+
+      const data = (await response.json()) as VocaDbAlbumSearchResponse;
+      return data.albums;
+    },
+
+    async getVocaDbAlbum(albumId) {
+      const response = await fetch(`/api/vocadb/albums/${albumId}`, {
+        method: "GET"
+      });
+      if (!response.ok) {
+        await throwApiError(response);
+      }
+
+      const data = (await response.json()) as VocaDbAlbumDetailResponse;
+      return data.album;
     }
   };
 }
