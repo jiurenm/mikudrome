@@ -4,6 +4,7 @@ import type { TrackMetadataRow, VocaDbAlbumCandidate, VocaDbAlbumDetail } from "
 import {
   buildBatchPatchFromTrackReviews,
   buildVocaDbTrackReviews,
+  isVocaDbFieldChanged,
   parseVocaDbAlbumId,
   type VocaDbFieldReview,
   type VocaDbFieldSuggestion,
@@ -47,11 +48,7 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 function isChangedSuggestion(field: VocaDbFieldReview): boolean {
-  return (
-    field.available &&
-    field.suggestedValue.trim() !== "" &&
-    field.currentValue.trim() !== field.suggestedValue.trim()
-  );
+  return field.available && isVocaDbFieldChanged(field.field, field.currentValue, field.suggestedValue);
 }
 
 export function useVocaDbAlbumMatcher(

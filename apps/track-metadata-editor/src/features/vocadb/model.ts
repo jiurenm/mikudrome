@@ -137,7 +137,15 @@ export function buildVocaDbSuggestions(
 ): VocaDbFieldSuggestion[] {
   return buildVocaDbTrackReviews(localRows, album)
     .flatMap((review) => review.fields)
-    .filter((field) => field.available && !valuesMatch(field.field, field.currentValue, field.suggestedValue));
+    .filter((field) => field.available && isVocaDbFieldChanged(field.field, field.currentValue, field.suggestedValue));
+}
+
+export function isVocaDbFieldChanged(
+  field: EditableField,
+  currentValue: string,
+  suggestedValue: string
+): boolean {
+  return suggestedValue.trim() !== "" && !valuesMatch(field, currentValue, suggestedValue);
 }
 
 export function buildVocaDbTrackReviews(

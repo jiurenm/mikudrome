@@ -130,6 +130,30 @@ describe("useVocaDbAlbumMatcher", () => {
     expect(result.current.suggestions.map((suggestion) => suggestion.field)).not.toContain("composer");
   });
 
+  it("keeps compatibility suggestions aligned with vocal normalization changes", async () => {
+    const equivalentVocalRow = { ...row, vocal: "Hatsune Miku" };
+    const client = createClient();
+    const { result } = renderHook(() =>
+      useVocaDbAlbumMatcher(client, [equivalentVocalRow], vi.fn())
+    );
+
+    await act(async () => {
+      await result.current.start(equivalentVocalRow.album_id);
+      await result.current.loadAlbum(42);
+    });
+
+    act(() => {
+      result.current.editSuggestion("1-vocal", "Hatsune Miku V6");
+    });
+
+    expect(result.current.trackReviews[0].fields.find((field) => field.id === "1-vocal")).toMatchObject({
+      currentValue: "Hatsune Miku",
+      suggestedValue: "Hatsune Miku V6",
+      available: true
+    });
+    expect(result.current.suggestions.map((suggestion) => suggestion.field)).not.toContain("vocal");
+  });
+
   it("edits an active track suggestion and saves the edited batch value", async () => {
     const onRowsSaved = vi.fn();
     const client = createClient();
