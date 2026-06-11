@@ -42,6 +42,114 @@ function albumToggleName(albumTitle: string): RegExp {
   return new RegExp(`^[▸▾]\\s*${albumTitle}$`, "i");
 }
 
+interface VocaDbCandidateFixture {
+  id: number;
+  name: string;
+  artistString: string;
+  releaseDate?: string;
+}
+
+interface VocaDbTrackFixture {
+  discNumber: number;
+  trackNumber: number;
+  title: string;
+  songId: number;
+  url: string;
+  producers: string[];
+  vocalists: string[];
+}
+
+function isVocaDbSearchUrl(url: string): boolean {
+  return url.startsWith("https://vocadb.net/api/albums?");
+}
+
+function isVocaDbAlbumUrl(url: string, albumId: number): boolean {
+  return url.startsWith(`https://vocadb.net/api/albums/${albumId}?`);
+}
+
+function isVocaDbTrackFieldsUrl(url: string, albumId: number): boolean {
+  return url.startsWith(`https://vocadb.net/api/albums/${albumId}/tracks/fields?`);
+}
+
+function isVocaDbSongDetailsUrl(url: string, songId: number, albumId: number): boolean {
+  return url === `https://vocadb.net/api/songs/${songId}/details?albumId=${albumId}`;
+}
+
+function createVocaDbSearchResponse(candidates: VocaDbCandidateFixture[]): Response {
+  return new Response(
+    JSON.stringify({
+      items: candidates.map((candidate) => ({
+        id: candidate.id,
+        name: candidate.name,
+        artistString: candidate.artistString,
+        releaseDate: candidate.releaseDate ?? ""
+      }))
+    }),
+    { status: 200 }
+  );
+}
+
+function createVocaDbAlbumResponse(
+  album: { id: number; name: string; artistString: string },
+  tracks: VocaDbTrackFixture[]
+): Response {
+  return new Response(
+    JSON.stringify({
+      id: album.id,
+      name: album.name,
+      artistString: album.artistString,
+      songs: tracks.map((track) => ({
+        discNumber: track.discNumber,
+        trackNumber: track.trackNumber,
+        song: {
+          id: track.songId,
+          name: track.title,
+          artists: []
+        }
+      }))
+    }),
+    { status: 200 }
+  );
+}
+
+function createVocaDbTrackFieldsResponse(tracks: VocaDbTrackFixture[]): Response {
+  return new Response(
+    JSON.stringify(
+      tracks.map((track) => ({
+        discNumber: track.discNumber,
+        trackNumber: track.trackNumber,
+        title: track.title,
+        producers: track.producers.join(", "),
+        vocalists: track.vocalists.join(", "),
+        url: track.url
+      }))
+    ),
+    { status: 200 }
+  );
+}
+
+function createVocaDbSongDetailsResponse(track: VocaDbTrackFixture): Response {
+  return new Response(
+    JSON.stringify({
+      artists: [
+        ...track.producers.map((producer) => ({
+          name: producer,
+          categories: "Producer",
+          effectiveRoles: "Composer, Lyricist",
+          roles: "Composer, Lyricist"
+        })),
+        ...track.vocalists.map((vocalist) => ({
+          name: vocalist,
+          categories: "Vocalist",
+          effectiveRoles: "Vocalist",
+          roles: "Vocalist"
+        }))
+      ]
+    }),
+    { status: 200 }
+  );
+}
+
 describe("App", () => {
   afterEach(() => {
     cleanup();
@@ -346,38 +454,48 @@ describe("App", () => {
       if (method === "GET" && url.endsWith("/api/tracks/metadata")) {
         return new Response(JSON.stringify({ tracks: [row] }), { status: 200 });
       }
-      if (method === "GET" && url.includes("/api/vocadb/albums/search")) {
-        return new Response(
-          JSON.stringify({
-            albums: [{ id: 42, name: "Miku Works", artistString: "ryo", url: "https://vocadb.net/Al/42", releaseDate: "" }]
-          }),
-          { status: 200 }
+      if (method === "GET" && isVocaDbSearchUrl(url)) {
+        return createVocaDbSearchResponse([{ id: 42, name: "Miku Works", artistString: "ryo" }]);
+      }
+      if (method === "GET" && isVocaDbAlbumUrl(url, 42)) {
+        return createVocaDbAlbumResponse(
+          { id: 42, name: "Miku Works", artistString: "ryo" },
+          [
+            {
+              discNumber: 1,
+              trackNumber: 1,
+              title: "Glow",
+              songId: 100,
+              url: "https://vocadb.net/S/100",
+              producers: ["ryo"],
+              vocalists: ["Hatsune Miku V6"]
+            }
+          ]
         );
       }
-      if (method === "GET" && url.endsWith("/api/vocadb/albums/42")) {
-        return new Response(
-          JSON.stringify({
-            album: {
-              id: 42,
-              name: "Miku Works",
-              artistString: "ryo",
-              url: "https://vocadb.net/Al/42",
-              tracks: [
-                {
-                  discNumber: 1,
-                  trackNumber: 1,
-                  title: "Glow",
-                  songId: 100,
-                  url: "https://vocadb.net/S/100",
-                  producers: ["ryo"],
-                  vocalists: ["Hatsune Miku V6"],
-                  artists: []
-                }
-              ]
-            }
-          }),
-          { status: 200 }
-        );
+      if (method === "GET" && isVocaDbTrackFieldsUrl(url, 42)) {
+        return createVocaDbTrackFieldsResponse([
+          {
+            discNumber: 1,
+            trackNumber: 1,
+            title: "Glow",
+            songId: 100,
+            url: "https://vocadb.net/S/100",
+            producers: ["ryo"],
+            vocalists: ["Hatsune Miku V6"]
+          }
+        ]);
+      }
+      if (method === "GET" && isVocaDbSongDetailsUrl(url, 100, 42)) {
+        return createVocaDbSongDetailsResponse({
+          discNumber: 1,
+          trackNumber: 1,
+          title: "Glow",
+          songId: 100,
+          url: "https://vocadb.net/S/100",
+          producers: ["ryo"],
+          vocalists: ["Hatsune Miku V6"]
+        });
       }
       if (method === "PATCH" && url.endsWith("/api/tracks/metadata")) {
         return new Response(JSON.stringify({ tracks: [savedRow] }), { status: 200 });
@@ -435,48 +553,77 @@ describe("App", () => {
       if (method === "GET" && url.endsWith("/api/tracks/metadata")) {
         return new Response(JSON.stringify({ tracks: [firstRow, secondRow] }), { status: 200 });
       }
-      if (method === "GET" && url.includes("/api/vocadb/albums/search")) {
-        return new Response(
-          JSON.stringify({
-            albums: [{ id: 42, name: "Miku Works", artistString: "ryo", url: "https://vocadb.net/Al/42", releaseDate: "" }]
-          }),
-          { status: 200 }
+      if (method === "GET" && isVocaDbSearchUrl(url)) {
+        return createVocaDbSearchResponse([{ id: 42, name: "Miku Works", artistString: "ryo" }]);
+      }
+      if (method === "GET" && isVocaDbAlbumUrl(url, 42)) {
+        return createVocaDbAlbumResponse(
+          { id: 42, name: "Miku Works", artistString: "ryo" },
+          [
+            {
+              discNumber: 1,
+              trackNumber: 1,
+              title: "Glow",
+              songId: 100,
+              url: "https://vocadb.net/S/100",
+              producers: ["ryo"],
+              vocalists: ["Hatsune Miku V6"]
+            },
+            {
+              discNumber: 1,
+              trackNumber: 2,
+              title: "Spark",
+              songId: 101,
+              url: "https://vocadb.net/S/101",
+              producers: ["ryo"],
+              vocalists: ["Hatsune Miku V6"]
+            }
+          ]
         );
       }
-      if (method === "GET" && url.endsWith("/api/vocadb/albums/42")) {
-        return new Response(
-          JSON.stringify({
-            album: {
-              id: 42,
-              name: "Miku Works",
-              artistString: "ryo",
-              url: "https://vocadb.net/Al/42",
-              tracks: [
-                {
-                  discNumber: 1,
-                  trackNumber: 1,
-                  title: "Glow",
-                  songId: 100,
-                  url: "https://vocadb.net/S/100",
-                  producers: ["ryo"],
-                  vocalists: ["Hatsune Miku V6"],
-                  artists: []
-                },
-                {
-                  discNumber: 1,
-                  trackNumber: 2,
-                  title: "Spark",
-                  songId: 101,
-                  url: "https://vocadb.net/S/101",
-                  producers: ["ryo"],
-                  vocalists: ["Hatsune Miku V6"],
-                  artists: []
-                }
-              ]
-            }
-          }),
-          { status: 200 }
-        );
+      if (method === "GET" && isVocaDbTrackFieldsUrl(url, 42)) {
+        return createVocaDbTrackFieldsResponse([
+          {
+            discNumber: 1,
+            trackNumber: 1,
+            title: "Glow",
+            songId: 100,
+            url: "https://vocadb.net/S/100",
+            producers: ["ryo"],
+            vocalists: ["Hatsune Miku V6"]
+          },
+          {
+            discNumber: 1,
+            trackNumber: 2,
+            title: "Spark",
+            songId: 101,
+            url: "https://vocadb.net/S/101",
+            producers: ["ryo"],
+            vocalists: ["Hatsune Miku V6"]
+          }
+        ]);
+      }
+      if (method === "GET" && isVocaDbSongDetailsUrl(url, 100, 42)) {
+        return createVocaDbSongDetailsResponse({
+          discNumber: 1,
+          trackNumber: 1,
+          title: "Glow",
+          songId: 100,
+          url: "https://vocadb.net/S/100",
+          producers: ["ryo"],
+          vocalists: ["Hatsune Miku V6"]
+        });
+      }
+      if (method === "GET" && isVocaDbSongDetailsUrl(url, 101, 42)) {
+        return createVocaDbSongDetailsResponse({
+          discNumber: 1,
+          trackNumber: 2,
+          title: "Spark",
+          songId: 101,
+          url: "https://vocadb.net/S/101",
+          producers: ["ryo"],
+          vocalists: ["Hatsune Miku V6"]
+        });
       }
       throw new Error(`Unexpected request: ${method} ${url}`);
     });
@@ -512,61 +659,67 @@ describe("App", () => {
       if (method === "GET" && url.endsWith("/api/tracks/metadata")) {
         return Promise.resolve(new Response(JSON.stringify({ tracks: [firstRow, secondRow] }), { status: 200 }));
       }
-      if (method === "GET" && url.includes("/api/vocadb/albums/search")) {
+      if (method === "GET" && isVocaDbSearchUrl(url)) {
         return Promise.resolve(
-          new Response(
-            JSON.stringify({
-              albums: [
-                { id: 42, name: "Miku Works", artistString: "ryo", url: "https://vocadb.net/Al/42", releaseDate: "" },
-                { id: 99, name: "Other Works", artistString: "kz", url: "https://vocadb.net/Al/99", releaseDate: "" }
-              ]
-            }),
-            { status: 200 }
+          createVocaDbSearchResponse([
+            { id: 42, name: "Miku Works", artistString: "ryo" },
+            { id: 99, name: "Other Works", artistString: "kz" }
+          ])
+        );
+      }
+      if (method === "GET" && isVocaDbAlbumUrl(url, 42)) {
+        return Promise.resolve(
+          createVocaDbAlbumResponse(
+            { id: 42, name: "Miku Works", artistString: "ryo" },
+            [
+              {
+                discNumber: 1,
+                trackNumber: 1,
+                title: "Glow",
+                songId: 100,
+                url: "https://vocadb.net/S/100",
+                producers: ["ryo"],
+                vocalists: ["Hatsune Miku V6"]
+              }
+            ]
           )
         );
       }
-      if (method === "GET" && url.endsWith("/api/vocadb/albums/42")) {
+      if (method === "GET" && isVocaDbTrackFieldsUrl(url, 42)) {
         return Promise.resolve(
-          new Response(
-            JSON.stringify({
-              album: {
-                id: 42,
-                name: "Miku Works",
-                artistString: "ryo",
-                url: "https://vocadb.net/Al/42",
-                tracks: [
-                  {
-                    discNumber: 1,
-                    trackNumber: 1,
-                    title: "Glow",
-                    songId: 100,
-                    url: "https://vocadb.net/S/100",
-                    producers: ["ryo"],
-                    vocalists: ["Hatsune Miku V6"],
-                    artists: []
-                  }
-                ]
-              }
-            }),
-            { status: 200 }
-          )
+          createVocaDbTrackFieldsResponse([
+            {
+              discNumber: 1,
+              trackNumber: 1,
+              title: "Glow",
+              songId: 100,
+              url: "https://vocadb.net/S/100",
+              producers: ["ryo"],
+              vocalists: ["Hatsune Miku V6"]
+            }
+          ])
         );
       }
-      if (method === "GET" && url.endsWith("/api/vocadb/albums/99")) {
+      if (method === "GET" && isVocaDbSongDetailsUrl(url, 100, 42)) {
         return Promise.resolve(
-          new Response(
-            JSON.stringify({
-              album: {
-                id: 99,
-                name: "Other Works",
-                artistString: "kz",
-                url: "https://vocadb.net/Al/99",
-                tracks: []
-              }
-            }),
-            { status: 200 }
-          )
+          createVocaDbSongDetailsResponse({
+            discNumber: 1,
+            trackNumber: 1,
+            title: "Glow",
+            songId: 100,
+            url: "https://vocadb.net/S/100",
+            producers: ["ryo"],
+            vocalists: ["Hatsune Miku V6"]
+          })
         );
+      }
+      if (method === "GET" && isVocaDbAlbumUrl(url, 99)) {
+        return Promise.resolve(
+          createVocaDbAlbumResponse({ id: 99, name: "Other Works", artistString: "kz" }, [])
+        );
+      }
+      if (method === "GET" && isVocaDbTrackFieldsUrl(url, 99)) {
+        return Promise.resolve(createVocaDbTrackFieldsResponse([]));
       }
       return Promise.reject(new Error(`Unexpected request: ${method} ${url}`));
     });
@@ -586,7 +739,7 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: /other works.*kz/i }));
     expect(confirmSpy).toHaveBeenCalledWith("Discard unsaved changes?");
     expect(screen.getByText(/Hatsune Miku V6 -> Hatsune Miku/i)).toBeInTheDocument();
-    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/api/vocadb/albums/99"))).toBe(false);
+    expect(fetchMock.mock.calls.some(([input]) => isVocaDbAlbumUrl(String(input), 99))).toBe(false);
 
     const albumInput = screen.getByLabelText("VocaDB album URL or ID");
     await user.clear(albumInput);
@@ -594,7 +747,7 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Load" }));
     expect(confirmSpy).toHaveBeenCalledTimes(2);
     expect(screen.getByText(/Hatsune Miku V6 -> Hatsune Miku/i)).toBeInTheDocument();
-    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/api/vocadb/albums/99"))).toBe(false);
+    expect(fetchMock.mock.calls.some(([input]) => isVocaDbAlbumUrl(String(input), 99))).toBe(false);
 
     await user.click(screen.getByRole("button", { name: "Close" }));
     expect(confirmSpy).toHaveBeenCalledTimes(3);
@@ -637,41 +790,55 @@ describe("App", () => {
       if (method === "GET" && url.endsWith("/api/tracks/metadata")) {
         return Promise.resolve(new Response(JSON.stringify({ tracks: [firstRow, secondRow] }), { status: 200 }));
       }
-      if (method === "GET" && url.includes("/api/vocadb/albums/search")) {
+      if (method === "GET" && isVocaDbSearchUrl(url)) {
         return Promise.resolve(
-          new Response(
-            JSON.stringify({
-              albums: [{ id: 42, name: "Miku Works", artistString: "ryo", url: "https://vocadb.net/Al/42", releaseDate: "" }]
-            }),
-            { status: 200 }
+          createVocaDbSearchResponse([{ id: 42, name: "Miku Works", artistString: "ryo" }])
+        );
+      }
+      if (method === "GET" && isVocaDbAlbumUrl(url, 42)) {
+        return Promise.resolve(
+          createVocaDbAlbumResponse(
+            { id: 42, name: "Miku Works", artistString: "ryo" },
+            [
+              {
+                discNumber: 1,
+                trackNumber: 1,
+                title: "Glow",
+                songId: 100,
+                url: "https://vocadb.net/S/100",
+                producers: ["ryo"],
+                vocalists: ["Hatsune Miku V6"]
+              }
+            ]
           )
         );
       }
-      if (method === "GET" && url.endsWith("/api/vocadb/albums/42")) {
+      if (method === "GET" && isVocaDbTrackFieldsUrl(url, 42)) {
         return Promise.resolve(
-          new Response(
-            JSON.stringify({
-              album: {
-                id: 42,
-                name: "Miku Works",
-                artistString: "ryo",
-                url: "https://vocadb.net/Al/42",
-                tracks: [
-                  {
-                    discNumber: 1,
-                    trackNumber: 1,
-                    title: "Glow",
-                    songId: 100,
-                    url: "https://vocadb.net/S/100",
-                    producers: ["ryo"],
-                    vocalists: ["Hatsune Miku V6"],
-                    artists: []
-                  }
-                ]
-              }
-            }),
-            { status: 200 }
-          )
+          createVocaDbTrackFieldsResponse([
+            {
+              discNumber: 1,
+              trackNumber: 1,
+              title: "Glow",
+              songId: 100,
+              url: "https://vocadb.net/S/100",
+              producers: ["ryo"],
+              vocalists: ["Hatsune Miku V6"]
+            }
+          ])
+        );
+      }
+      if (method === "GET" && isVocaDbSongDetailsUrl(url, 100, 42)) {
+        return Promise.resolve(
+          createVocaDbSongDetailsResponse({
+            discNumber: 1,
+            trackNumber: 1,
+            title: "Glow",
+            songId: 100,
+            url: "https://vocadb.net/S/100",
+            producers: ["ryo"],
+            vocalists: ["Hatsune Miku V6"]
+          })
         );
       }
       if (method === "PATCH" && url.endsWith("/api/tracks/metadata")) {
