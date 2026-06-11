@@ -4,10 +4,12 @@ import type {
   TrackMetadataPatch,
   TrackMetadataRow,
   VocaDbAlbumCandidate,
-  VocaDbAlbumDetail,
-  VocaDbAlbumDetailResponse,
-  VocaDbAlbumSearchResponse
+  VocaDbAlbumDetail
 } from "./types";
+import {
+  getVocaDbAlbum as getVocaDbAlbumDirect,
+  searchVocaDbAlbums as searchVocaDbAlbumsDirect
+} from "./vocadb";
 
 export class ApiError extends Error {
   status: number;
@@ -87,28 +89,11 @@ export function createApiClient(): ApiClient {
     },
 
     async searchVocaDbAlbums(query) {
-      const params = new URLSearchParams({ query });
-      const response = await fetch(`/api/vocadb/albums/search?${params.toString()}`, {
-        method: "GET"
-      });
-      if (!response.ok) {
-        await throwApiError(response);
-      }
-
-      const data = (await response.json()) as VocaDbAlbumSearchResponse;
-      return data.albums;
+      return searchVocaDbAlbumsDirect(query);
     },
 
     async getVocaDbAlbum(albumId) {
-      const response = await fetch(`/api/vocadb/albums/${albumId}`, {
-        method: "GET"
-      });
-      if (!response.ok) {
-        await throwApiError(response);
-      }
-
-      const data = (await response.json()) as VocaDbAlbumDetailResponse;
-      return data.album;
+      return getVocaDbAlbumDirect(albumId);
     }
   };
 }
