@@ -645,6 +645,87 @@ describe("App", () => {
     expect(screen.getAllByText("02 Spark")).not.toHaveLength(0);
   });
 
+  it("renders unmatched VocaDB track reviews without an Open song link", async () => {
+    const firstRow = createRow({
+      composer: "",
+      lyricist: "",
+      vocal: "",
+      source: ""
+    });
+    const secondRow = createRow({
+      id: 2,
+      title: "Local Only",
+      track_number: 2,
+      composer: "",
+      lyricist: "",
+      vocal: "",
+      source: ""
+    });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const method = init?.method ?? "GET";
+      const url = String(input);
+      if (method === "GET" && url.endsWith("/api/tracks/metadata")) {
+        return new Response(JSON.stringify({ tracks: [firstRow, secondRow] }), { status: 200 });
+      }
+      if (method === "GET" && isVocaDbSearchUrl(url)) {
+        return createVocaDbSearchResponse([{ id: 42, name: "Miku Works", artistString: "ryo" }]);
+      }
+      if (method === "GET" && isVocaDbAlbumUrl(url, 42)) {
+        return createVocaDbAlbumResponse(
+          { id: 42, name: "Miku Works", artistString: "ryo" },
+          [
+            {
+              discNumber: 1,
+              trackNumber: 1,
+              title: "Glow",
+              songId: 100,
+              url: "https://vocadb.net/S/100",
+              producers: ["ryo"],
+              vocalists: ["Hatsune Miku V6"]
+            }
+          ]
+        );
+      }
+      if (method === "GET" && isVocaDbTrackFieldsUrl(url, 42)) {
+        return createVocaDbTrackFieldsResponse([
+          {
+            discNumber: 1,
+            trackNumber: 1,
+            title: "Glow",
+            songId: 100,
+            url: "https://vocadb.net/S/100",
+            producers: ["ryo"],
+            vocalists: ["Hatsune Miku V6"]
+          }
+        ]);
+      }
+      if (method === "GET" && isVocaDbSongDetailsUrl(url, 100, 42)) {
+        return createVocaDbSongDetailsResponse({
+          discNumber: 1,
+          trackNumber: 1,
+          title: "Glow",
+          songId: 100,
+          url: "https://vocadb.net/S/100",
+          producers: ["ryo"],
+          vocalists: ["Hatsune Miku V6"]
+        });
+      }
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+
+    const user = userEvent.setup();
+    render(<App />);
+
+    await screen.findByRole("button", { name: albumToggleName("Miku Works") });
+    await user.click(screen.getByRole("button", { name: /match vocadb/i }));
+    await user.click(await screen.findByRole("button", { name: /miku works.*ryo/i }));
+
+    await user.click(await screen.findByRole("button", { name: /02 Local Only/i }));
+
+    expect(screen.getByRole("heading", { name: "02 Local Only", level: 3 })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open song" })).not.toBeInTheDocument();
+  });
+
   it("confirms before discarding selected VocaDB suggestions", async () => {
     const firstRow = createRow({
       composer: "",

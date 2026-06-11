@@ -164,7 +164,7 @@ export function VocaDbAlbumMatcherPanel({
                   <h3>{trackLabel(activeReview.localTrack.track_number, activeReview.localTrack.title)}</h3>
                   {activeReview.vocaTrack != null && <p>{activeReview.vocaTrack.title}</p>}
                 </div>
-                {activeReview.vocaTrack?.url.trim() !== "" && (
+                {activeReview.vocaTrack != null && activeReview.vocaTrack.url.trim() !== "" && (
                   <a href={activeReview.vocaTrack.url} target="_blank" rel="noreferrer">
                     Open song
                   </a>
