@@ -107,6 +107,58 @@ describe("useVocaDbAlbumMatcher", () => {
     );
   });
 
+  it("edits an active track suggestion and saves the edited batch value", async () => {
+    const onRowsSaved = vi.fn();
+    const client = createClient();
+    const { result } = renderHook(() => useVocaDbAlbumMatcher(client, [row], onRowsSaved));
+
+    await act(async () => {
+      await result.current.start(row.album_id);
+      await result.current.loadAlbum(42);
+    });
+
+    expect(result.current.trackReviews).toHaveLength(1);
+    expect(result.current.activeReviewTrackId).toBe(row.id);
+
+    act(() => {
+      result.current.editSuggestion("1-composer", "edited ryo");
+    });
+    await act(async () => {
+      await result.current.save();
+    });
+
+    expect(client.patchTrackMetadataBatch).toHaveBeenCalledWith({
+      updates: [
+        {
+          track_id: 1,
+          patch: expect.objectContaining({
+            composer: "edited ryo"
+          })
+        }
+      ]
+    });
+  });
+
+  it("selects and clears all available fields on the active review track", async () => {
+    const client = createClient();
+    const { result } = renderHook(() => useVocaDbAlbumMatcher(client, [row], vi.fn()));
+
+    await act(async () => {
+      await result.current.start(row.album_id);
+      await result.current.loadAlbum(42);
+    });
+
+    act(() => {
+      result.current.clearActiveTrackFields();
+    });
+    expect(result.current.suggestions.filter((suggestion) => suggestion.selected)).toEqual([]);
+
+    act(() => {
+      result.current.selectActiveTrackFields();
+    });
+    expect(result.current.suggestions.filter((suggestion) => suggestion.selected).length).toBeGreaterThan(0);
+  });
+
   it("toggles suggestions and saves selected batch updates", async () => {
     const onRowsSaved = vi.fn();
     const client = createClient();
@@ -328,7 +380,7 @@ describe("useVocaDbAlbumMatcher", () => {
       await result.current.save();
     });
 
-    expect(result.current.lookupError).toBe("Failed to search VocaDB albums.");
+    expect(result.current.lookupError).toBe("search failed");
     expect(result.current.selectedAlbum).toBeNull();
     expect(result.current.suggestions).toEqual([]);
     expect(client.patchTrackMetadataBatch).not.toHaveBeenCalled();
@@ -356,7 +408,7 @@ describe("useVocaDbAlbumMatcher", () => {
       await result.current.save();
     });
 
-    expect(result.current.lookupError).toBe("Failed to load VocaDB album.");
+    expect(result.current.lookupError).toBe("load failed");
     expect(result.current.selectedAlbum).toBeNull();
     expect(result.current.suggestions).toEqual([]);
     expect(client.patchTrackMetadataBatch).not.toHaveBeenCalled();

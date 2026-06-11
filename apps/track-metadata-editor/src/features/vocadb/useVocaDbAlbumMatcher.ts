@@ -2,10 +2,11 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { ApiClient } from "../../api/client";
 import type { TrackMetadataRow, VocaDbAlbumCandidate, VocaDbAlbumDetail } from "../../api/types";
 import {
-  buildBatchPatchFromSelections,
-  buildVocaDbSuggestions,
+  buildBatchPatchFromTrackReviews,
+  buildVocaDbTrackReviews,
   parseVocaDbAlbumId,
-  type VocaDbFieldSuggestion
+  type VocaDbFieldSuggestion,
+  type VocaDbTrackReview
 } from "./model";
 
 export interface VocaDbAlbumMatcherState {
@@ -13,6 +14,8 @@ export interface VocaDbAlbumMatcherState {
   activeRows: TrackMetadataRow[];
   candidates: VocaDbAlbumCandidate[];
   selectedAlbum: VocaDbAlbumDetail | null;
+  trackReviews: VocaDbTrackReview[];
+  activeReviewTrackId: number | null;
   suggestions: VocaDbFieldSuggestion[];
   albumIdInput: string;
   setAlbumIdInput: (value: string) => void;
@@ -28,7 +31,18 @@ export interface VocaDbAlbumMatcherState {
   loadAlbum: (albumId: number) => Promise<void>;
   loadAlbumFromInput: () => Promise<void>;
   toggleSuggestion: (id: string) => void;
+  selectReviewTrack: (trackId: number) => void;
+  editSuggestion: (id: string, value: string) => void;
+  selectActiveTrackFields: () => void;
+  clearActiveTrackFields: () => void;
+  goToPreviousReviewTrack: () => void;
+  goToNextReviewTrack: () => void;
+  goToNextChangedReviewTrack: () => void;
   save: () => Promise<void>;
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message.trim() !== "" ? error.message : fallback;
 }
 
 export function useVocaDbAlbumMatcher(
@@ -43,9 +57,12 @@ export function useVocaDbAlbumMatcher(
   const loadAlbumRequestIdRef = useRef(0);
   const saveRequestIdRef = useRef(0);
   const suggestionsRef = useRef<VocaDbFieldSuggestion[]>([]);
+  const trackReviewsRef = useRef<VocaDbTrackReview[]>([]);
   const [candidates, setCandidates] = useState<VocaDbAlbumCandidate[]>([]);
   const [selectedAlbum, setSelectedAlbum] = useState<VocaDbAlbumDetail | null>(null);
   const [suggestions, setSuggestions] = useState<VocaDbFieldSuggestion[]>([]);
+  const [trackReviews, setTrackReviews] = useState<VocaDbTrackReview[]>([]);
+  const [activeReviewTrackId, setActiveReviewTrackId] = useState<number | null>(null);
   const [albumIdInput, setAlbumIdInput] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingAlbum, setIsLoadingAlbum] = useState(false);
@@ -59,13 +76,29 @@ export function useVocaDbAlbumMatcher(
     [activeAlbumId, rows]
   );
 
+  const setReviewState = useCallback((nextReviews: VocaDbTrackReview[]) => {
+    trackReviewsRef.current = nextReviews;
+    suggestionsRef.current = nextReviews.flatMap((review) =>
+      review.fields.filter((field) => field.available)
+    );
+    setTrackReviews(nextReviews);
+    setSuggestions(suggestionsRef.current);
+  }, []);
+
+  const clearReviewState = useCallback(() => {
+    trackReviewsRef.current = [];
+    suggestionsRef.current = [];
+    setTrackReviews([]);
+    setSuggestions([]);
+    setActiveReviewTrackId(null);
+  }, []);
+
   const runSearch = useCallback(
     async (query: string, workflowToken: number) => {
       const requestId = ++searchRequestIdRef.current;
       const loadRequestId = ++loadAlbumRequestIdRef.current;
       setSelectedAlbum(null);
-      suggestionsRef.current = [];
-      setSuggestions([]);
+      clearReviewState();
       setIsSearching(true);
       setLookupError(null);
       setSaveError(null);
@@ -78,14 +111,13 @@ export function useVocaDbAlbumMatcher(
         setCandidates(nextCandidates);
         if (loadAlbumRequestIdRef.current === loadRequestId) {
           setSelectedAlbum(null);
-          suggestionsRef.current = [];
-          setSuggestions([]);
+          clearReviewState();
         }
-      } catch {
+      } catch (error) {
         if (workflowTokenRef.current !== workflowToken || searchRequestIdRef.current !== requestId) {
           return;
         }
-        setLookupError("Failed to search VocaDB albums.");
+        setLookupError(errorMessage(error, "Failed to search VocaDB albums."));
         setCandidates([]);
       } finally {
         if (workflowTokenRef.current === workflowToken && searchRequestIdRef.current === requestId) {
@@ -93,7 +125,7 @@ export function useVocaDbAlbumMatcher(
         }
       }
     },
-    [apiClient]
+    [apiClient, clearReviewState]
   );
 
   const search = useCallback(
@@ -112,12 +144,11 @@ export function useVocaDbAlbumMatcher(
       activeAlbumIdRef.current = albumId;
       setActiveAlbumId(albumId);
       setSelectedAlbum(null);
-      suggestionsRef.current = [];
-      setSuggestions([]);
+      clearReviewState();
       setAlbumIdInput("");
       await runSearch(albumRows[0]?.album_title ?? "", workflowToken);
     },
-    [rows, runSearch]
+    [rows, runSearch, clearReviewState]
   );
 
   const cancel = useCallback(() => {
@@ -129,8 +160,7 @@ export function useVocaDbAlbumMatcher(
     setActiveAlbumId(null);
     setCandidates([]);
     setSelectedAlbum(null);
-    suggestionsRef.current = [];
-    setSuggestions([]);
+    clearReviewState();
     setAlbumIdInput("");
     setIsSearching(false);
     setIsLoadingAlbum(false);
@@ -138,7 +168,7 @@ export function useVocaDbAlbumMatcher(
     setLookupError(null);
     setSaveError(null);
     setSuccessMessage(null);
-  }, []);
+  }, [clearReviewState]);
 
   const loadAlbum = useCallback(
     async (albumId: number) => {
@@ -146,8 +176,7 @@ export function useVocaDbAlbumMatcher(
       const requestId = ++loadAlbumRequestIdRef.current;
       const activeAlbumIdSnapshot = activeAlbumIdRef.current;
       setSelectedAlbum(null);
-      suggestionsRef.current = [];
-      setSuggestions([]);
+      clearReviewState();
       setIsLoadingAlbum(true);
       setLookupError(null);
       setSaveError(null);
@@ -161,23 +190,23 @@ export function useVocaDbAlbumMatcher(
           activeAlbumIdSnapshot == null
             ? []
             : rows.filter((row) => row.album_id === activeAlbumIdSnapshot);
-        const nextSuggestions = buildVocaDbSuggestions(albumRows, album);
+        const nextReviews = buildVocaDbTrackReviews(albumRows, album);
         setSelectedAlbum(album);
-        suggestionsRef.current = nextSuggestions;
-        setSuggestions(nextSuggestions);
+        setReviewState(nextReviews);
+        setActiveReviewTrackId(nextReviews[0]?.localTrack.id ?? null);
         setAlbumIdInput(String(album.id));
-      } catch {
+      } catch (error) {
         if (workflowTokenRef.current !== workflowToken || loadAlbumRequestIdRef.current !== requestId) {
           return;
         }
-        setLookupError("Failed to load VocaDB album.");
+        setLookupError(errorMessage(error, "Failed to load VocaDB album."));
       } finally {
         if (workflowTokenRef.current === workflowToken && loadAlbumRequestIdRef.current === requestId) {
           setIsLoadingAlbum(false);
         }
       }
     },
-    [apiClient, rows]
+    [apiClient, rows, clearReviewState, setReviewState]
   );
 
   const loadAlbumFromInput = useCallback(async () => {
@@ -185,8 +214,7 @@ export function useVocaDbAlbumMatcher(
     if (albumId == null) {
       loadAlbumRequestIdRef.current += 1;
       setSelectedAlbum(null);
-      suggestionsRef.current = [];
-      setSuggestions([]);
+      clearReviewState();
       setIsLoadingAlbum(false);
       setSaveError(null);
       setSuccessMessage(null);
@@ -195,22 +223,103 @@ export function useVocaDbAlbumMatcher(
     }
 
     await loadAlbum(albumId);
-  }, [albumIdInput, loadAlbum]);
+  }, [albumIdInput, loadAlbum, clearReviewState]);
 
-  const toggleSuggestion = useCallback((id: string) => {
-    setSaveError(null);
-    setSuccessMessage(null);
-    setSuggestions((current) => {
-      const nextSuggestions = current.map((suggestion) =>
-        suggestion.id === id ? { ...suggestion, selected: !suggestion.selected } : suggestion
+  const updateTrackReviews = useCallback(
+    (updater: (reviews: VocaDbTrackReview[]) => VocaDbTrackReview[]) => {
+      setSaveError(null);
+      setSuccessMessage(null);
+      setReviewState(updater(trackReviewsRef.current));
+    },
+    [setReviewState]
+  );
+
+  const toggleSuggestion = useCallback(
+    (id: string) => {
+      updateTrackReviews((current) =>
+        current.map((review) => ({
+          ...review,
+          fields: review.fields.map((field) =>
+            field.id === id && field.available ? { ...field, selected: !field.selected } : field
+          )
+        }))
       );
-      suggestionsRef.current = nextSuggestions;
-      return nextSuggestions;
-    });
+    },
+    [updateTrackReviews]
+  );
+
+  const editSuggestion = useCallback(
+    (id: string, value: string) => {
+      updateTrackReviews((current) =>
+        current.map((review) => ({
+          ...review,
+          fields: review.fields.map((field) =>
+            field.id === id ? { ...field, suggestedValue: value, available: value.trim() !== "" } : field
+          )
+        }))
+      );
+    },
+    [updateTrackReviews]
+  );
+
+  const selectReviewTrack = useCallback((trackId: number) => {
+    setActiveReviewTrackId(trackId);
   }, []);
 
+  const selectActiveTrackFields = useCallback(() => {
+    updateTrackReviews((current) =>
+      current.map((review) =>
+        review.localTrack.id === activeReviewTrackId
+          ? {
+              ...review,
+              fields: review.fields.map((field) =>
+                field.available ? { ...field, selected: true } : field
+              )
+            }
+          : review
+      )
+    );
+  }, [activeReviewTrackId, updateTrackReviews]);
+
+  const clearActiveTrackFields = useCallback(() => {
+    updateTrackReviews((current) =>
+      current.map((review) =>
+        review.localTrack.id === activeReviewTrackId
+          ? { ...review, fields: review.fields.map((field) => ({ ...field, selected: false })) }
+          : review
+      )
+    );
+  }, [activeReviewTrackId, updateTrackReviews]);
+
+  const moveActiveReviewTrack = useCallback((direction: 1 | -1) => {
+    const reviews = trackReviewsRef.current;
+    if (reviews.length === 0) {
+      setActiveReviewTrackId(null);
+      return;
+    }
+    const currentIndex = Math.max(
+      0,
+      reviews.findIndex((review) => review.localTrack.id === activeReviewTrackId)
+    );
+    const nextIndex = Math.min(Math.max(currentIndex + direction, 0), reviews.length - 1);
+    setActiveReviewTrackId(reviews[nextIndex].localTrack.id);
+  }, [activeReviewTrackId]);
+
+  const goToPreviousReviewTrack = useCallback(() => moveActiveReviewTrack(-1), [moveActiveReviewTrack]);
+  const goToNextReviewTrack = useCallback(() => moveActiveReviewTrack(1), [moveActiveReviewTrack]);
+
+  const goToNextChangedReviewTrack = useCallback(() => {
+    const reviews = trackReviewsRef.current;
+    const currentIndex = reviews.findIndex((review) => review.localTrack.id === activeReviewTrackId);
+    const ordered = [...reviews.slice(currentIndex + 1), ...reviews.slice(0, currentIndex + 1)];
+    const next = ordered.find((review) => review.fields.some((field) => field.available && field.selected));
+    if (next != null) {
+      setActiveReviewTrackId(next.localTrack.id);
+    }
+  }, [activeReviewTrackId]);
+
   const save = useCallback(async () => {
-    const batchPatch = buildBatchPatchFromSelections(suggestionsRef.current);
+    const batchPatch = buildBatchPatchFromTrackReviews(trackReviewsRef.current);
     if (batchPatch.updates.length === 0) {
       if (successMessage != null) {
         return;
@@ -231,8 +340,7 @@ export function useVocaDbAlbumMatcher(
         return;
       }
       onRowsSaved(savedRows);
-      suggestionsRef.current = [];
-      setSuggestions([]);
+      clearReviewState();
       setSuccessMessage("Saved VocaDB metadata.");
     } catch {
       if (workflowTokenRef.current !== workflowToken || saveRequestIdRef.current !== requestId) {
@@ -244,13 +352,15 @@ export function useVocaDbAlbumMatcher(
         setIsSaving(false);
       }
     }
-  }, [apiClient, onRowsSaved, successMessage]);
+  }, [apiClient, clearReviewState, onRowsSaved, successMessage]);
 
   return {
     activeAlbumId,
     activeRows,
     candidates,
     selectedAlbum,
+    trackReviews,
+    activeReviewTrackId,
     suggestions,
     albumIdInput,
     setAlbumIdInput,
@@ -266,6 +376,13 @@ export function useVocaDbAlbumMatcher(
     loadAlbum,
     loadAlbumFromInput,
     toggleSuggestion,
+    selectReviewTrack,
+    editSuggestion,
+    selectActiveTrackFields,
+    clearActiveTrackFields,
+    goToPreviousReviewTrack,
+    goToNextReviewTrack,
+    goToNextChangedReviewTrack,
     save
   };
 }
