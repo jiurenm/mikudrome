@@ -340,6 +340,44 @@ describe("VocaDB metadata model", () => {
     });
   });
 
+  it("buildBatchPatchFromTrackReviews skips selected trim-equivalent edits", () => {
+    const row = { ...baseRow, composer: "ryo" };
+    const reviews = buildVocaDbTrackReviews([row], baseAlbum).map((review) => ({
+      ...review,
+      fields: review.fields.map((field) =>
+        field.field === "composer"
+          ? { ...field, selected: true, suggestedValue: " ryo " }
+          : { ...field, selected: false }
+      )
+    }));
+
+    expect(buildBatchPatchFromTrackReviews(reviews)).toEqual({ updates: [] });
+  });
+
+  it("buildBatchPatchFromTrackReviews skips selected vocal-normalization equivalent edits", () => {
+    const row = { ...baseRow, vocal: "重音テト" };
+    const album: VocaDbAlbumDetail = {
+      ...baseAlbum,
+      tracks: [
+        {
+          ...baseAlbum.tracks[0],
+          artists: [{ name: "重音テトSV", roles: ["Vocalist"] }],
+          vocalists: []
+        }
+      ]
+    };
+    const reviews = buildVocaDbTrackReviews([row], album).map((review) => ({
+      ...review,
+      fields: review.fields.map((field) =>
+        field.field === "vocal"
+          ? { ...field, selected: true, suggestedValue: "重音テトSV" }
+          : { ...field, selected: false }
+      )
+    }));
+
+    expect(buildBatchPatchFromTrackReviews(reviews)).toEqual({ updates: [] });
+  });
+
   it("buildBatchPatchFromTrackReviews saves selected edited values even when the field was initially unavailable", () => {
     const reviews = buildVocaDbTrackReviews([baseRow], baseAlbum).map((review) => ({
       ...review,
