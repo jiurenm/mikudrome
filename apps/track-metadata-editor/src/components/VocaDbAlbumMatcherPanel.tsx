@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type { VocaDbAlbumMatcherState } from "../features/vocadb/useVocaDbAlbumMatcher";
 import type { VocaDbTrackReview } from "../features/vocadb/model";
 
@@ -43,8 +42,6 @@ export function VocaDbAlbumMatcherPanel({
   onLoadAlbum,
   onLoadAlbumFromInput
 }: VocaDbAlbumMatcherPanelProps) {
-  const [activeEditingFieldId, setActiveEditingFieldId] = useState<string | null>(null);
-
   if (matcher.activeAlbumId == null) {
     return null;
   }
@@ -190,12 +187,13 @@ export function VocaDbAlbumMatcherPanel({
 
               <div className="vocadb-field-grid">
                 {activeReview.fields.map((field) => (
-                  <label
+                  <div
                     className={`vocadb-field-row${field.available ? "" : " vocadb-field-row--empty"}`}
                     key={field.id}
                   >
                     <input
                       type="checkbox"
+                      aria-label={`${field.field} selected`}
                       checked={field.selected}
                       disabled={matcher.isSaving || !field.available}
                       onChange={() => matcher.toggleSuggestion(field.id)}
@@ -208,13 +206,7 @@ export function VocaDbAlbumMatcherPanel({
                       type="text"
                       aria-label={`${field.field} suggestion`}
                       value={field.suggestedValue}
-                      disabled={
-                        matcher.isSaving || (!field.available && activeEditingFieldId !== field.id)
-                      }
-                      onFocus={() => setActiveEditingFieldId(field.id)}
-                      onBlur={() =>
-                        setActiveEditingFieldId((current) => (current === field.id ? null : current))
-                      }
+                      disabled={matcher.isSaving}
                       onChange={(event) => {
                         const nextValue = event.target.value;
                         matcher.editSuggestion(field.id, nextValue);
@@ -228,7 +220,7 @@ export function VocaDbAlbumMatcherPanel({
                     >
                       {field.available ? field.confidence : "missing"}
                     </span>
-                  </label>
+                  </div>
                 ))}
               </div>
 

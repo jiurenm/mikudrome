@@ -537,6 +537,105 @@ describe("App", () => {
     });
   });
 
+  it("edits and saves a missing VocaDB field suggestion", async () => {
+    const row = createRow({
+      composer: "ryo",
+      lyricist: "ryo",
+      arranger: "",
+      vocal: "Hatsune Miku",
+      source: "https://vocadb.net/S/100"
+    });
+    const savedRow = createRow({
+      composer: "ryo",
+      lyricist: "ryo",
+      arranger: "manual arranger",
+      vocal: "Hatsune Miku",
+      source: "https://vocadb.net/S/100"
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const method = init?.method ?? "GET";
+      const url = String(input);
+      if (method === "GET" && url.endsWith("/api/tracks/metadata")) {
+        return new Response(JSON.stringify({ tracks: [row] }), { status: 200 });
+      }
+      if (method === "GET" && isVocaDbSearchUrl(url)) {
+        return createVocaDbSearchResponse([{ id: 42, name: "Miku Works", artistString: "ryo" }]);
+      }
+      if (method === "GET" && isVocaDbAlbumUrl(url, 42)) {
+        return createVocaDbAlbumResponse(
+          { id: 42, name: "Miku Works", artistString: "ryo" },
+          [
+            {
+              discNumber: 1,
+              trackNumber: 1,
+              title: "Glow",
+              songId: 100,
+              url: "https://vocadb.net/S/100",
+              producers: ["ryo"],
+              vocalists: ["Hatsune Miku V6"]
+            }
+          ]
+        );
+      }
+      if (method === "GET" && isVocaDbTrackFieldsUrl(url, 42)) {
+        return createVocaDbTrackFieldsResponse([
+          {
+            discNumber: 1,
+            trackNumber: 1,
+            title: "Glow",
+            songId: 100,
+            url: "https://vocadb.net/S/100",
+            producers: ["ryo"],
+            vocalists: ["Hatsune Miku V6"]
+          }
+        ]);
+      }
+      if (method === "GET" && isVocaDbSongDetailsUrl(url, 100, 42)) {
+        return createVocaDbSongDetailsResponse({
+          discNumber: 1,
+          trackNumber: 1,
+          title: "Glow",
+          songId: 100,
+          url: "https://vocadb.net/S/100",
+          producers: ["ryo"],
+          vocalists: ["Hatsune Miku V6"]
+        });
+      }
+      if (method === "PATCH" && url.endsWith("/api/tracks/metadata")) {
+        return new Response(JSON.stringify({ tracks: [savedRow] }), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+
+    const user = userEvent.setup();
+    render(<App />);
+
+    await screen.findByRole("button", { name: albumToggleName("Miku Works") });
+    await user.click(screen.getByRole("button", { name: /match vocadb/i }));
+    await user.click(await screen.findByRole("button", { name: /miku works.*ryo/i }));
+
+    const arrangerInput = await screen.findByRole("textbox", { name: "arranger suggestion" });
+    expect(arrangerInput).toBeEnabled();
+
+    await user.type(arrangerInput, "manual arranger");
+    await user.click(screen.getByRole("button", { name: "Save VocaDB metadata" }));
+
+    await waitFor(() => expect(screen.getByText("Saved VocaDB metadata.")).toBeInTheDocument());
+    const patchCall = fetchMock.mock.calls.find(([input, init]) => {
+      return String(input).endsWith("/api/tracks/metadata") && init?.method === "PATCH";
+    });
+    expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({
+      updates: [
+        {
+          track_id: row.id,
+          patch: {
+            arranger: "manual arranger"
+          }
+        }
+      ]
+    });
+  });
+
   it("shows local track context for VocaDB suggestions", async () => {
     const firstRow = createRow({
       composer: "",
