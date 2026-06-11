@@ -107,6 +107,29 @@ describe("useVocaDbAlbumMatcher", () => {
     );
   });
 
+  it("keeps compatibility suggestions limited to changed fields", async () => {
+    const unchangedComposerRow = { ...row, composer: "ryo", lyricist: "", vocal: "" };
+    const client = createClient();
+    const { result } = renderHook(() =>
+      useVocaDbAlbumMatcher(client, [unchangedComposerRow], vi.fn())
+    );
+
+    await act(async () => {
+      await result.current.start(unchangedComposerRow.album_id);
+      await result.current.loadAlbum(42);
+    });
+
+    expect(result.current.trackReviews[0].fields).toContainEqual(
+      expect.objectContaining({
+        field: "composer",
+        currentValue: "ryo",
+        suggestedValue: "ryo",
+        available: true
+      })
+    );
+    expect(result.current.suggestions.map((suggestion) => suggestion.field)).not.toContain("composer");
+  });
+
   it("edits an active track suggestion and saves the edited batch value", async () => {
     const onRowsSaved = vi.fn();
     const client = createClient();
@@ -137,6 +160,38 @@ describe("useVocaDbAlbumMatcher", () => {
         }
       ]
     });
+  });
+
+  it("clearing an edited suggestion makes it unselected and prevents save", async () => {
+    const existingComposerRow = { ...row, composer: "old composer" };
+    const client = createClient();
+    const { result } = renderHook(() =>
+      useVocaDbAlbumMatcher(client, [existingComposerRow], vi.fn())
+    );
+
+    await act(async () => {
+      await result.current.start(existingComposerRow.album_id);
+      await result.current.loadAlbum(42);
+    });
+
+    act(() => {
+      result.current.clearActiveTrackFields();
+      result.current.toggleSuggestion("1-composer");
+      result.current.editSuggestion("1-composer", "");
+    });
+
+    expect(result.current.trackReviews[0].fields.find((field) => field.id === "1-composer")).toMatchObject({
+      available: false,
+      selected: false,
+      suggestedValue: ""
+    });
+
+    await act(async () => {
+      await result.current.save();
+    });
+
+    expect(client.patchTrackMetadataBatch).not.toHaveBeenCalled();
+    expect(result.current.saveError).toBe("Select at least one VocaDB metadata field.");
   });
 
   it("selects and clears all available fields on the active review track", async () => {
@@ -316,6 +371,38 @@ describe("useVocaDbAlbumMatcher", () => {
 
     expect(result.current.selectedAlbum?.id).toBe(42);
     expect(result.current.suggestions.length).toBeGreaterThan(0);
+  });
+
+  it("ignores a stale search rejection after album details load", async () => {
+    const searchResult = deferred<Awaited<ReturnType<ApiClient["searchVocaDbAlbums"]>>>();
+    const albumLoad = deferred<VocaDbAlbumDetail>();
+    const client = createClient();
+    vi.mocked(client.searchVocaDbAlbums).mockReturnValue(searchResult.promise);
+    vi.mocked(client.getVocaDbAlbum).mockReturnValue(albumLoad.promise);
+    const { result } = renderHook(() => useVocaDbAlbumMatcher(client, [row], vi.fn()));
+
+    await act(async () => {
+      void result.current.start(row.album_id);
+    });
+    await act(async () => {
+      void result.current.loadAlbum(42);
+    });
+
+    await act(async () => {
+      albumLoad.resolve(vocaAlbum);
+      await albumLoad.promise;
+    });
+    expect(result.current.selectedAlbum?.id).toBe(42);
+    expect(result.current.trackReviews).toHaveLength(1);
+
+    await act(async () => {
+      searchResult.reject(new Error("search failed after load"));
+      await searchResult.promise.catch(() => undefined);
+    });
+
+    expect(result.current.selectedAlbum?.id).toBe(42);
+    expect(result.current.trackReviews).toHaveLength(1);
+    expect(result.current.lookupError).toBeNull();
   });
 
   it("ignores older pending album loads after an explicit search starts", async () => {

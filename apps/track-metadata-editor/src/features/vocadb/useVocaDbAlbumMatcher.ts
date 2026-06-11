@@ -5,6 +5,7 @@ import {
   buildBatchPatchFromTrackReviews,
   buildVocaDbTrackReviews,
   parseVocaDbAlbumId,
+  type VocaDbFieldReview,
   type VocaDbFieldSuggestion,
   type VocaDbTrackReview
 } from "./model";
@@ -45,6 +46,14 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message.trim() !== "" ? error.message : fallback;
 }
 
+function isChangedSuggestion(field: VocaDbFieldReview): boolean {
+  return (
+    field.available &&
+    field.suggestedValue.trim() !== "" &&
+    field.currentValue.trim() !== field.suggestedValue.trim()
+  );
+}
+
 export function useVocaDbAlbumMatcher(
   apiClient: ApiClient,
   rows: TrackMetadataRow[],
@@ -79,7 +88,7 @@ export function useVocaDbAlbumMatcher(
   const setReviewState = useCallback((nextReviews: VocaDbTrackReview[]) => {
     trackReviewsRef.current = nextReviews;
     suggestionsRef.current = nextReviews.flatMap((review) =>
-      review.fields.filter((field) => field.available)
+      review.fields.filter(isChangedSuggestion)
     );
     setTrackReviews(nextReviews);
     setSuggestions(suggestionsRef.current);
@@ -115,6 +124,9 @@ export function useVocaDbAlbumMatcher(
         }
       } catch (error) {
         if (workflowTokenRef.current !== workflowToken || searchRequestIdRef.current !== requestId) {
+          return;
+        }
+        if (loadAlbumRequestIdRef.current !== loadRequestId) {
           return;
         }
         setLookupError(errorMessage(error, "Failed to search VocaDB albums."));
@@ -253,9 +265,18 @@ export function useVocaDbAlbumMatcher(
       updateTrackReviews((current) =>
         current.map((review) => ({
           ...review,
-          fields: review.fields.map((field) =>
-            field.id === id ? { ...field, suggestedValue: value, available: value.trim() !== "" } : field
-          )
+          fields: review.fields.map((field) => {
+            if (field.id !== id) {
+              return field;
+            }
+            const available = value.trim() !== "";
+            return {
+              ...field,
+              suggestedValue: value,
+              available,
+              selected: available ? field.selected : false
+            };
+          })
         }))
       );
     },
