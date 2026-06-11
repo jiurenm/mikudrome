@@ -1,5 +1,16 @@
 export type TrackMetadataSource = "manual" | "scanned" | "empty";
 
+export type VocaDbEditableFieldName =
+  | "composer"
+  | "lyricist"
+  | "arranger"
+  | "remix"
+  | "vocal"
+  | "voice_manipulator"
+  | "illustrator"
+  | "movie"
+  | "source";
+
 export interface TrackMetadataRow {
   id: number;
   title: string;

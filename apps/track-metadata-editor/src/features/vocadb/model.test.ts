@@ -3,7 +3,9 @@ import type { TrackMetadataRow, VocaDbAlbumDetail } from "../../api/types";
 import {
   alignAlbumTracks,
   buildBatchPatchFromSelections,
+  buildBatchPatchFromTrackReviews,
   buildVocaDbSuggestions,
+  buildVocaDbTrackReviews,
   normalizeVocalName,
   parseVocaDbAlbumId
 } from "./model";
@@ -254,6 +256,84 @@ describe("VocaDB metadata model", () => {
             lyricist: "ryo",
             vocal: "Hatsune Miku",
             source: "https://vocadb.net/S/9001"
+          }
+        }
+      ]
+    });
+  });
+
+  it("buildVocaDbTrackReviews includes every editable field and explicit song-detail roles", () => {
+    const album: VocaDbAlbumDetail = {
+      ...baseAlbum,
+      tracks: [
+        {
+          ...baseAlbum.tracks[0],
+          artists: [
+            { name: "吉田夜世", roles: ["Composer", "Lyricist", "Animator", "Mixer"] },
+            { name: "シシア", roles: ["Illustrator"] },
+            { name: "重音テトSV", roles: ["Vocalist"] }
+          ]
+        }
+      ]
+    };
+
+    const reviews = buildVocaDbTrackReviews([baseRow], album);
+
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0].status).toBe("matched");
+    expect(reviews[0].fields.map((field) => field.field)).toEqual([
+      "composer",
+      "lyricist",
+      "arranger",
+      "remix",
+      "vocal",
+      "voice_manipulator",
+      "illustrator",
+      "movie",
+      "source"
+    ]);
+    expect(reviews[0].fields.find((field) => field.field === "composer")).toMatchObject({
+      originalValue: "吉田夜世",
+      suggestedValue: "吉田夜世",
+      confidence: "explicit",
+      selected: true
+    });
+    expect(reviews[0].fields.find((field) => field.field === "vocal")).toMatchObject({
+      originalValue: "重音テトSV",
+      suggestedValue: "重音テト",
+      selected: true
+    });
+    expect(reviews[0].fields.find((field) => field.field === "illustrator")).toMatchObject({
+      originalValue: "シシア",
+      selected: true
+    });
+    expect(reviews[0].fields.find((field) => field.field === "arranger")).toMatchObject({
+      originalValue: "",
+      suggestedValue: "",
+      selected: false
+    });
+  });
+
+  it("buildBatchPatchFromTrackReviews saves edited checked values only", () => {
+    const reviews = buildVocaDbTrackReviews([baseRow], baseAlbum).map((review) => ({
+      ...review,
+      fields: review.fields.map((field) =>
+        field.field === "composer"
+          ? { ...field, suggestedValue: "edited composer", selected: true }
+          : field.field === "source"
+            ? { ...field, selected: false }
+            : field
+      )
+    }));
+
+    expect(buildBatchPatchFromTrackReviews(reviews)).toEqual({
+      updates: [
+        {
+          track_id: 101,
+          patch: {
+            composer: "edited composer",
+            lyricist: "ryo",
+            vocal: "Hatsune Miku"
           }
         }
       ]

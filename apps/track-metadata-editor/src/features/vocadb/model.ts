@@ -2,11 +2,12 @@ import type {
   TrackMetadataBatchPatch,
   TrackMetadataRow,
   VocaDbAlbumDetail,
+  VocaDbEditableFieldName,
   VocaDbAlbumTrack
 } from "../../api/types";
 import type { TrackMetadataDraft } from "../tracks/model";
 
-type EditableField = keyof TrackMetadataDraft;
+type EditableField = VocaDbEditableFieldName;
 
 export type MatchStatus = "matched" | "unmatched" | "ambiguous";
 export type SuggestionConfidence = "explicit" | "fallback";
@@ -26,6 +27,25 @@ export interface VocaDbFieldSuggestion {
   suggestedValue: string;
   confidence: SuggestionConfidence;
   selected: boolean;
+}
+
+export interface VocaDbFieldReview {
+  id: string;
+  trackId: number;
+  field: EditableField;
+  currentValue: string;
+  originalValue: string;
+  suggestedValue: string;
+  confidence: SuggestionConfidence;
+  selected: boolean;
+  available: boolean;
+}
+
+export interface VocaDbTrackReview {
+  localTrack: TrackMetadataRow;
+  vocaTrack: VocaDbAlbumTrack | null;
+  status: MatchStatus;
+  fields: VocaDbFieldReview[];
 }
 
 const roleToField = new Map<string, EditableField>([
@@ -115,11 +135,21 @@ export function buildVocaDbSuggestions(
   localRows: TrackMetadataRow[],
   album: VocaDbAlbumDetail
 ): VocaDbFieldSuggestion[] {
-  const suggestions: VocaDbFieldSuggestion[] = [];
+  return buildVocaDbTrackReviews(localRows, album)
+    .flatMap((review) => review.fields)
+    .filter((field) => field.available && !valuesMatch(field.field, field.currentValue, field.suggestedValue));
+}
 
-  for (const match of alignAlbumTracks(localRows, album)) {
+export function buildVocaDbTrackReviews(
+  localRows: TrackMetadataRow[],
+  album: VocaDbAlbumDetail
+): VocaDbTrackReview[] {
+  return alignAlbumTracks(localRows, album).map((match) => {
     if (match.status !== "matched" || match.vocaTrack == null) {
-      continue;
+      return {
+        ...match,
+        fields: suggestionFields.map((field) => emptyFieldReview(match.localTrack, field))
+      };
     }
 
     const explicit = collectExplicitCredits(match.vocaTrack);
@@ -132,36 +162,49 @@ export function buildVocaDbSuggestions(
       confidence: "explicit"
     });
 
-    for (const field of suggestionFields) {
-      const credit = explicit.get(field);
-      if (credit == null || credit.originalValue.trim() === "") {
-        continue;
-      }
+    return {
+      ...match,
+      fields: suggestionFields.map((field) => {
+        const credit = explicit.get(field);
+        if (credit == null || credit.originalValue.trim() === "") {
+          return emptyFieldReview(match.localTrack, field);
+        }
 
-      const currentValue = match.localTrack[field];
-      const suggestedValue =
-        field === "vocal"
-          ? normalizeJoinedVocalCredit(credit.originalValue, currentValue)
-          : credit.originalValue;
+        const currentValue = match.localTrack[field];
+        const suggestedValue =
+          field === "vocal"
+            ? normalizeJoinedVocalCredit(credit.originalValue, currentValue)
+            : credit.originalValue;
+        const hasChange = suggestedValue.trim() !== "" && !valuesMatch(field, currentValue, suggestedValue);
 
-      if (suggestedValue.trim() === "" || valuesMatch(field, currentValue, suggestedValue)) {
-        continue;
-      }
+        return {
+          id: `${match.localTrack.id}-${field}`,
+          trackId: match.localTrack.id,
+          field,
+          currentValue,
+          originalValue: credit.originalValue,
+          suggestedValue,
+          confidence: credit.confidence,
+          available: suggestedValue.trim() !== "",
+          selected: hasChange && currentValue.trim() === ""
+        };
+      })
+    };
+  });
+}
 
-      suggestions.push({
-        id: `${match.localTrack.id}-${field}`,
-        trackId: match.localTrack.id,
-        field,
-        currentValue,
-        originalValue: credit.originalValue,
-        suggestedValue,
-        confidence: credit.confidence,
-        selected: currentValue.trim() === "" && suggestedValue !== currentValue
-      });
-    }
-  }
-
-  return suggestions;
+function emptyFieldReview(localTrack: TrackMetadataRow, field: EditableField): VocaDbFieldReview {
+  return {
+    id: `${localTrack.id}-${field}`,
+    trackId: localTrack.id,
+    field,
+    currentValue: localTrack[field],
+    originalValue: "",
+    suggestedValue: "",
+    confidence: "fallback",
+    available: false,
+    selected: false
+  };
 }
 
 export function buildBatchPatchFromSelections(
@@ -188,6 +231,16 @@ export function buildBatchPatchFromSelections(
       patch
     }))
   };
+}
+
+export function buildBatchPatchFromTrackReviews(
+  reviews: VocaDbTrackReview[]
+): TrackMetadataBatchPatch {
+  return buildBatchPatchFromSelections(
+    reviews
+      .flatMap((review) => review.fields)
+      .filter((field) => field.available)
+  );
 }
 
 function collectExplicitCredits(
@@ -255,13 +308,13 @@ function normalizeJoinedVocalCredit(originalValue: string, existingLocalVocal: s
 
 function normalizeKnownVocalVersion(name: string): string {
   const trimmed = name.trim().replace(/\s+/g, " ");
-  const separatedSuffix = /^(.+?)[\s-]+(?:v2|v3|v4|v4x|v6|append|nt|ai)$/i.exec(trimmed);
+  const separatedSuffix = /^(.+?)[\s-]+(?:v2|v3|v4|v4x|v6|append|nt|ai|sv)$/i.exec(trimmed);
   if (separatedSuffix != null) {
     return separatedSuffix[1].trim();
   }
 
   const japaneseSuffix =
-    /^([\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}ー々〆〤]+)(?:v2|v3|v4|v4x|v6|append|nt|ai)$/iu.exec(
+    /^([\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}ー々〆〤]+)(?:v2|v3|v4|v4x|v6|append|nt|ai|sv)$/iu.exec(
       trimmed
     );
   return japaneseSuffix == null ? trimmed : japaneseSuffix[1].trim();
