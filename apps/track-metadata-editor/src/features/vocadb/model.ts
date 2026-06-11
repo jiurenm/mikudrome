@@ -236,11 +236,7 @@ export function buildBatchPatchFromSelections(
 export function buildBatchPatchFromTrackReviews(
   reviews: VocaDbTrackReview[]
 ): TrackMetadataBatchPatch {
-  return buildBatchPatchFromSelections(
-    reviews
-      .flatMap((review) => review.fields)
-      .filter((field) => field.available)
-  );
+  return buildBatchPatchFromSelections(reviews.flatMap((review) => review.fields));
 }
 
 function collectExplicitCredits(

@@ -339,4 +339,26 @@ describe("VocaDB metadata model", () => {
       ]
     });
   });
+
+  it("buildBatchPatchFromTrackReviews saves selected edited values even when the field was initially unavailable", () => {
+    const reviews = buildVocaDbTrackReviews([baseRow], baseAlbum).map((review) => ({
+      ...review,
+      fields: review.fields.map((field) =>
+        field.field === "arranger"
+          ? { ...field, available: false, selected: true, suggestedValue: "manual arranger" }
+          : { ...field, selected: false }
+      )
+    }));
+
+    expect(buildBatchPatchFromTrackReviews(reviews)).toEqual({
+      updates: [
+        {
+          track_id: 101,
+          patch: {
+            arranger: "manual arranger"
+          }
+        }
+      ]
+    });
+  });
 });
