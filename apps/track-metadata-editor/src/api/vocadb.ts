@@ -218,6 +218,23 @@ function normalizeRoles(value: unknown): string[] {
   return splitArtistList(value);
 }
 
+function normalizeArtistRoles(artistRecord: JsonRecord): string[] {
+  const explicitRoles = uniqueStrings(
+    [
+      ...normalizeRoles(artistRecord.effectiveRoles),
+      ...normalizeRoles(artistRecord.roles)
+    ].filter((role) => role.toLowerCase() !== "default")
+  );
+
+  if (explicitRoles.length > 0) {
+    return explicitRoles;
+  }
+
+  return uniqueStrings(
+    normalizeRoles(artistRecord.categories).filter((role) => role.toLowerCase() !== "default")
+  );
+}
+
 function normalizeArtistCredits(rawArtists: unknown): VocaDbArtistRoleCredit[] {
   const artists = expectOptionalArray(rawArtists);
 
@@ -226,13 +243,7 @@ function normalizeArtistCredits(rawArtists: unknown): VocaDbArtistRoleCredit[] {
       const artistRecord = expectRecord(artist);
       return {
         name: normalizeString(artistRecord.name).trim(),
-        roles: uniqueStrings(
-          [
-            ...normalizeRoles(artistRecord.effectiveRoles),
-            ...normalizeRoles(artistRecord.roles),
-            ...normalizeRoles(artistRecord.categories)
-          ].filter((role) => role.toLowerCase() !== "default")
-        )
+        roles: normalizeArtistRoles(artistRecord)
       };
     })
     .filter((artist) => artist.name !== "");

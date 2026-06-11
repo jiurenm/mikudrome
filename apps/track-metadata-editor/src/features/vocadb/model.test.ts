@@ -172,6 +172,50 @@ describe("VocaDB metadata model", () => {
     });
   });
 
+  it("buildVocaDbSuggestions maps VoiceManipulator to voice manipulation", () => {
+    const album: VocaDbAlbumDetail = {
+      ...baseAlbum,
+      tracks: [
+        {
+          ...baseAlbum.tracks[0],
+          producers: [],
+          vocalists: [],
+          artists: [{ name: "びび", roles: ["VoiceManipulator"] }]
+        }
+      ]
+    };
+
+    const suggestions = buildVocaDbSuggestions([baseRow], album);
+
+    expect(suggestionValue(suggestions, "voice_manipulator")).toMatchObject({
+      originalValue: "びび",
+      suggestedValue: "びび",
+      confidence: "explicit",
+      selected: true
+    });
+  });
+
+  it("buildVocaDbSuggestions maps Animator to movie", () => {
+    const album: VocaDbAlbumDetail = {
+      ...baseAlbum,
+      tracks: [
+        {
+          ...baseAlbum.tracks[0],
+          artists: [{ name: "Movie Maker", roles: ["Animator"] }]
+        }
+      ]
+    };
+
+    const suggestions = buildVocaDbSuggestions([baseRow], album);
+
+    expect(suggestionValue(suggestions, "movie")).toMatchObject({
+      originalValue: "Movie Maker",
+      suggestedValue: "Movie Maker",
+      confidence: "explicit",
+      selected: true
+    });
+  });
+
   it("buildVocaDbSuggestions leaves existing local values as unselected overwrite suggestions", () => {
     const row = {
       ...baseRow,

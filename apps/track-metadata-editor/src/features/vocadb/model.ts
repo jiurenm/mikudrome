@@ -62,7 +62,10 @@ const roleToField = new Map<string, EditableField>([
   ["animator", "movie"],
   ["movie", "movie"],
   ["pv", "movie"],
+  ["voicemanipulator", "voice_manipulator"],
   ["voice manipulation", "voice_manipulator"],
+  ["voice manipulator", "voice_manipulator"],
+  ["voice_manipulator", "voice_manipulator"],
   ["tuning", "voice_manipulator"],
   ["tuner", "voice_manipulator"]
 ]);
@@ -292,6 +295,7 @@ function addFallbackCredit(
 
 function splitRole(role: string): string[] {
   return role
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
     .toLowerCase()
     .split(/[\/,]/)
     .map((part) => part.trim())

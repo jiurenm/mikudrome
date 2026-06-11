@@ -289,7 +289,7 @@ describe("api client", () => {
     ]);
   });
 
-  it("getVocaDbAlbum loads song detail artists and merges roles with categories", async () => {
+  it("getVocaDbAlbum loads song detail artists and uses categories only when explicit roles are missing", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
@@ -338,6 +338,12 @@ describe("api client", () => {
                 categories: "Vocalist",
                 effectiveRoles: "Default",
                 roles: "Default"
+              },
+              {
+                name: "びび",
+                categories: "Producer",
+                effectiveRoles: "VoiceManipulator",
+                roles: "VoiceManipulator"
               }
             ]
           }),
@@ -356,9 +362,10 @@ describe("api client", () => {
       { name: "シシア", roles: ["Illustrator"] },
       {
         name: "吉田夜世",
-        roles: ["Animator", "Composer", "Lyricist", "Mastering", "Mixer", "Producer"]
+        roles: ["Animator", "Composer", "Lyricist", "Mastering", "Mixer"]
       },
-      { name: "重音テトSV", roles: ["Vocalist"] }
+      { name: "重音テトSV", roles: ["Vocalist"] },
+      { name: "びび", roles: ["VoiceManipulator"] }
     ]);
   });
 
