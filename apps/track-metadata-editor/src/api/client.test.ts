@@ -361,4 +361,198 @@ describe("api client", () => {
       { name: "重音テトSV", roles: ["Vocalist"] }
     ]);
   });
+
+  it("getVocaDbAlbum preserves track artists when song detail loading fails", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 42,
+            name: "Album",
+            artistString: "Artist",
+            tracks: [
+              {
+                discNumber: 1,
+                trackNumber: 1,
+                song: {
+                  id: 100,
+                  name: "Sharing The World",
+                  artists: [{ name: "Album Artist", roles: "Producer" }]
+                }
+              }
+            ]
+          }),
+          { status: 200 }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            {
+              discNumber: 1,
+              trackNumber: 1,
+              title: "Sharing The World",
+              producers: "Album Artist",
+              vocalists: "",
+              url: "https://vocadb.net/S/100"
+            }
+          ]),
+          { status: 200 }
+        )
+      )
+      .mockResolvedValueOnce(new Response("failed", { status: 500 }));
+
+    const album = await createApiClient().getVocaDbAlbum(42);
+
+    expect(album.tracks[0].artists).toEqual([{ name: "Album Artist", roles: ["Producer"] }]);
+  });
+
+  it("getVocaDbAlbum fetches duplicate song details once and applies them to matching tracks", async () => {
+    const detailCalls: string[] = [];
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === "https://vocadb.net/api/albums/42?fields=Artists%2CTracks&lang=Default") {
+        return new Response(
+          JSON.stringify({
+            id: 42,
+            name: "Album",
+            artistString: "Artist",
+            tracks: [
+              {
+                discNumber: 1,
+                trackNumber: 1,
+                song: { id: 100, name: "Sharing The World", artists: [] }
+              },
+              {
+                discNumber: 1,
+                trackNumber: 2,
+                song: { id: 100, name: "Sharing The World (Repeat)", artists: [] }
+              }
+            ]
+          }),
+          { status: 200 }
+        );
+      }
+      if (
+        url ===
+        "https://vocadb.net/api/albums/42/tracks/fields?fields=title%2Cproducers%2Cvocalists%2Curl&lang=Default"
+      ) {
+        return new Response(
+          JSON.stringify([
+            {
+              discNumber: 1,
+              trackNumber: 1,
+              title: "Sharing The World",
+              producers: "",
+              vocalists: "",
+              url: "https://vocadb.net/S/100"
+            },
+            {
+              discNumber: 1,
+              trackNumber: 2,
+              title: "Sharing The World (Repeat)",
+              producers: "",
+              vocalists: "",
+              url: "https://vocadb.net/S/100"
+            }
+          ]),
+          { status: 200 }
+        );
+      }
+      if (url === "https://vocadb.net/api/songs/100/details?albumId=42") {
+        detailCalls.push(url);
+        return new Response(
+          JSON.stringify({
+            artists: [{ name: "Detail Artist", effectiveRoles: "Composer", roles: "Composer" }]
+          }),
+          { status: 200 }
+        );
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const album = await createApiClient().getVocaDbAlbum(42);
+
+    expect(detailCalls).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(album.tracks.map((track) => track.artists)).toEqual([
+      [{ name: "Detail Artist", roles: ["Composer"] }],
+      [{ name: "Detail Artist", roles: ["Composer"] }]
+    ]);
+  });
+
+  it("getVocaDbAlbum limits concurrent song detail requests", async () => {
+    let activeDetailRequests = 0;
+    let maxActiveDetailRequests = 0;
+    const songIds = [100, 101, 102, 103, 104, 105];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === "https://vocadb.net/api/albums/42?fields=Artists%2CTracks&lang=Default") {
+        return new Response(
+          JSON.stringify({
+            id: 42,
+            name: "Album",
+            artistString: "Artist",
+            tracks: songIds.map((songId, index) => ({
+              discNumber: 1,
+              trackNumber: index + 1,
+              song: { id: songId, name: `Track ${index + 1}`, artists: [] }
+            }))
+          }),
+          { status: 200 }
+        );
+      }
+      if (
+        url ===
+        "https://vocadb.net/api/albums/42/tracks/fields?fields=title%2Cproducers%2Cvocalists%2Curl&lang=Default"
+      ) {
+        return new Response(
+          JSON.stringify(
+            songIds.map((songId, index) => ({
+              discNumber: 1,
+              trackNumber: index + 1,
+              title: `Track ${index + 1}`,
+              producers: "",
+              vocalists: "",
+              url: `https://vocadb.net/S/${songId}`
+            }))
+          ),
+          { status: 200 }
+        );
+      }
+
+      const songId = songIds.find(
+        (candidate) => url === `https://vocadb.net/api/songs/${candidate}/details?albumId=42`
+      );
+      if (songId != null) {
+        activeDetailRequests += 1;
+        maxActiveDetailRequests = Math.max(maxActiveDetailRequests, activeDetailRequests);
+        return new Promise<Response>((resolve) => {
+          setTimeout(() => {
+            activeDetailRequests -= 1;
+            resolve(
+              new Response(
+                JSON.stringify({
+                  artists: [
+                    {
+                      name: `Detail Artist ${songId}`,
+                      effectiveRoles: "Composer",
+                      roles: "Composer"
+                    }
+                  ]
+                }),
+                { status: 200 }
+              )
+            );
+          }, 0);
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    await createApiClient().getVocaDbAlbum(42);
+
+    expect(maxActiveDetailRequests).toBeLessThanOrEqual(4);
+  });
 });

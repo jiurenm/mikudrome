@@ -7,6 +7,7 @@ import type {
 
 const VOCADB_BASE_URL = "https://vocadb.net";
 const VOCADB_TIMEOUT_MS = 10000;
+const VOCADB_SONG_DETAIL_CONCURRENCY = 4;
 
 class VocaDbClientError extends Error {
   status: number;
@@ -242,6 +243,44 @@ function normalizeSongDetailArtists(rawSongDetail: unknown): VocaDbArtistRoleCre
   return normalizeArtistCredits(detail.artists);
 }
 
+async function fetchSongDetailArtists(
+  albumId: number,
+  songId: number
+): Promise<VocaDbArtistRoleCredit[]> {
+  try {
+    const detail = await fetchVocaDbJson<unknown>(
+      buildVocaDbUrl(`/api/songs/${songId}/details`, {
+        albumId: String(albumId)
+      })
+    );
+    return normalizeSongDetailArtists(detail);
+  } catch {
+    return [];
+  }
+}
+
+async function mapWithConcurrency<T, U>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<U>
+): Promise<U[]> {
+  const results = new Array<U>(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(Math.max(concurrency, 1), items.length);
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        results[index] = await mapper(items[index]);
+      }
+    })
+  );
+
+  return results;
+}
+
 function uniqueStrings(values: string[]): string[] {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 }
@@ -367,26 +406,29 @@ export async function getVocaDbAlbum(albumId: number): Promise<VocaDbAlbumDetail
   ]);
 
   const album = normalizeAlbumDetailResponse(albumResponse, trackFieldsResponse);
-  const detailResults = await Promise.all(
-    album.tracks.map(async (track) => {
-      if (track.songId == null) {
-        return [];
-      }
-
-      const detail = await fetchVocaDbJson<unknown>(
-        buildVocaDbUrl(`/api/songs/${track.songId}/details`, {
-          albumId: String(albumId)
-        })
-      );
-      return normalizeSongDetailArtists(detail);
-    })
+  const songIds = Array.from(
+    new Set(
+      album.tracks
+        .map((track) => track.songId)
+        .filter((songId): songId is number => songId != null)
+    )
   );
+  const detailEntries = await mapWithConcurrency(
+    songIds,
+    VOCADB_SONG_DETAIL_CONCURRENCY,
+    async (songId) => [songId, await fetchSongDetailArtists(albumId, songId)] as const
+  );
+  const detailsBySongId = new Map<number, VocaDbArtistRoleCredit[]>(detailEntries);
 
   return {
     ...album,
-    tracks: album.tracks.map((track, index) => ({
-      ...track,
-      artists: detailResults[index].length > 0 ? detailResults[index] : track.artists
-    }))
+    tracks: album.tracks.map((track) => {
+      const detailArtists =
+        track.songId == null ? [] : detailsBySongId.get(track.songId) ?? [];
+      return {
+        ...track,
+        artists: detailArtists.length > 0 ? detailArtists : track.artists
+      };
+    })
   };
 }
