@@ -238,6 +238,53 @@ describe("useVocaDbAlbumMatcher", () => {
     expect(result.current.suggestions.filter((suggestion) => suggestion.selected).length).toBeGreaterThan(0);
   });
 
+  it("skips selected equivalent fields when navigating to the next changed review track", async () => {
+    const equivalentVocalRow: TrackMetadataRow = {
+      ...row,
+      id: 2,
+      title: "Future",
+      track_number: 2,
+      vocal: "Hatsune Miku",
+      source: "https://vocadb.net/S/101"
+    };
+    const album: VocaDbAlbumDetail = {
+      ...vocaAlbum,
+      tracks: [
+        ...vocaAlbum.tracks,
+        {
+          discNumber: 1,
+          trackNumber: 2,
+          title: "Future",
+          songId: 101,
+          url: "https://vocadb.net/S/101",
+          producers: [],
+          vocalists: ["Hatsune Miku V6"],
+          artists: []
+        }
+      ]
+    };
+    const client = createClient();
+    vi.mocked(client.getVocaDbAlbum).mockResolvedValue(album);
+    const { result } = renderHook(() =>
+      useVocaDbAlbumMatcher(client, [row, equivalentVocalRow], vi.fn())
+    );
+
+    await act(async () => {
+      await result.current.start(row.album_id);
+      await result.current.loadAlbum(42);
+    });
+
+    act(() => {
+      result.current.selectReviewTrack(equivalentVocalRow.id);
+      result.current.toggleSuggestion("2-vocal");
+      result.current.editSuggestion("2-vocal", "Hatsune Miku V6");
+      result.current.selectReviewTrack(row.id);
+      result.current.goToNextChangedReviewTrack();
+    });
+
+    expect(result.current.activeReviewTrackId).toBe(row.id);
+  });
+
   it("toggles suggestions and saves selected batch updates", async () => {
     const onRowsSaved = vi.fn();
     const client = createClient();

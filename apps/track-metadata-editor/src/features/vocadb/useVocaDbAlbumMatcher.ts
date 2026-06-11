@@ -330,7 +330,11 @@ export function useVocaDbAlbumMatcher(
     const reviews = trackReviewsRef.current;
     const currentIndex = reviews.findIndex((review) => review.localTrack.id === activeReviewTrackId);
     const ordered = [...reviews.slice(currentIndex + 1), ...reviews.slice(0, currentIndex + 1)];
-    const next = ordered.find((review) => review.fields.some((field) => field.available && field.selected));
+    const next = ordered.find((review) =>
+      review.fields.some((field) =>
+        field.selected && isVocaDbFieldChanged(field.field, field.currentValue, field.suggestedValue)
+      )
+    );
     if (next != null) {
       setActiveReviewTrackId(next.localTrack.id);
     }

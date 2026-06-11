@@ -262,6 +262,21 @@ describe("VocaDB metadata model", () => {
     });
   });
 
+  it("buildBatchPatchFromSelections skips selected empty suggested values", () => {
+    expect(buildBatchPatchFromSelections([
+      {
+        id: "101-composer",
+        trackId: 101,
+        field: "composer",
+        currentValue: "ryo",
+        originalValue: "ryo",
+        suggestedValue: "",
+        confidence: "explicit",
+        selected: true
+      }
+    ])).toEqual({ updates: [] });
+  });
+
   it("buildVocaDbTrackReviews includes every editable field and explicit song-detail roles", () => {
     const album: VocaDbAlbumDetail = {
       ...baseAlbum,

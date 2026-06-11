@@ -221,7 +221,7 @@ export function buildBatchPatchFromSelections(
   const updatesByTrack = new Map<number, Partial<TrackMetadataDraft>>();
 
   for (const suggestion of suggestions) {
-    if (!suggestion.selected || valuesMatch(suggestion.field, suggestion.currentValue, suggestion.suggestedValue)) {
+    if (!suggestion.selected || !isVocaDbFieldChanged(suggestion.field, suggestion.currentValue, suggestion.suggestedValue)) {
       continue;
     }
 
