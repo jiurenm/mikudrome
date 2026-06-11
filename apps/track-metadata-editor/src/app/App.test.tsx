@@ -437,13 +437,15 @@ describe("App", () => {
 
   it("matches an album with VocaDB and saves selected batch metadata", async () => {
     const row = createRow({
+      title: "World",
       composer: "",
       lyricist: "",
       vocal: "",
       source: ""
     });
     const savedRow = createRow({
-      composer: "ryo",
+      title: "World",
+      composer: "edited ryo",
       lyricist: "ryo",
       vocal: "Hatsune Miku",
       source: "https://vocadb.net/S/100"
@@ -509,7 +511,11 @@ describe("App", () => {
     await screen.findByRole("button", { name: albumToggleName("Miku Works") });
     await user.click(screen.getByRole("button", { name: /match vocadb/i }));
     await user.click(await screen.findByRole("button", { name: /miku works.*ryo/i }));
-    await screen.findByText(/Hatsune Miku V6 -> Hatsune Miku/i);
+    expect(await screen.findByRole("button", { name: /01 World/i })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "composer suggestion" })).toHaveValue("ryo");
+
+    await user.clear(screen.getByRole("textbox", { name: "composer suggestion" }));
+    await user.type(screen.getByRole("textbox", { name: "composer suggestion" }), "edited ryo");
     await user.click(screen.getByRole("button", { name: "Save VocaDB metadata" }));
 
     await waitFor(() => expect(screen.getByText("Saved VocaDB metadata.")).toBeInTheDocument());
@@ -521,7 +527,7 @@ describe("App", () => {
         {
           track_id: row.id,
           patch: {
-            composer: "ryo",
+            composer: "edited ryo",
             lyricist: "ryo",
             vocal: "Hatsune Miku",
             source: "https://vocadb.net/S/100"
@@ -730,7 +736,7 @@ describe("App", () => {
 
     await user.click(await screen.findByRole("button", { name: "Match VocaDB for Miku Works album 10" }));
     await user.click(await screen.findByRole("button", { name: /miku works.*ryo/i }));
-    await screen.findByText(/Hatsune Miku V6 -> Hatsune Miku/i);
+    expect(await screen.findByRole("textbox", { name: "vocal suggestion" })).toHaveValue("Hatsune Miku");
 
     const beforeUnloadEvent = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(beforeUnloadEvent);
@@ -738,7 +744,7 @@ describe("App", () => {
 
     await user.click(screen.getByRole("button", { name: /other works.*kz/i }));
     expect(confirmSpy).toHaveBeenCalledWith("Discard unsaved changes?");
-    expect(screen.getByText(/Hatsune Miku V6 -> Hatsune Miku/i)).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "vocal suggestion" })).toHaveValue("Hatsune Miku");
     expect(fetchMock.mock.calls.some(([input]) => isVocaDbAlbumUrl(String(input), 99))).toBe(false);
 
     const albumInput = screen.getByLabelText("VocaDB album URL or ID");
@@ -746,7 +752,7 @@ describe("App", () => {
     await user.type(albumInput, "99");
     await user.click(screen.getByRole("button", { name: "Load" }));
     expect(confirmSpy).toHaveBeenCalledTimes(2);
-    expect(screen.getByText(/Hatsune Miku V6 -> Hatsune Miku/i)).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "vocal suggestion" })).toHaveValue("Hatsune Miku");
     expect(fetchMock.mock.calls.some(([input]) => isVocaDbAlbumUrl(String(input), 99))).toBe(false);
 
     await user.click(screen.getByRole("button", { name: "Close" }));
@@ -856,7 +862,7 @@ describe("App", () => {
     await user.click(await screen.findByRole("button", { name: "Match VocaDB for Miku Works album 10" }));
     const candidateButton = await screen.findByRole("button", { name: /miku works.*ryo/i });
     await user.click(candidateButton);
-    await screen.findByText(/Hatsune Miku V6 -> Hatsune Miku/i);
+    expect(await screen.findByRole("textbox", { name: "vocal suggestion" })).toHaveValue("Hatsune Miku");
     await user.click(screen.getByRole("button", { name: "Save VocaDB metadata" }));
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Close" })).toBeDisabled());

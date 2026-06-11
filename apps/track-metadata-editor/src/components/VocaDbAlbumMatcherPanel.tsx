@@ -1,4 +1,6 @@
+import { useState } from "react";
 import type { VocaDbAlbumMatcherState } from "../features/vocadb/useVocaDbAlbumMatcher";
+import type { VocaDbTrackReview } from "../features/vocadb/model";
 
 interface VocaDbAlbumMatcherPanelProps {
   matcher: VocaDbAlbumMatcherState;
@@ -15,22 +17,45 @@ function trackLabel(trackNumber: number, title: string): string {
   return `${String(trackNumber).padStart(2, "0")} ${title}`;
 }
 
+const fieldLabels = new Map([
+  ["composer", "Composer"],
+  ["lyricist", "Lyricist"],
+  ["arranger", "Arranger"],
+  ["remix", "Remix"],
+  ["vocal", "Vocal"],
+  ["voice_manipulator", "Voice manipulation"],
+  ["illustrator", "Illustrator"],
+  ["movie", "Movie"],
+  ["source", "Source"]
+]);
+
+function selectedFieldCount(review: VocaDbTrackReview): number {
+  return review.fields.filter((field) => field.selected).length;
+}
+
+function availableFieldCount(review: VocaDbTrackReview): number {
+  return review.fields.filter((field) => field.available).length;
+}
+
 export function VocaDbAlbumMatcherPanel({
   matcher,
   onClose,
   onLoadAlbum,
   onLoadAlbumFromInput
 }: VocaDbAlbumMatcherPanelProps) {
+  const [activeEditingFieldId, setActiveEditingFieldId] = useState<string | null>(null);
+
   if (matcher.activeAlbumId == null) {
     return null;
   }
 
   const albumTitle = matcher.activeRows[0]?.album_title ?? "Album";
-  const trackLabels = new Map(
-    matcher.activeRows.map((row) => [row.id, trackLabel(row.track_number, row.title)])
-  );
   const selectedSuggestionCount = matcher.suggestions.filter((suggestion) => suggestion.selected).length;
   const isWorkflowLocked = matcher.isSearching || matcher.isLoadingAlbum || matcher.isSaving;
+  const activeReview =
+    matcher.trackReviews.find((review) => review.localTrack.id === matcher.activeReviewTrackId) ??
+    matcher.trackReviews[0] ??
+    null;
 
   return (
     <section className="editor-card vocadb-panel">
@@ -105,30 +130,133 @@ export function VocaDbAlbumMatcherPanel({
         </section>
       )}
 
-      {matcher.suggestions.length > 0 && (
-        <div className="vocadb-suggestion-list">
-          {matcher.suggestions.map((suggestion) => (
-            <label className="vocadb-suggestion" key={suggestion.id}>
-              <input
-                type="checkbox"
-                checked={suggestion.selected}
-                onChange={() => matcher.toggleSuggestion(suggestion.id)}
-                disabled={matcher.isSaving}
-              />
-              <span className="vocadb-suggestion__track">
-                {trackLabels.get(suggestion.trackId) ?? `Track ${suggestion.trackId}`}
-              </span>
-              <span className="vocadb-suggestion__field">{suggestion.field}</span>
-              <span className="vocadb-suggestion__value">
-                {`${emptyLabel(suggestion.currentValue)} -> ${suggestion.suggestedValue}`}
-              </span>
-              {suggestion.originalValue !== suggestion.suggestedValue && (
-                <span className="vocadb-suggestion__normalization">
-                  {`${suggestion.originalValue} -> ${suggestion.suggestedValue}`}
-                </span>
-              )}
-            </label>
-          ))}
+      {matcher.trackReviews.length > 0 && (
+        <div className="vocadb-workspace">
+          <aside className="vocadb-sidebar">
+            <div className="vocadb-track-queue" aria-label="VocaDB track queue">
+              {matcher.trackReviews.map((review) => (
+                <button
+                  type="button"
+                  key={review.localTrack.id}
+                  className={`vocadb-track-queue__item${
+                    review.localTrack.id === activeReview?.localTrack.id
+                      ? " vocadb-track-queue__item--active"
+                      : ""
+                  }`}
+                  onClick={() => matcher.selectReviewTrack(review.localTrack.id)}
+                  disabled={matcher.isSaving}
+                >
+                  <span>{trackLabel(review.localTrack.track_number, review.localTrack.title)}</span>
+                  <span>{review.status}</span>
+                  <span>
+                    {selectedFieldCount(review)} / {availableFieldCount(review)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </aside>
+
+          {activeReview != null && (
+            <section className="vocadb-track-review">
+              <header className="vocadb-track-review__header">
+                <div>
+                  <p className="editor-album-title">Track review</p>
+                  <h3>{trackLabel(activeReview.localTrack.track_number, activeReview.localTrack.title)}</h3>
+                  {activeReview.vocaTrack != null && <p>{activeReview.vocaTrack.title}</p>}
+                </div>
+                {activeReview.vocaTrack?.url.trim() !== "" && (
+                  <a href={activeReview.vocaTrack.url} target="_blank" rel="noreferrer">
+                    Open song
+                  </a>
+                )}
+              </header>
+
+              <div className="vocadb-track-review__toolbar">
+                <button
+                  type="button"
+                  onClick={matcher.selectActiveTrackFields}
+                  disabled={matcher.isSaving}
+                >
+                  Select track fields
+                </button>
+                <button
+                  type="button"
+                  onClick={matcher.clearActiveTrackFields}
+                  disabled={matcher.isSaving}
+                >
+                  Clear track fields
+                </button>
+              </div>
+
+              <div className="vocadb-field-grid">
+                {activeReview.fields.map((field) => (
+                  <label
+                    className={`vocadb-field-row${field.available ? "" : " vocadb-field-row--empty"}`}
+                    key={field.id}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={field.selected}
+                      disabled={matcher.isSaving || !field.available}
+                      onChange={() => matcher.toggleSuggestion(field.id)}
+                    />
+                    <span className="vocadb-field-row__name">
+                      {fieldLabels.get(field.field) ?? field.field}
+                    </span>
+                    <span className="vocadb-field-row__current">{emptyLabel(field.currentValue)}</span>
+                    <input
+                      type="text"
+                      aria-label={`${field.field} suggestion`}
+                      value={field.suggestedValue}
+                      disabled={
+                        matcher.isSaving || (!field.available && activeEditingFieldId !== field.id)
+                      }
+                      onFocus={() => setActiveEditingFieldId(field.id)}
+                      onBlur={() =>
+                        setActiveEditingFieldId((current) => (current === field.id ? null : current))
+                      }
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        matcher.editSuggestion(field.id, nextValue);
+                        if (nextValue.trim() !== "" && !field.available) {
+                          matcher.toggleSuggestion(field.id);
+                        }
+                      }}
+                    />
+                    <span
+                      className={`vocadb-field-row__confidence vocadb-field-row__confidence--${field.confidence}`}
+                    >
+                      {field.available ? field.confidence : "missing"}
+                    </span>
+                  </label>
+                ))}
+              </div>
+
+              <footer className="vocadb-track-review__nav">
+                <button
+                  type="button"
+                  onClick={matcher.goToPreviousReviewTrack}
+                  disabled={matcher.isSaving}
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={matcher.goToNextChangedReviewTrack}
+                  disabled={matcher.isSaving}
+                >
+                  Next selected
+                </button>
+                <button
+                  type="button"
+                  onClick={matcher.goToNextReviewTrack}
+                  disabled={matcher.isSaving}
+                >
+                  Next
+                </button>
+              </footer>
+            </section>
+          )}
         </div>
       )}
 
