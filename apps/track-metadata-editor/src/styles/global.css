@@ -41,6 +41,10 @@ body {
   align-items: start;
 }
 
+.app-shell--explorer-collapsed {
+  grid-template-columns: 88px minmax(0, 1fr);
+}
+
 .explorer-card,
 .editor-card {
   border: 1px solid rgba(79, 54, 31, 0.16);
@@ -55,14 +59,40 @@ body {
   gap: 16px;
 }
 
+.explorer-card--collapsed {
+  padding: 12px;
+  min-height: 0;
+  justify-items: stretch;
+}
+
 .explorer-header {
   display: grid;
   gap: 12px;
 }
 
+.explorer-title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
 .explorer-header h1 {
   margin: 0;
   font-size: 1.35rem;
+  min-width: 0;
+}
+
+.explorer-collapse-button {
+  border-radius: 8px;
+  border: 1px solid rgba(79, 54, 31, 0.18);
+  background: #fff7eb;
+  color: inherit;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .search-input {
@@ -413,12 +443,17 @@ body {
 }
 
 @media (max-width: 960px) {
-  .app-shell--workbench {
+  .app-shell--workbench,
+  .app-shell--explorer-collapsed {
     grid-template-columns: 1fr;
   }
 
   .editor-card {
     min-height: 0;
+  }
+
+  .explorer-card--collapsed {
+    justify-items: start;
   }
 }
 

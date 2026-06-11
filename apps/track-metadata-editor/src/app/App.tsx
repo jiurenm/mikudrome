@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createApiClient } from "../api/client";
 import { AlbumExplorer } from "../components/AlbumExplorer";
 import { TrackEditorPanel } from "../components/TrackEditorPanel";
@@ -10,6 +10,7 @@ export default function App() {
   const client = useMemo(() => createApiClient(), []);
   const editor = useTrackMetadataEditor(client);
   const matcher = useVocaDbAlbumMatcher(client, editor.allRows, editor.replaceRows);
+  const [isExplorerCollapsed, setIsExplorerCollapsed] = useState(false);
   const isMatcherDirty =
     matcher.successMessage == null && matcher.suggestions.some((suggestion) => suggestion.selected);
 
@@ -123,11 +124,13 @@ export default function App() {
   const dirtyTrackId = editor.isDirty ? editor.selectedTrackId : null;
 
   return (
-    <main className="app-shell app-shell--workbench">
+    <main className={`app-shell app-shell--workbench${isExplorerCollapsed ? " app-shell--explorer-collapsed" : ""}`}>
       <AlbumExplorer
         groups={editor.albumGroups}
         selectedTrackId={editor.selectedTrackId}
         dirtyTrackId={dirtyTrackId}
+        isCollapsed={isExplorerCollapsed}
+        onToggleCollapsed={() => setIsExplorerCollapsed((current) => !current)}
         onSelectTrack={handleSelectTrack}
         onMatchAlbum={handleMatchAlbum}
         isMatchDisabled={matcher.isSaving}

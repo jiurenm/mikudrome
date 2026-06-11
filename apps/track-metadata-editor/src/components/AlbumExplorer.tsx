@@ -5,6 +5,8 @@ interface AlbumExplorerProps {
   groups: AlbumGroup[];
   selectedTrackId: number | null;
   dirtyTrackId: number | null;
+  isCollapsed: boolean;
+  onToggleCollapsed: () => void;
   onSelectTrack: (trackId: number) => void;
   onMatchAlbum: (albumId: number) => void;
   isMatchDisabled: boolean;
@@ -29,6 +31,8 @@ export function AlbumExplorer({
   groups,
   selectedTrackId,
   dirtyTrackId,
+  isCollapsed,
+  onToggleCollapsed,
   onSelectTrack,
   onMatchAlbum,
   isMatchDisabled,
@@ -52,10 +56,35 @@ export function AlbumExplorer({
     });
   };
 
+  if (isCollapsed) {
+    return (
+      <aside className="explorer-card explorer-card--collapsed" aria-label="Track explorer">
+        <button
+          type="button"
+          className="explorer-collapse-button"
+          aria-label="Expand explorer"
+          onClick={onToggleCollapsed}
+        >
+          Expand
+        </button>
+      </aside>
+    );
+  }
+
   return (
-    <aside className="explorer-card">
+    <aside className="explorer-card" aria-label="Track explorer">
       <header className="explorer-header">
-        <h1>Track Metadata Editor</h1>
+        <div className="explorer-title-row">
+          <h1>Track Metadata Editor</h1>
+          <button
+            type="button"
+            className="explorer-collapse-button"
+            aria-label="Collapse explorer"
+            onClick={onToggleCollapsed}
+          >
+            Collapse
+          </button>
+        </div>
         <input
           aria-label="Search"
           className="search-input"
