@@ -61,6 +61,29 @@ void main() {
     await handler.dispose();
   });
 
+  test('audio handler publishes playback queue index', () async {
+    final player = FakeJustAudioPlayer();
+    final handler = audio_service.MikudromeAudioHandler(player: player);
+
+    await handler.setMikudromeQueue(
+      tracks: [_track(1), _track(2)],
+      audioUrls: const ['http://server/audio/1', 'http://server/audio/2'],
+      initialIndex: 1,
+    );
+
+    expect(handler.playbackState.value.queueIndex, 1);
+
+    player.setCurrentIndex(0);
+
+    expect(handler.playbackState.value.queueIndex, 0);
+
+    await handler.stop();
+
+    expect(handler.playbackState.value.queueIndex, isNull);
+
+    await handler.dispose();
+  });
+
   test(
     'audio handler publishes favorite custom control for current track',
     () async {

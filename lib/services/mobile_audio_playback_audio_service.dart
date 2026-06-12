@@ -607,6 +607,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
         speed: playing && processingState == AudioProcessingState.ready
             ? 1.0
             : 0.0,
+        queueIndex: _playbackQueueIndex,
       ),
     );
   }
@@ -669,6 +670,13 @@ class MikudromeAudioHandler extends BaseAudioHandler
 
   bool get _effectiveIsPlaying =>
       _lastPausedSeekPosition == null && _player.playing;
+
+  int? get _playbackQueueIndex {
+    if (_tracks.isEmpty) return null;
+    final index = _currentIndex ?? _player.currentIndex;
+    if (index == null || index < 0 || index >= _tracks.length) return null;
+    return index;
+  }
 
   Track? get _currentTrack {
     final index = _currentIndex;
