@@ -20,7 +20,7 @@ Open:
 http://127.0.0.1:4173
 ```
 
-The browser talks to same-origin `/api/*` paths. Next proxies those requests to `API_BASE_URL`.
+The browser talks to same-origin `/api/*` paths for the local metadata backend. Next proxies those requests to `API_BASE_URL`.
 
 If the backend requires a fixed cookie, set `API_COOKIE` on the server process:
 
@@ -41,7 +41,7 @@ The editor can match a local album against VocaDB from the album explorer.
 - Existing local values are shown but not selected for overwrite by default.
 - Confirmed album changes are saved with one backend batch PATCH.
 
-The Next server calls VocaDB through same-origin `/api/vocadb/*` routes. Browser JavaScript does not call VocaDB directly.
+Browser JavaScript calls the public VocaDB API directly for album search and album details.
 
 ## Test
 

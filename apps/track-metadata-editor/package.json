@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0 --port 4173",
     "build": "next build",
+    "postbuild": "node scripts/prepare-standalone.mjs",
     "start": "HOSTNAME=0.0.0.0 PORT=4173 node .next/standalone/server.js",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts"
