@@ -61,6 +61,33 @@ void main() {
     expect(backCount, 1);
   });
 
+  testWidgets('mobile list reserves space for collapsed mini player', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final httpClient = _FavoritesRecordingHttpClient();
+
+    await HttpOverrides.runZoned(() async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: FavoritesScreen(baseUrl: 'http://127.0.0.1:8080'),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }, createHttpClient: (_) => httpClient);
+
+    final listPadding = tester.widget<SliverPadding>(
+      find.byType(SliverPadding),
+    );
+    final padding = listPadding.padding as EdgeInsets;
+
+    expect(padding.bottom, greaterThanOrEqualTo(128));
+  });
+
   testWidgets('removes favorites through the favorites endpoint', (
     tester,
   ) async {

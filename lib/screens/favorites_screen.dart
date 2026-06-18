@@ -20,6 +20,8 @@ const _kMessageInternalPadding = EdgeInsets.symmetric(
 );
 const _kMessageBorderRadius = 8.0;
 const _kMessageIconSize = 22.0;
+const _kMobileListBottomPadding = 128.0;
+const _kDesktopListBottomPadding = 16.0;
 
 /// Shows a temporary message at the top of the screen.
 /// Returns a Timer that can be cancelled to prevent the message from being removed.
@@ -219,13 +221,15 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final mobile = isMobile(context);
+
     return Scaffold(
       backgroundColor: AppTheme.mikuDark,
       body: Stack(
         children: [
           CustomScrollView(
             slivers: [
-              if (isMobile(context) && widget.onBack != null)
+              if (mobile && widget.onBack != null)
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
@@ -304,9 +308,13 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                 )
               else
                 SliverPadding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isMobile(context) ? 8 : 32,
-                    vertical: 16,
+                  padding: EdgeInsets.fromLTRB(
+                    mobile ? 8 : 32,
+                    16,
+                    mobile ? 8 : 32,
+                    mobile
+                        ? _kMobileListBottomPadding
+                        : _kDesktopListBottomPadding,
                   ),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate((context, index) {
