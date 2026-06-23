@@ -13,9 +13,10 @@ const double _mobileGalleryBottomGutter = 16;
 /// MV Gallery: video thumbnail grid from API, with search.
 /// When [onVideoTap] is set, the caller handles navigation.
 class MvGalleryScreen extends StatefulWidget {
-  const MvGalleryScreen({super.key, this.onVideoTap});
+  const MvGalleryScreen({super.key, this.onVideoTap, this.onMobileBack});
 
   final ValueChanged<Video>? onVideoTap;
+  final VoidCallback? onMobileBack;
 
   @override
   State<MvGalleryScreen> createState() => _MvGalleryScreenState();
@@ -194,7 +195,30 @@ class _MvGalleryScreenState extends State<MvGalleryScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-            child: _buildGalleryHeader(context, list.length, compact: true),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (widget.onMobileBack != null) ...[
+                  IconButton(
+                    onPressed: widget.onMobileBack,
+                    tooltip: '返回',
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 36,
+                      height: 36,
+                    ),
+                    icon: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: AppTheme.textPrimary,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                ],
+                _buildGalleryHeader(context, list.length, compact: true),
+              ],
+            ),
           ),
           Expanded(
             child: CustomScrollView(

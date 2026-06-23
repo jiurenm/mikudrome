@@ -143,6 +143,85 @@ void main() {
     },
   );
 
+  testWidgets('producer section page shows mobile back to discover home', (
+    tester,
+  ) async {
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(TextButton, '更多 >').at(1));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('producer-mobile-list')),
+        findsOneWidget,
+      );
+      expect(find.byTooltip('返回'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('返回'));
+      await tester.pumpAndSettle();
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(find.text('热门P主'), findsOneWidget);
+    expect(find.byKey(const ValueKey('producer-mobile-list')), findsNothing);
+  });
+
+  testWidgets('vocalist section page shows mobile back to discover home', (
+    tester,
+  ) async {
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester);
+      await tester.pumpAndSettle();
+
+      await tester.drag(
+        find.byType(CustomScrollView).first,
+        const Offset(0, -360),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, '更多 >').at(2));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('vocalist-mobile-list')),
+        findsOneWidget,
+      );
+      expect(find.byTooltip('返回'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('返回'));
+      await tester.pumpAndSettle();
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(find.text('虚拟歌手'), findsOneWidget);
+    expect(find.byKey(const ValueKey('vocalist-mobile-list')), findsNothing);
+  });
+
+  testWidgets('MV section page shows mobile back to discover home', (
+    tester,
+  ) async {
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester);
+      await tester.pumpAndSettle();
+
+      await tester.drag(
+        find.byType(CustomScrollView).first,
+        const Offset(0, -600),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, '更多 >').last);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('mv-gallery-scroll')), findsOneWidget);
+      expect(find.byTooltip('返回'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('返回'));
+      await tester.pumpAndSettle();
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(find.text('专辑推荐'), findsOneWidget);
+    expect(find.byKey(const ValueKey('mv-gallery-scroll')), findsNothing);
+  });
+
   testWidgets('tapping a discover home album opens its detail page', (
     tester,
   ) async {

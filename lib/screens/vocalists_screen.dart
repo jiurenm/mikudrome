@@ -7,9 +7,10 @@ import '../theme/vocal_theme.dart';
 import '../utils/responsive.dart';
 
 class VocalistsScreen extends StatefulWidget {
-  const VocalistsScreen({super.key, this.onVocalistTap});
+  const VocalistsScreen({super.key, this.onVocalistTap, this.onMobileBack});
 
   final ValueChanged<Vocalist>? onVocalistTap;
+  final VoidCallback? onMobileBack;
 
   @override
   State<VocalistsScreen> createState() => _VocalistsScreenState();
@@ -82,6 +83,7 @@ class _VocalistsScreenState extends State<VocalistsScreen> {
       return _MobileVocalistsList(
         vocalists: list,
         onVocalistTap: (vocalist) => widget.onVocalistTap?.call(vocalist),
+        onMobileBack: widget.onMobileBack,
       );
     }
     const edgePad = 40.0;
@@ -152,10 +154,12 @@ class _MobileVocalistsList extends StatefulWidget {
   const _MobileVocalistsList({
     required this.vocalists,
     required this.onVocalistTap,
+    this.onMobileBack,
   });
 
   final List<Vocalist> vocalists;
   final ValueChanged<Vocalist> onVocalistTap;
+  final VoidCallback? onMobileBack;
 
   @override
   State<_MobileVocalistsList> createState() => _MobileVocalistsListState();
@@ -193,6 +197,24 @@ class _MobileVocalistsListState extends State<_MobileVocalistsList> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (widget.onMobileBack != null) ...[
+                IconButton(
+                  onPressed: widget.onMobileBack,
+                  tooltip: '返回',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 36,
+                    height: 36,
+                  ),
+                  icon: const Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: AppTheme.textPrimary,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(height: 18),
+              ],
               Text(
                 '歌手',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(

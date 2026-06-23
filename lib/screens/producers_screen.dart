@@ -8,12 +8,18 @@ import 'producer_detail_screen.dart';
 
 /// Producers index: grid of circular avatars + stats, alphabet scroller (miku_produce.html).
 class ProducersScreen extends StatefulWidget {
-  const ProducersScreen({super.key, this.baseUrl = '', this.onProducerTap});
+  const ProducersScreen({
+    super.key,
+    this.baseUrl = '',
+    this.onProducerTap,
+    this.onMobileBack,
+  });
 
   final String baseUrl;
   String get _effectiveBaseUrl =>
       baseUrl.isEmpty ? ApiConfig.defaultBaseUrl : baseUrl;
   final ValueChanged<Producer>? onProducerTap;
+  final VoidCallback? onMobileBack;
 
   @override
   State<ProducersScreen> createState() => _ProducersScreenState();
@@ -87,6 +93,7 @@ class _ProducersScreenState extends State<ProducersScreen> {
         producers: list,
         baseUrl: widget._effectiveBaseUrl,
         onProducerTap: _openProducer,
+        onMobileBack: widget.onMobileBack,
       );
     }
     final edgePad = mobile ? 12.0 : 40.0;
@@ -199,11 +206,13 @@ class _MobileProducersList extends StatefulWidget {
     required this.producers,
     required this.baseUrl,
     required this.onProducerTap,
+    this.onMobileBack,
   });
 
   final List<Producer> producers;
   final String baseUrl;
   final ValueChanged<Producer> onProducerTap;
+  final VoidCallback? onMobileBack;
 
   @override
   State<_MobileProducersList> createState() => _MobileProducersListState();
@@ -241,6 +250,24 @@ class _MobileProducersListState extends State<_MobileProducersList> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (widget.onMobileBack != null) ...[
+                IconButton(
+                  onPressed: widget.onMobileBack,
+                  tooltip: '返回',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 36,
+                    height: 36,
+                  ),
+                  icon: const Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: AppTheme.textPrimary,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(height: 18),
+              ],
               Text(
                 'P主',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(

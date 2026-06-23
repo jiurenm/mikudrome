@@ -389,6 +389,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
         );
       case ShellRoute.producers:
         return ProducersScreen(
+          onMobileBack: _mobileHistory.isNotEmpty ? _handleMobileBack : null,
           onProducerTap: (producer) {
             _recordMobileHistory();
             setState(() {
@@ -401,6 +402,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
         );
       case ShellRoute.vocalists:
         return VocalistsScreen(
+          onMobileBack: _mobileHistory.isNotEmpty ? _handleMobileBack : null,
           onVocalistTap: (vocalist) {
             _recordMobileHistory();
             setState(() {
@@ -461,7 +463,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
           isPlaying: _isPlaying,
         );
       case ShellRoute.localMv:
-        return MvGalleryScreen(onVideoTap: _playVideo);
+        return MvGalleryScreen(
+          onMobileBack: _mobileHistory.isNotEmpty ? _handleMobileBack : null,
+          onVideoTap: _playVideo,
+        );
       case ShellRoute.more:
         return MobileMoreScreen(
           onNavigate: (r) {
