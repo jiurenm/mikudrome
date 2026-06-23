@@ -184,126 +184,130 @@ class _MobileVocalistsListState extends State<_MobileVocalistsList> {
   @override
   Widget build(BuildContext context) {
     final visibleVocalists = _visibleVocalists;
-    return CustomScrollView(
+    return Column(
       key: const ValueKey('vocalist-mobile-list'),
-      slivers: [
-        SliverPadding(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-          sliver: SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '歌手',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: AppTheme.textPrimary,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '歌手',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: AppTheme.textPrimary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '共 ${widget.vocalists.length} 位歌手',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.textMuted,
-                    fontSize: 12,
-                  ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '共 ${widget.vocalists.length} 位歌手',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppTheme.textMuted,
+                  fontSize: 12,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
-        SliverPadding(
+        Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          sliver: SliverToBoxAdapter(
-            child: SizedBox(
-              height: 38,
-              child: TextField(
-                key: const ValueKey('vocalist-mobile-search'),
-                controller: _searchController,
-                onChanged: (value) {
-                  setState(() {
-                    _query = value;
-                  });
-                },
-                decoration: InputDecoration(
-                  hintText: '搜索歌手',
-                  prefixIcon: const Icon(
-                    Icons.search_rounded,
-                    color: AppTheme.textMuted,
-                    size: 18,
-                  ),
-                  suffixIcon: _query.isEmpty
-                      ? null
-                      : IconButton(
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() {
-                              _query = '';
-                            });
-                          },
-                          icon: const Icon(
-                            Icons.close_rounded,
-                            color: AppTheme.textMuted,
-                            size: 18,
-                          ),
-                          tooltip: '清空',
+          child: SizedBox(
+            height: 38,
+            child: TextField(
+              key: const ValueKey('vocalist-mobile-search'),
+              controller: _searchController,
+              onChanged: (value) {
+                setState(() {
+                  _query = value;
+                });
+              },
+              decoration: InputDecoration(
+                hintText: '搜索歌手',
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  color: AppTheme.textMuted,
+                  size: 18,
+                ),
+                suffixIcon: _query.isEmpty
+                    ? null
+                    : IconButton(
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {
+                            _query = '';
+                          });
+                        },
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: AppTheme.textMuted,
+                          size: 18,
                         ),
-                  filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.06),
-                  contentPadding: EdgeInsets.zero,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(19),
-                    borderSide: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.08),
-                    ),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(19),
-                    borderSide: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.08),
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(19),
-                    borderSide: BorderSide(
-                      color: AppTheme.mikuGreen.withValues(alpha: 0.55),
-                    ),
+                        tooltip: '清空',
+                      ),
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: 0.06),
+                contentPadding: EdgeInsets.zero,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(19),
+                  borderSide: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.08),
                   ),
                 ),
-                style: const TextStyle(fontSize: 13),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(19),
+                  borderSide: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(19),
+                  borderSide: BorderSide(
+                    color: AppTheme.mikuGreen.withValues(alpha: 0.55),
+                  ),
+                ),
               ),
+              style: const TextStyle(fontSize: 13),
             ),
           ),
         ),
-        if (widget.vocalists.isEmpty || visibleVocalists.isEmpty)
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: Center(
-              child: Text(
-                widget.vocalists.isEmpty ? '还没有歌手' : '没有找到匹配的歌手',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: AppTheme.textMuted),
-              ),
-            ),
-          )
-        else
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 88),
-            sliver: SliverList.separated(
-              itemCount: visibleVocalists.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final vocalist = visibleVocalists[index];
-                return _MobileVocalistRow(
-                  key: ValueKey('vocalist-mobile-row-${vocalist.name}'),
-                  vocalist: vocalist,
-                  onTap: () => widget.onVocalistTap(vocalist),
-                );
-              },
-            ),
+        Expanded(
+          child: CustomScrollView(
+            key: const ValueKey('vocalist-mobile-scroll'),
+            slivers: [
+              if (widget.vocalists.isEmpty || visibleVocalists.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Text(
+                      widget.vocalists.isEmpty ? '还没有歌手' : '没有找到匹配的歌手',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppTheme.textMuted,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 88),
+                  sliver: SliverList.separated(
+                    itemCount: visibleVocalists.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final vocalist = visibleVocalists[index];
+                      return _MobileVocalistRow(
+                        key: ValueKey('vocalist-mobile-row-${vocalist.name}'),
+                        vocalist: vocalist,
+                        onTap: () => widget.onVocalistTap(vocalist),
+                      );
+                    },
+                  ),
+                ),
+            ],
           ),
+        ),
       ],
     );
   }

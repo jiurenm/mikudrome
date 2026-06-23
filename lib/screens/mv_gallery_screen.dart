@@ -3,7 +3,12 @@ import 'package:flutter/material.dart';
 import '../api/api.dart';
 import '../models/video.dart';
 import '../theme/app_theme.dart';
+import '../utils/responsive.dart';
 import '../widgets/auto_scroll_text.dart';
+import '../widgets/mobile_chrome_metrics.dart';
+
+const double _mobileMiniPlayerHeight = 64;
+const double _mobileGalleryBottomGutter = 16;
 
 /// MV Gallery: video thumbnail grid from API, with search.
 /// When [onVideoTap] is set, the caller handles navigation.
@@ -67,6 +72,100 @@ class _MvGalleryScreenState extends State<MvGalleryScreen> {
         .toList();
   }
 
+  double _mobileGridBottomPadding(BuildContext context) {
+    return _mobileMiniPlayerHeight +
+        kPortraitBottomNavigationHeight +
+        MediaQuery.paddingOf(context).bottom +
+        _mobileGalleryBottomGutter;
+  }
+
+  Widget _buildGalleryHeader(
+    BuildContext context,
+    int count, {
+    required bool compact,
+  }) {
+    final title = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'MV Gallery',
+          style: Theme.of(context).textTheme.displaySmall?.copyWith(
+            color: AppTheme.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Total $count videos',
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AppTheme.textMuted),
+        ),
+      ],
+    );
+    final search = TextField(
+      key: const ValueKey('mv-gallery-search'),
+      controller: _searchController,
+      decoration: const InputDecoration(
+        hintText: 'Search title, artist...',
+        prefixIcon: Icon(Icons.search, color: AppTheme.textMuted, size: 18),
+      ),
+      style: const TextStyle(fontSize: 14),
+      onChanged: (_) => setState(() {}),
+    );
+    if (compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [title, const SizedBox(height: 16), search],
+      );
+    }
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        title,
+        SizedBox(width: 264, child: search),
+      ],
+    );
+  }
+
+  Widget _buildVideoGrid(
+    BuildContext context,
+    List<Video> list, {
+    required bool mobile,
+  }) {
+    if (list.isEmpty) {
+      return const SliverFillRemaining(
+        child: Center(
+          child: Text(
+            'No videos found. Add media with MV files and run the server.',
+          ),
+        ),
+      );
+    }
+    return SliverPadding(
+      key: const ValueKey('mv-gallery-grid-padding'),
+      padding: mobile
+          ? EdgeInsets.fromLTRB(16, 0, 16, _mobileGridBottomPadding(context))
+          : const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 280,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.2,
+        ),
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final video = list[index];
+          return _MvCard(
+            video: video,
+            onTap: () => widget.onVideoTap?.call(video),
+          );
+        }, childCount: list.length),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -88,95 +187,42 @@ class _MvGalleryScreenState extends State<MvGalleryScreen> {
       );
     }
     final list = _filteredVideos;
+    final mobile = isMobile(context);
+    if (mobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+            child: _buildGalleryHeader(context, list.length, compact: true),
+          ),
+          Expanded(
+            child: CustomScrollView(
+              key: const ValueKey('mv-gallery-scroll'),
+              slivers: [_buildVideoGrid(context, list, mobile: true)],
+            ),
+          ),
+        ],
+      );
+    }
     return CustomScrollView(
+      key: const ValueKey('mv-gallery-scroll'),
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.all(32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final compact = constraints.maxWidth < 620;
-                    final title = Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'MV Gallery',
-                          style: Theme.of(context).textTheme.displaySmall
-                              ?.copyWith(
-                                color: AppTheme.textPrimary,
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Total ${list.length} videos',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: AppTheme.textMuted),
-                        ),
-                      ],
-                    );
-                    final search = TextField(
-                      controller: _searchController,
-                      decoration: const InputDecoration(
-                        hintText: 'Search title, artist...',
-                        prefixIcon: Icon(
-                          Icons.search,
-                          color: AppTheme.textMuted,
-                          size: 18,
-                        ),
-                      ),
-                      style: const TextStyle(fontSize: 14),
-                      onChanged: (_) => setState(() {}),
-                    );
-                    if (compact) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [title, const SizedBox(height: 16), search],
-                      );
-                    }
-                    return Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        title,
-                        SizedBox(width: 264, child: search),
-                      ],
-                    );
-                  },
-                ),
-              ],
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return _buildGalleryHeader(
+                  context,
+                  list.length,
+                  compact: constraints.maxWidth < 620,
+                );
+              },
             ),
           ),
         ),
-        list.isEmpty
-            ? const SliverFillRemaining(
-                child: Center(
-                  child: Text(
-                    'No videos found. Add media with MV files and run the server.',
-                  ),
-                ),
-              )
-            : SliverPadding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 280,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 1.2,
-                  ),
-                  delegate: SliverChildBuilderDelegate((context, index) {
-                    final video = list[index];
-                    return _MvCard(
-                      video: video,
-                      onTap: () => widget.onVideoTap?.call(video),
-                    );
-                  }, childCount: list.length),
-                ),
-              ),
+        _buildVideoGrid(context, list, mobile: false),
       ],
     );
   }

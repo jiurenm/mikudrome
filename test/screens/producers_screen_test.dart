@@ -86,16 +86,49 @@ void main() {
     expect(find.byKey(const ValueKey('producer-mobile-row-2')), findsOneWidget);
     expect(find.byKey(const ValueKey('producer-mobile-row-1')), findsOneWidget);
   });
+
+  testWidgets(
+    'mobile producers keep header and search fixed while rows scroll',
+    (tester) async {
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(
+          _harness(size: const Size(390, 844), child: const ProducersScreen()),
+        );
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => _ProducersFakeHttpClient(producerCount: 28));
+
+      final titleFinder = find.text('P主');
+      final searchFinder = find.byKey(const ValueKey('producer-mobile-search'));
+      final scrollFinder = find.byKey(const ValueKey('producer-mobile-scroll'));
+
+      expect(titleFinder, findsOneWidget);
+      expect(searchFinder, findsOneWidget);
+      expect(scrollFinder, findsOneWidget);
+
+      final initialTitleTop = tester.getTopLeft(titleFinder).dy;
+      final initialSearchTop = tester.getTopLeft(searchFinder).dy;
+
+      await tester.drag(scrollFinder, const Offset(0, -520));
+      await tester.pumpAndSettle();
+
+      expect(tester.getTopLeft(titleFinder).dy, initialTitleTop);
+      expect(tester.getTopLeft(searchFinder).dy, initialSearchTop);
+    },
+  );
 }
 
 class _ProducersFakeHttpClient implements HttpClient {
+  _ProducersFakeHttpClient({this.producerCount = 2});
+
+  final int producerCount;
+
   @override
   Future<HttpClientRequest> getUrl(Uri url) async =>
-      _ProducersFakeHttpClientRequest(url);
+      _ProducersFakeHttpClientRequest(url, producerCount);
 
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) async =>
-      _ProducersFakeHttpClientRequest(url);
+      _ProducersFakeHttpClientRequest(url, producerCount);
 
   @override
   void close({bool force = false}) {}
@@ -105,9 +138,10 @@ class _ProducersFakeHttpClient implements HttpClient {
 }
 
 class _ProducersFakeHttpClientRequest implements HttpClientRequest {
-  _ProducersFakeHttpClientRequest(this.url);
+  _ProducersFakeHttpClientRequest(this.url, this.producerCount);
 
   final Uri url;
+  final int producerCount;
   bool _followRedirects = true;
   int _maxRedirects = 5;
   int _contentLength = 0;
@@ -115,7 +149,7 @@ class _ProducersFakeHttpClientRequest implements HttpClientRequest {
 
   @override
   Future<HttpClientResponse> close() async =>
-      _ProducersFakeHttpClientResponse(url);
+      _ProducersFakeHttpClientResponse(url, producerCount);
 
   @override
   Encoding get encoding => utf8;
@@ -166,18 +200,33 @@ class _ProducersFakeHttpClientRequest implements HttpClientRequest {
 
 class _ProducersFakeHttpClientResponse extends Stream<List<int>>
     implements HttpClientResponse {
-  _ProducersFakeHttpClientResponse(Uri url)
-    : _bytes = utf8.encode(_bodyFor(url));
+  _ProducersFakeHttpClientResponse(Uri url, int producerCount)
+    : _bytes = utf8.encode(_bodyFor(url, producerCount));
 
   final List<int> _bytes;
 
-  static String _bodyFor(Uri url) {
+  static String _bodyFor(Uri url, int producerCount) {
     return switch (url.path) {
       '/api/producers' => jsonEncode({
-        'producers': [
-          {'id': 1, 'name': 'DECO*27', 'track_count': 27, 'album_count': 3},
-          {'id': 2, 'name': 'ryo', 'track_count': 12, 'album_count': 1},
-        ],
+        'producers': producerCount == 2
+            ? [
+                {
+                  'id': 1,
+                  'name': 'DECO*27',
+                  'track_count': 27,
+                  'album_count': 3,
+                },
+                {'id': 2, 'name': 'ryo', 'track_count': 12, 'album_count': 1},
+              ]
+            : [
+                for (var i = 1; i <= producerCount; i++)
+                  {
+                    'id': i,
+                    'name': 'Producer $i',
+                    'track_count': i,
+                    'album_count': 1,
+                  },
+              ],
       }),
       _ => '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>',
     };

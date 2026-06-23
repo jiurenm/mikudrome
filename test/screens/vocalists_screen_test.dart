@@ -105,16 +105,49 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'mobile vocalists keep header and search fixed while rows scroll',
+    (tester) async {
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(
+          _harness(size: const Size(390, 844), child: const VocalistsScreen()),
+        );
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => _VocalistsFakeHttpClient(vocalistCount: 28));
+
+      final titleFinder = find.text('歌手');
+      final searchFinder = find.byKey(const ValueKey('vocalist-mobile-search'));
+      final scrollFinder = find.byKey(const ValueKey('vocalist-mobile-scroll'));
+
+      expect(titleFinder, findsOneWidget);
+      expect(searchFinder, findsOneWidget);
+      expect(scrollFinder, findsOneWidget);
+
+      final initialTitleTop = tester.getTopLeft(titleFinder).dy;
+      final initialSearchTop = tester.getTopLeft(searchFinder).dy;
+
+      await tester.drag(scrollFinder, const Offset(0, -520));
+      await tester.pumpAndSettle();
+
+      expect(tester.getTopLeft(titleFinder).dy, initialTitleTop);
+      expect(tester.getTopLeft(searchFinder).dy, initialSearchTop);
+    },
+  );
 }
 
 class _VocalistsFakeHttpClient implements HttpClient {
+  _VocalistsFakeHttpClient({this.vocalistCount = 2});
+
+  final int vocalistCount;
+
   @override
   Future<HttpClientRequest> getUrl(Uri url) async =>
-      _VocalistsFakeHttpClientRequest(url);
+      _VocalistsFakeHttpClientRequest(url, vocalistCount);
 
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) async =>
-      _VocalistsFakeHttpClientRequest(url);
+      _VocalistsFakeHttpClientRequest(url, vocalistCount);
 
   @override
   void close({bool force = false}) {}
@@ -124,9 +157,10 @@ class _VocalistsFakeHttpClient implements HttpClient {
 }
 
 class _VocalistsFakeHttpClientRequest implements HttpClientRequest {
-  _VocalistsFakeHttpClientRequest(this.url);
+  _VocalistsFakeHttpClientRequest(this.url, this.vocalistCount);
 
   final Uri url;
+  final int vocalistCount;
   bool _followRedirects = true;
   int _maxRedirects = 5;
   int _contentLength = 0;
@@ -134,7 +168,7 @@ class _VocalistsFakeHttpClientRequest implements HttpClientRequest {
 
   @override
   Future<HttpClientResponse> close() async =>
-      _VocalistsFakeHttpClientResponse(url);
+      _VocalistsFakeHttpClientResponse(url, vocalistCount);
 
   @override
   Encoding get encoding => utf8;
@@ -185,18 +219,23 @@ class _VocalistsFakeHttpClientRequest implements HttpClientRequest {
 
 class _VocalistsFakeHttpClientResponse extends Stream<List<int>>
     implements HttpClientResponse {
-  _VocalistsFakeHttpClientResponse(Uri url)
-    : _bytes = utf8.encode(_bodyFor(url));
+  _VocalistsFakeHttpClientResponse(Uri url, int vocalistCount)
+    : _bytes = utf8.encode(_bodyFor(url, vocalistCount));
 
   final List<int> _bytes;
 
-  static String _bodyFor(Uri url) {
+  static String _bodyFor(Uri url, int vocalistCount) {
     return switch (url.path) {
       '/api/vocalists' => jsonEncode({
-        'vocalists': [
-          {'name': 'Hatsune Miku', 'track_count': 39, 'album_count': 4},
-          {'name': 'Kagamine Rin', 'track_count': 12, 'album_count': 2},
-        ],
+        'vocalists': vocalistCount == 2
+            ? [
+                {'name': 'Hatsune Miku', 'track_count': 39, 'album_count': 4},
+                {'name': 'Kagamine Rin', 'track_count': 12, 'album_count': 2},
+              ]
+            : [
+                for (var i = 1; i <= vocalistCount; i++)
+                  {'name': 'Vocalist $i', 'track_count': i, 'album_count': 1},
+              ],
       }),
       _ => '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>',
     };

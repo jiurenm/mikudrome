@@ -191,6 +191,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
           if (_showMobileSearch) ...[
             const SizedBox(height: 12),
             TextField(
+              key: const ValueKey('album-mobile-recommendation-search'),
               controller: _searchController,
               autofocus: true,
               decoration: InputDecoration(
@@ -257,6 +258,64 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
         .toList();
   }
 
+  Widget _buildAlbumGridSliver(
+    BuildContext context,
+    List<Album> list, {
+    required bool mobileRecommendation,
+  }) {
+    if (list.isEmpty) {
+      return const SliverFillRemaining(
+        child: Center(
+          child: Text(
+            'No albums. Add media under media/Artist/Album/ and run the server.',
+          ),
+        ),
+      );
+    }
+    return SliverPadding(
+      padding: mobileRecommendation
+          ? const EdgeInsets.fromLTRB(20, 0, 20, 112)
+          : const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      sliver: SliverGrid(
+        gridDelegate: mobileRecommendation
+            ? const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                mainAxisSpacing: 16,
+                crossAxisSpacing: 12,
+                childAspectRatio: 0.62,
+              )
+            : const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 180,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 0.80,
+              ),
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final album = list[index];
+          void onTap() {
+            if (widget.onAlbumTap != null) {
+              widget.onAlbumTap!(album);
+            } else {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (context) => AlbumDetailScreen(
+                    album: album,
+                    baseUrl: widget._effectiveBaseUrl,
+                  ),
+                ),
+              );
+            }
+          }
+
+          if (mobileRecommendation) {
+            return _MobileRecommendationAlbumCard(album: album, onTap: onTap);
+          }
+          return _AlbumCard(album: album, onTap: onTap);
+        }, childCount: list.length),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -280,72 +339,38 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
     final list = _filteredAlbums;
     final mobileRecommendation =
         isMobile(context) && widget.mobileRecommendationLayout;
+    if (mobileRecommendation) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildMobileRecommendationHeader(context),
+          Expanded(
+            child: CustomScrollView(
+              key: const ValueKey('album-mobile-recommendation-scroll'),
+              slivers: [
+                _buildAlbumGridSliver(
+                  context,
+                  list,
+                  mobileRecommendation: true,
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
-          child: mobileRecommendation
-              ? _buildMobileRecommendationHeader(context)
-              : Padding(
-                  padding: EdgeInsets.all(isMobile(context) ? 12.0 : 32.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [_buildHeader(context, list.length)],
-                  ),
-                ),
+          child: Padding(
+            padding: EdgeInsets.all(isMobile(context) ? 12.0 : 32.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [_buildHeader(context, list.length)],
+            ),
+          ),
         ),
-        list.isEmpty
-            ? const SliverFillRemaining(
-                child: Center(
-                  child: Text(
-                    'No albums. Add media under media/Artist/Album/ and run the server.',
-                  ),
-                ),
-              )
-            : SliverPadding(
-                padding: mobileRecommendation
-                    ? const EdgeInsets.fromLTRB(20, 0, 20, 112)
-                    : const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                sliver: SliverGrid(
-                  gridDelegate: mobileRecommendation
-                      ? const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          mainAxisSpacing: 16,
-                          crossAxisSpacing: 12,
-                          childAspectRatio: 0.62,
-                        )
-                      : const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 180,
-                          mainAxisSpacing: 12,
-                          crossAxisSpacing: 12,
-                          childAspectRatio: 0.80,
-                        ),
-                  delegate: SliverChildBuilderDelegate((context, index) {
-                    final album = list[index];
-                    void onTap() {
-                      if (widget.onAlbumTap != null) {
-                        widget.onAlbumTap!(album);
-                      } else {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (context) => AlbumDetailScreen(
-                              album: album,
-                              baseUrl: widget._effectiveBaseUrl,
-                            ),
-                          ),
-                        );
-                      }
-                    }
-
-                    if (mobileRecommendation) {
-                      return _MobileRecommendationAlbumCard(
-                        album: album,
-                        onTap: onTap,
-                      );
-                    }
-                    return _AlbumCard(album: album, onTap: onTap);
-                  }, childCount: list.length),
-                ),
-              ),
+        _buildAlbumGridSliver(context, list, mobileRecommendation: false),
       ],
     );
   }
