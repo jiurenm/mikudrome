@@ -490,7 +490,7 @@ void main() {
     expect(service.playedIndexes.single, 0);
   });
 
-  testWidgets('standalone MV collapse stays open without audio fallback', (
+  testWidgets('standalone MV collapses to mini player without audio fallback', (
     tester,
   ) async {
     final service = _RecordingMobileAudioPlaybackService();
@@ -522,9 +522,13 @@ void main() {
       final sheet = tester.widget<MobilePlayerSheet>(
         find.byType(MobilePlayerSheet),
       );
-      expect(sheet.expanded, isTrue);
+      expect(sheet.expanded, isFalse);
       expect(
         find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsNothing,
+      );
+      expect(
+        find.byType(MobileMiniPlayer, skipOffstage: false),
         findsOneWidget,
       );
     }, createHttpClient: (_) => _LibraryFakeHttpClient());

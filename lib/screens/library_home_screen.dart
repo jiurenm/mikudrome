@@ -1275,7 +1275,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       _invalidateMobileVideoCollapseRequest();
       setState(() {
         _playbackMode = PlaybackMode.video;
-        _showPlayer = true;
+        _showPlayer = false;
         _preferVideoOnExpand = currentTrack.hasVideo;
       });
       return;
