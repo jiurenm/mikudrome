@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,9 +14,6 @@ import 'package:mikudrome/widgets/mobile_mini_player.dart';
 import 'package:mikudrome/widgets/mobile_player_sheet.dart';
 import 'package:mikudrome/widgets/player/mobile_mv_player_surface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
 void main() {
   setUp(() async {
@@ -879,6 +880,34 @@ void main() {
     },
   );
 
+  testWidgets('recent playback history waits for ten percent progress', (
+    tester,
+  ) async {
+    final service = _RecordingMobileAudioPlaybackService();
+    final httpClient = _LibraryFakeHttpClient();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('每日推荐'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Daily One'));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(httpClient.playbackHistoryPosts, isEmpty);
+
+      await service.seek(const Duration(seconds: 18));
+      await _pumpUntil(
+        tester,
+        () => httpClient.playbackHistoryPosts.isNotEmpty,
+      );
+
+      expect(httpClient.playbackHistoryPosts, hasLength(1));
+    }, createHttpClient: (_) => httpClient);
+  });
+
   testWidgets('recent played more opens history list', (tester) async {
     await HttpOverrides.runZoned(() async {
       await _pumpMobileLibrary(tester);
@@ -895,14 +924,33 @@ void main() {
   });
 }
 
+class _LibraryRecordedRequest {
+  _LibraryRecordedRequest({required this.method, required this.url});
+
+  final String method;
+  final Uri url;
+}
+
 class _LibraryFakeHttpClient implements HttpClient {
-  @override
-  Future<HttpClientRequest> getUrl(Uri url) async =>
-      _LibraryFakeHttpClientRequest(url);
+  final requests = <_LibraryRecordedRequest>[];
+
+  List<_LibraryRecordedRequest> get playbackHistoryPosts => requests
+      .where(
+        (request) =>
+            request.method == 'POST' &&
+            request.url.path == '/api/playback/history',
+      )
+      .toList();
 
   @override
-  Future<HttpClientRequest> openUrl(String method, Uri url) async =>
-      _LibraryFakeHttpClientRequest(url);
+  Future<HttpClientRequest> getUrl(Uri url) async => openUrl('GET', url);
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) async {
+    final request = _LibraryRecordedRequest(method: method, url: url);
+    requests.add(request);
+    return _LibraryFakeHttpClientRequest(method, url);
+  }
 
   @override
   void close({bool force = false}) {}
@@ -912,8 +960,10 @@ class _LibraryFakeHttpClient implements HttpClient {
 }
 
 class _LibraryFakeHttpClientRequest implements HttpClientRequest {
-  _LibraryFakeHttpClientRequest(this.url);
+  _LibraryFakeHttpClientRequest(this.method, this.url);
 
+  @override
+  final String method;
   final Uri url;
   bool _followRedirects = true;
   int _maxRedirects = 5;
@@ -921,8 +971,9 @@ class _LibraryFakeHttpClientRequest implements HttpClientRequest {
   bool _persistentConnection = true;
 
   @override
-  Future<HttpClientResponse> close() async =>
-      _LibraryFakeHttpClientResponse(url);
+  Future<HttpClientResponse> close() async {
+    return _LibraryFakeHttpClientResponse(method, url);
+  }
 
   @override
   Encoding get encoding => utf8;
@@ -968,13 +1019,31 @@ class _LibraryFakeHttpClientRequest implements HttpClientRequest {
   }
 
   @override
+  void add(List<int> data) {}
+
+  @override
+  void write(Object? object) {}
+
+  @override
+  void writeAll(Iterable<dynamic> objects, [String separator = '']) {}
+
+  @override
+  void writeCharCode(int charCode) {}
+
+  @override
+  void writeln([Object? object = '']) {}
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _LibraryFakeHttpClientResponse extends Stream<List<int>>
     implements HttpClientResponse {
-  _LibraryFakeHttpClientResponse(Uri url) : _bytes = utf8.encode(_bodyFor(url));
+  _LibraryFakeHttpClientResponse(this.method, this.url)
+    : _bytes = utf8.encode(method == 'GET' ? _bodyFor(url) : '');
 
+  final String method;
+  final Uri url;
   final List<int> _bytes;
 
   static String _bodyFor(Uri url) {
@@ -1182,7 +1251,7 @@ class _LibraryFakeHttpClientResponse extends Stream<List<int>>
   int get contentLength => _bytes.length;
 
   @override
-  int get statusCode => HttpStatus.ok;
+  int get statusCode => method == 'GET' ? HttpStatus.ok : HttpStatus.noContent;
 
   @override
   HttpHeaders get headers => _LibraryFakeHttpHeaders();
@@ -1478,6 +1547,16 @@ void _invokeScopedIconButton(
     find.ancestor(of: iconFinder, matching: find.byType(IconButton)).first,
   );
   control.onPressed!();
+}
+
+Future<void> _pumpUntil(
+  WidgetTester tester,
+  bool Function() condition, {
+  int attempts = 10,
+}) async {
+  for (var i = 0; i < attempts && !condition(); i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }
 
 Future<void> _pumpMobileLibrary(

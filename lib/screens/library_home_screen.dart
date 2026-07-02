@@ -127,6 +127,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   static Future<void> _noopTogglePlayback() async {}
 
   static Future<void> _noopSeekToFraction(double _) async {}
+  static const double _playbackHistoryProgressThreshold = 0.10;
   ShellRoute _route = ShellRoute.albums;
   Album? _selectedAlbum;
   Producer? _selectedProducer;
@@ -264,9 +265,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     final track = _currentTrack;
     if (track == null || track.id <= 0) return;
     final durationMs = max(0, track.durationSeconds * 1000);
-    final positionMs = durationMs == 0
-        ? 0
-        : (durationMs * _playbackProgress.clamp(0.0, 1.0)).round();
+    if (durationMs <= 0) return;
+    final progress = _playbackProgress.clamp(0.0, 1.0).toDouble();
+    if (progress < _playbackHistoryProgressThreshold) return;
+    final positionMs = (durationMs * progress).round();
     unawaited(
       ApiClient()
           .savePlaybackHistory(
