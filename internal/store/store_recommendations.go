@@ -7,7 +7,12 @@ import (
 	"time"
 )
 
-const defaultDailyRecommendationLimit = 20
+const (
+	defaultDailyRecommendationLimit = 20
+	playbackCooldownSeconds         = 7 * 24 * 60 * 60
+	playbackRecoverySeconds         = 30 * 24 * 60 * 60
+	playbackCooldownPenalty         = 4.0
+)
 
 type recommendationCandidate struct {
 	Track    Track
@@ -121,17 +126,7 @@ func recommendationScore(candidate recommendationCandidate, date string, scoreAn
 		score += 3.0
 	}
 	if candidate.PlayedAt > 0 {
-		score += 1.5
-		const recencyWindowSeconds = 30 * 24 * 60 * 60
-		age := scoreAnchor.Unix() - candidate.PlayedAt
-		if age < 0 {
-			age = 0
-		}
-		recency := 1.0 - float64(age)/float64(recencyWindowSeconds)
-		if recency < 0 {
-			recency = 0
-		}
-		score += recency
+		score -= playbackHistoryPenalty(candidate.PlayedAt, scoreAnchor)
 	}
 	if candidate.Track.VideoPath != "" {
 		score += 0.15
@@ -140,6 +135,22 @@ func recommendationScore(candidate recommendationCandidate, date string, scoreAn
 		score += 0.10
 	}
 	return score
+}
+
+func playbackHistoryPenalty(playedAt int64, scoreAnchor time.Time) float64 {
+	age := scoreAnchor.Unix() - playedAt
+	if age < 0 {
+		age = 0
+	}
+	if age >= playbackRecoverySeconds {
+		return 0
+	}
+	if age <= playbackCooldownSeconds {
+		return playbackCooldownPenalty
+	}
+	recoveryProgress := float64(age-playbackCooldownSeconds) /
+		float64(playbackRecoverySeconds-playbackCooldownSeconds)
+	return playbackCooldownPenalty * (1 - recoveryProgress)
 }
 
 func stableDailyScore(date string, trackID int64) float64 {

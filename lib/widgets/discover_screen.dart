@@ -35,6 +35,16 @@ List<Album> pickMobileDiscoverAlbums(
   return List<Album>.unmodifiable(shuffled.take(limit));
 }
 
+@visibleForTesting
+Album? pickDailyFeaturedAlbum(List<Album> albums, {DateTime? date}) {
+  if (albums.isEmpty) return null;
+  final currentDate = date ?? DateTime.now();
+  final dateKey =
+      currentDate.year * 10000 + currentDate.month * 100 + currentDate.day;
+  final index = Random(dateKey).nextInt(albums.length);
+  return albums[index];
+}
+
 class DiscoverScreen extends StatefulWidget {
   const DiscoverScreen({
     super.key,
@@ -48,6 +58,7 @@ class DiscoverScreen extends StatefulWidget {
     this.onMobileProducerSelected,
     this.onMobileVocalistSelected,
     this.onDailyRecommendationsSelected,
+    this.featuredDate,
   });
 
   final DiscoverSection? currentSection;
@@ -60,6 +71,8 @@ class DiscoverScreen extends StatefulWidget {
   final ValueChanged<Producer>? onMobileProducerSelected;
   final ValueChanged<Vocalist>? onMobileVocalistSelected;
   final VoidCallback? onDailyRecommendationsSelected;
+  @visibleForTesting
+  final DateTime? featuredDate;
 
   @override
   State<DiscoverScreen> createState() => _DiscoverScreenState();
@@ -100,6 +113,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         onProducerSelected: widget.onMobileProducerSelected,
         onVocalistSelected: widget.onMobileVocalistSelected,
         onDailyRecommendationsSelected: widget.onDailyRecommendationsSelected,
+        featuredDate: widget.featuredDate,
       );
     }
 
@@ -175,6 +189,7 @@ class _MobileDiscoverHome extends StatefulWidget {
     this.onProducerSelected,
     this.onVocalistSelected,
     this.onDailyRecommendationsSelected,
+    this.featuredDate,
   });
 
   final ValueChanged<DiscoverSection>? onMoreSelected;
@@ -182,6 +197,7 @@ class _MobileDiscoverHome extends StatefulWidget {
   final ValueChanged<Producer>? onProducerSelected;
   final ValueChanged<Vocalist>? onVocalistSelected;
   final VoidCallback? onDailyRecommendationsSelected;
+  final DateTime? featuredDate;
 
   @override
   State<_MobileDiscoverHome> createState() => _MobileDiscoverHomeState();
@@ -354,7 +370,10 @@ class _MobileDiscoverHomeState extends State<_MobileDiscoverHome> {
   }
 
   List<Widget> _buildMobileHomeSectionWidgets() {
-    final featuredAlbum = _albums.isNotEmpty ? _albums.first : null;
+    final featuredAlbum = pickDailyFeaturedAlbum(
+      _albums,
+      date: widget.featuredDate,
+    );
     return [
       const _MobileDiscoverTopBar(),
       const SizedBox(height: 12),

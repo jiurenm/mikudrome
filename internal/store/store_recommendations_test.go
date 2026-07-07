@@ -163,22 +163,12 @@ func TestDailyRecommendationsStableWithinServerLocalDateWithHistory(t *testing.T
 	}
 }
 
-func TestDailyRecommendationsFavoritesAndHistoryBoostTracks(t *testing.T) {
+func TestDailyRecommendationsFavoritesBoostTracksWithoutDuplicates(t *testing.T) {
 	s := newTestStore(t)
 	ids := seedRecommendationTracks(t, s, 12)
 
 	if err := s.AddFavorite(ids[0]); err != nil {
 		t.Fatalf("AddFavorite: %v", err)
-	}
-	if err := s.UpsertPlaybackHistory(PlaybackHistoryUpdate{
-		TrackID:      ids[1],
-		PositionMS:   1000,
-		DurationMS:   10000,
-		PlaybackMode: "audio",
-		ContextLabel: "Test",
-		PlayedAt:     1779072000,
-	}); err != nil {
-		t.Fatalf("UpsertPlaybackHistory: %v", err)
 	}
 
 	got, err := s.DailyRecommendations(time.Date(2026, 5, 22, 10, 0, 0, 0, time.Local), 5)
@@ -189,11 +179,42 @@ func TestDailyRecommendationsFavoritesAndHistoryBoostTracks(t *testing.T) {
 	if !containsTrackID(gotIDs, ids[0]) {
 		t.Fatalf("favorite track %d missing from boosted recommendations: %v", ids[0], gotIDs)
 	}
-	if !containsTrackID(gotIDs, ids[1]) {
-		t.Fatalf("history track %d missing from boosted recommendations: %v", ids[1], gotIDs)
-	}
 	if hasDuplicateTrackIDs(gotIDs) {
 		t.Fatalf("duplicate recommendation IDs: %v", gotIDs)
+	}
+}
+
+func TestDailyRecommendationsRecentlyPlayedTrackCoolsDown(t *testing.T) {
+	s := newTestStore(t)
+	seedRecommendationTracks(t, s, 30)
+	now := time.Date(2026, 5, 22, 10, 0, 0, 0, time.Local)
+
+	before, err := s.DailyRecommendations(now, 20)
+	if err != nil {
+		t.Fatalf("DailyRecommendations before history: %v", err)
+	}
+	if len(before) != 20 {
+		t.Fatalf("before len = %d, want 20", len(before))
+	}
+	recentlyPlayedID := before[0].ID
+
+	if err := s.UpsertPlaybackHistory(PlaybackHistoryUpdate{
+		TrackID:      recentlyPlayedID,
+		PositionMS:   30000,
+		DurationMS:   180000,
+		PlaybackMode: "audio",
+		ContextLabel: "Test",
+		PlayedAt:     recommendationDateAnchor(now).Unix(),
+	}); err != nil {
+		t.Fatalf("UpsertPlaybackHistory: %v", err)
+	}
+
+	after, err := s.DailyRecommendations(now, 20)
+	if err != nil {
+		t.Fatalf("DailyRecommendations after history: %v", err)
+	}
+	if containsTrackID(trackIDs(after), recentlyPlayedID) {
+		t.Fatalf("recently played track %d still recommended: %v", recentlyPlayedID, trackIDs(after))
 	}
 }
 
@@ -227,31 +248,34 @@ func TestDailyRecommendationsCapsFavoritesToQuarterOfLimit(t *testing.T) {
 	}
 }
 
-func TestDailyRecommendationsScoreAnchorsRecencyToLocalDate(t *testing.T) {
+func TestDailyRecommendationsScorePenalizesRecentPlayback(t *testing.T) {
 	now := time.Date(2026, 5, 22, 10, 0, 0, 0, time.Local)
 	localNow := now.Local()
 	date := localNow.Format("2006-01-02")
 	scoreAnchor := recommendationDateAnchor(localNow)
 	track := Track{ID: 7}
 
+	unplayed := recommendationScore(recommendationCandidate{
+		Track: track,
+	}, date, scoreAnchor)
 	recent := recommendationScore(recommendationCandidate{
 		Track:    track,
 		PlayedAt: scoreAnchor.Unix(),
 	}, date, scoreAnchor)
-	future := recommendationScore(recommendationCandidate{
+	recovering := recommendationScore(recommendationCandidate{
 		Track:    track,
-		PlayedAt: scoreAnchor.Add(2 * time.Hour).Unix(),
+		PlayedAt: scoreAnchor.Add(-14 * 24 * time.Hour).Unix(),
 	}, date, scoreAnchor)
 	stale := recommendationScore(recommendationCandidate{
 		Track:    track,
 		PlayedAt: scoreAnchor.Add(-31 * 24 * time.Hour).Unix(),
 	}, date, scoreAnchor)
 
-	if future != recent {
-		t.Fatalf("future playback score = %v, want same as most recent score %v", future, recent)
+	if !(recent < recovering && recovering < unplayed) {
+		t.Fatalf("playback cooldown scores recent=%v recovering=%v unplayed=%v, want recent < recovering < unplayed", recent, recovering, unplayed)
 	}
-	if stale >= recent {
-		t.Fatalf("stale playback score = %v, want less than recent score %v", stale, recent)
+	if stale != unplayed {
+		t.Fatalf("stale playback score = %v, want recovered unplayed score %v", stale, unplayed)
 	}
 }
 

@@ -47,6 +47,36 @@ void main() {
     },
   );
 
+  test('pickDailyFeaturedAlbum keeps the featured album stable per day', () {
+    final albums = List.generate(
+      7,
+      (index) => Album(
+        id: '${index + 1}',
+        title: 'Album ${index + 1}',
+        coverUrl: '',
+        producerName: 'Producer ${index + 1}',
+        trackCount: 1,
+      ),
+    );
+
+    final morning = pickDailyFeaturedAlbum(
+      albums,
+      date: DateTime(2026, 6, 23, 8),
+    );
+    final evening = pickDailyFeaturedAlbum(
+      albums,
+      date: DateTime(2026, 6, 23, 22),
+    );
+    final picksAcrossDays = {
+      for (var day = 1; day <= 14; day++)
+        pickDailyFeaturedAlbum(albums, date: DateTime(2026, 6, day))!.id,
+    };
+
+    expect(evening, same(morning));
+    expect(picksAcrossDays.any((id) => id != albums.first.id), isTrue);
+    expect(pickDailyFeaturedAlbum([], date: DateTime(2026, 6, 23)), isNull);
+  });
+
   test('DiscoverDataCache stores and clears process-local data', () {
     DiscoverDataCache.clear();
 
@@ -113,6 +143,73 @@ void main() {
     expect(find.text('推荐MV'), findsOneWidget);
     expect(find.text('初音ミク'), findsWidgets);
     expect(find.text('愛言葉V'), findsWidgets);
+  });
+
+  testWidgets('mobile featured banner uses the daily featured album', (
+    tester,
+  ) async {
+    const albums = [
+      Album(
+        id: '1',
+        title: 'First Album',
+        coverUrl: '',
+        producerName: 'First Producer',
+        trackCount: 1,
+      ),
+      Album(
+        id: '2',
+        title: 'Daily Featured Album',
+        coverUrl: '',
+        producerName: 'Featured Producer',
+        trackCount: 1,
+      ),
+      Album(
+        id: '3',
+        title: 'Third Album',
+        coverUrl: '',
+        producerName: 'Third Producer',
+        trackCount: 1,
+      ),
+    ];
+    final featuredDate =
+        List.generate(31, (index) => DateTime(2026, 1, index + 1)).firstWhere(
+          (date) => pickDailyFeaturedAlbum(albums, date: date) != albums.first,
+        );
+    final featuredAlbum = pickDailyFeaturedAlbum(albums, date: featuredDate)!;
+
+    DiscoverDataCache.write(
+      const DiscoverData(
+        albums: albums,
+        producers: [],
+        vocalists: [],
+        videos: [],
+      ),
+    );
+
+    await HttpOverrides.runZoned(() async {
+      await tester.pumpWidget(
+        _harness(DiscoverScreen(featuredDate: featuredDate)),
+      );
+      await tester.pump();
+    }, createHttpClient: (_) => _NeverCompletingDiscoverHttpClient());
+
+    final featuredBanner = find.ancestor(
+      of: find.text('FEATURED'),
+      matching: find.byType(InkWell),
+    );
+
+    expect(featuredBanner, findsOneWidget);
+    expect(
+      find.descendant(
+        of: featuredBanner,
+        matching: find.text(featuredAlbum.title),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: featuredBanner, matching: find.text('First Album')),
+      findsNothing,
+    );
   });
 
   testWidgets('mobile recommendation home renders cached data immediately', (

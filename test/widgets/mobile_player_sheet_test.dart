@@ -43,6 +43,32 @@ void main() {
     expect(tester.getRect(cover).left, greaterThanOrEqualTo(84));
   });
 
+  testWidgets('mini player shows full track credit line', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MobileMiniPlayer(
+            track: const Track(
+              id: 1,
+              title: 'Track',
+              audioPath: 'track.flac',
+              videoPath: '',
+              composer: 'DECO*27',
+              vocal: '初音ミク',
+            ),
+            coverUrl: '',
+            isPlaying: false,
+            progress: 0,
+            onTap: () {},
+            onPlayPause: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('DECO*27 feat. 初音ミク'), findsOneWidget);
+  });
+
   testWidgets('expanded sheet covers the tab bar bottom padding', (
     tester,
   ) async {

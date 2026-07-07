@@ -25,6 +25,7 @@ class MobileMiniPlayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final safePadding = MediaQuery.paddingOf(context);
+    final creditLine = track.vocalLine;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -76,9 +77,9 @@ class MobileMiniPlayer extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          if (track.vocal.isNotEmpty)
+                          if (creditLine.isNotEmpty)
                             Text(
-                              track.vocal,
+                              creditLine,
                               style: const TextStyle(
                                 color: AppTheme.textMuted,
                                 fontSize: 12,
