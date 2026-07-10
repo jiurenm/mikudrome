@@ -1,8 +1,11 @@
+// ignore_for_file: experimental_member_use
+
 import 'dart:async';
 import 'dart:io';
 
 import 'package:audio_service/audio_service.dart'
     show AudioProcessingState, MediaControl;
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
@@ -16,6 +19,23 @@ import 'package:mikudrome/services/mobile_audio_playback_stub.dart' as stub;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  const pathProviderChannel = MethodChannel('plugins.flutter.io/path_provider');
+
+  setUpAll(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(pathProviderChannel, (call) async {
+          if (call.method == 'getTemporaryDirectory') {
+            return Directory.systemTemp.path;
+          }
+          return null;
+        });
+  });
+
+  tearDownAll(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(pathProviderChannel, null);
+  });
 
   tearDown(ApiConfig.resetRuntimeConfigForTests);
 
@@ -247,6 +267,7 @@ void main() {
     );
     final states = <MobileAudioPlaybackState>[];
     final sub = service.states.listen(states.add);
+    ApiConfig.setRuntimeCookie('session=abc');
 
     await service.playQueue(
       queue: [_track(1), _track(2)],
@@ -254,10 +275,16 @@ void main() {
       audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
     );
 
-    expect(player.sources.map((source) => source.uri.toString()), [
+    expect(player.sources, everyElement(isA<LockCachingAudioSource>()));
+    final cachingSources = player.sources.cast<LockCachingAudioSource>();
+    expect(cachingSources.map((source) => source.uri.toString()), [
       'http://server/audio/1',
       'http://server/audio/2',
     ]);
+    expect(
+      cachingSources.map((source) => source.headers),
+      everyElement({'Cookie': 'session=abc'}),
+    );
     expect(player.initialIndex, 1);
     expect(player.playCalls, 1);
     expect(service.currentState.track?.id, 2);
@@ -335,7 +362,7 @@ void main() {
       await service.setPlaybackOrderMode(MobilePlaybackOrderMode.singleLoop);
 
       expect(player.loopMode, LoopMode.one);
-      expect(player.sources.map((source) => source.uri.toString()), [
+      expect(player.sources.map((source) => _sourceUri(source).toString()), [
         'http://server/audio/1',
         'http://server/audio/2',
       ]);
@@ -427,26 +454,42 @@ void main() {
   });
 
   test(
-    'audio handler switches current item to low quality while buffering',
+    'audio handler keeps restored source and position while buffering',
     () async {
       final player = FakeJustAudioPlayer();
       final handler = audio_service.MikudromeAudioHandler(player: player);
+      final states = <MobileAudioPlaybackState>[];
+      final sub = handler.mikudromeState.listen(states.add);
 
       await handler.setMikudromeQueue(
-        tracks: [_track(1)],
-        audioUrls: const ['http://server/api/stream/1/audio'],
-        initialIndex: 0,
+        tracks: [_track(1), _track(2)],
+        audioUrls: const [
+          'http://server/api/stream/1/audio',
+          'http://server/api/stream/2/audio',
+        ],
+        initialIndex: 1,
+        initialPosition: const Duration(seconds: 75),
       );
-      player.setPosition(const Duration(seconds: 12));
 
+      player.setProcessingState(ProcessingState.buffering);
       player.setProcessingState(ProcessingState.buffering);
       await pumpEventQueue();
 
-      expect(player.setAudioSourcesCalls, 2);
-      expect(player.sources.single.uri.toString(), contains('quality=low'));
-      expect(player.initialPosition, const Duration(seconds: 12));
-      expect(handler.mediaItem.value?.id, contains('quality=low'));
+      expect(player.setAudioSourcesCalls, 1);
+      expect(player.initialIndex, 1);
+      expect(player.initialPosition, const Duration(seconds: 75));
+      expect(player.sources.map((source) => _sourceUri(source).toString()), [
+        'http://server/api/stream/1/audio',
+        'http://server/api/stream/2/audio',
+      ]);
+      expect(
+        handler.playbackState.value.processingState,
+        AudioProcessingState.buffering,
+      );
+      expect(states.last.index, 1);
+      expect(states.last.position, const Duration(seconds: 75));
 
+      await sub.cancel();
       await handler.dispose();
     },
   );
@@ -490,7 +533,11 @@ void main() {
       await pumpEventQueue();
 
       expect(player.setAudioSourcesCalls, 2);
-      expect(player.sources.single.uri.toString(), contains('quality=low'));
+      expect(player.sources.single, isA<LockCachingAudioSource>());
+      expect(
+        _sourceUri(player.sources.single).toString(),
+        contains('quality=low'),
+      );
       expect(player.initialIndex, 0);
       expect(player.initialPosition, const Duration(seconds: 42));
       expect(handler.mediaItem.value?.id, contains('quality=low'));
@@ -882,6 +929,52 @@ void main() {
     expect(service.currentState.queue, isEmpty);
   });
 
+  test('just_audio service stops playback before clearing cache', () async {
+    final player = FakeJustAudioPlayer();
+    var stopCallsObservedByClearer = -1;
+    var clearCalls = 0;
+    final service = audio_service.JustAudioMobileAudioPlaybackService(
+      player: player,
+      cacheClearer: () async {
+        clearCalls += 1;
+        stopCallsObservedByClearer = player.stopCalls;
+      },
+    );
+
+    await service.playQueue(
+      queue: [_track(1)],
+      index: 0,
+      audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+    );
+
+    await service.clearCache();
+
+    expect(clearCalls, 1);
+    expect(stopCallsObservedByClearer, 1);
+    expect(service.currentState.queue, isEmpty);
+
+    await service.dispose();
+  });
+
+  test('just_audio service ignores temporary cache clear failures', () async {
+    final player = FakeJustAudioPlayer();
+    final service = audio_service.JustAudioMobileAudioPlaybackService(
+      player: player,
+      cacheClearer: () async => throw const FileSystemException('cache busy'),
+    );
+
+    await service.playQueue(
+      queue: [_track(1)],
+      index: 0,
+      audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+    );
+
+    await expectLater(service.clearCache(), completes);
+    expect(service.currentState.queue, isEmpty);
+
+    await service.dispose();
+  });
+
   test('setAudioSources failure leaves service stopped', () async {
     final player = FakeJustAudioPlayer()
       ..setAudioSourcesError = StateError('load failed');
@@ -1216,6 +1309,12 @@ MediaControl _favoriteControl(audio_service.MikudromeAudioHandler handler) {
   );
 }
 
+Uri _sourceUri(AudioSource source) {
+  if (source is LockCachingAudioSource) return source.uri;
+  if (source is UriAudioSource) return source.uri;
+  throw StateError('Unsupported test audio source: ${source.runtimeType}');
+}
+
 class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
   final _playing = StreamController<bool>.broadcast(sync: true);
   final _currentIndex = StreamController<int?>.broadcast(sync: true);
@@ -1226,7 +1325,7 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
   final _duration = StreamController<Duration?>.broadcast(sync: true);
   final _errors = StreamController<PlayerException>.broadcast(sync: true);
 
-  List<UriAudioSource> sources = [];
+  List<AudioSource> sources = [];
   int setAudioSourcesCalls = 0;
   int? initialIndex;
   Duration? initialPosition;
@@ -1269,7 +1368,7 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
 
   @override
   Future<void> setAudioSources(
-    List<UriAudioSource> sources, {
+    List<AudioSource> sources, {
     required int initialIndex,
     required Duration initialPosition,
   }) async {

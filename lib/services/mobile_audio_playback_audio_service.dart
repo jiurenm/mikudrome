@@ -46,7 +46,7 @@ abstract class MobileAudioPlayerAdapter {
   Duration? get duration;
 
   Future<void> setAudioSources(
-    List<UriAudioSource> sources, {
+    List<AudioSource> sources, {
     required int initialIndex,
     required Duration initialPosition,
   });
@@ -155,14 +155,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     ];
 
     await _player.setAudioSources(
-      nextAudioUrls
-          .map(
-            (url) => AudioSource.uri(
-              Uri.parse(url),
-              headers: ApiConfig.defaultHeaders,
-            ),
-          )
-          .toList(growable: false),
+      nextAudioUrls.map(_audioSourceForUrl).toList(growable: false),
       initialIndex: clampedIndex,
       initialPosition: clampedPosition,
     );
@@ -205,6 +198,16 @@ class MikudromeAudioHandler extends BaseAudioHandler
     final coverUrl = coverUrlForTrack?.call(track).trim() ?? '';
     if (coverUrl.isEmpty) return null;
     return Uri.tryParse(coverUrl);
+  }
+
+  AudioSource _audioSourceForUrl(String url) {
+    final headers = ApiConfig.defaultHeaders;
+    // LockCachingAudioSource is just_audio's native transparent cache API.
+    // ignore: experimental_member_use
+    return LockCachingAudioSource(
+      Uri.parse(url),
+      headers: headers.isEmpty ? null : headers,
+    );
   }
 
   Duration _clampPositionForTrack(Duration position, Track track) {
@@ -411,7 +414,6 @@ class MikudromeAudioHandler extends BaseAudioHandler
       );
       _emitMikudromeState(isPlaying: false, isCompleted: true);
     } else if (state == ProcessingState.buffering && _tracks.isNotEmpty) {
-      final retryPosition = _positionForPause();
       _publishPlaybackState(
         isPlaying: _playbackRequested && _lastPausedSeekPosition == null,
         processingState: AudioProcessingState.buffering,
@@ -420,14 +422,6 @@ class MikudromeAudioHandler extends BaseAudioHandler
         isPlaying: _playbackRequested && _lastPausedSeekPosition == null,
         isCompleted: false,
       );
-      if (_playbackRequested && _lastPausedSeekPosition == null) {
-        unawaited(
-          _switchCurrentTrackToLowQuality(
-            retryPosition,
-            resumePlayback: true,
-          ).catchError((_) {}),
-        );
-      }
     } else if (state == ProcessingState.ready ||
         state == ProcessingState.loading) {
       _publishPlaybackState(
@@ -525,14 +519,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     }
 
     await _player.setAudioSources(
-      nextAudioUrls
-          .map(
-            (url) => AudioSource.uri(
-              Uri.parse(url),
-              headers: ApiConfig.defaultHeaders,
-            ),
-          )
-          .toList(growable: false),
+      nextAudioUrls.map(_audioSourceForUrl).toList(growable: false),
       initialIndex: index,
       initialPosition: position,
     );
@@ -715,9 +702,11 @@ class JustAudioMobileAudioPlaybackService
     MikudromeAudioHandler? handler,
     Future<MikudromeAudioHandler> Function()? handlerLoader,
     MobileAudioPlayerAdapter? player,
+    Future<void> Function()? cacheClearer,
     this.usesAudioService = false,
   }) : _handler = handler,
        _handlerLoader = handlerLoader,
+       _cacheClearer = cacheClearer ?? AudioPlayer.clearAssetCache,
        _fallbackHandler = handler == null && handlerLoader == null
            ? MikudromeAudioHandler(player: player)
            : null,
@@ -733,6 +722,7 @@ class JustAudioMobileAudioPlaybackService
   final MikudromeAudioHandler? _handler;
   final MikudromeAudioHandler? _fallbackHandler;
   final Future<MikudromeAudioHandler> Function()? _handlerLoader;
+  final Future<void> Function() _cacheClearer;
   final bool usesAudioService;
   final StreamController<MobileAudioPlaybackState> _states;
   final List<StreamSubscription<Object?>> _subscriptions = [];
@@ -815,6 +805,15 @@ class JustAudioMobileAudioPlaybackService
     if (_disposed) return;
     final handler = await _effectiveHandler();
     await handler.stop();
+  }
+
+  @override
+  Future<void> clearCache() async {
+    if (_disposed) return;
+    await stop();
+    try {
+      await _cacheClearer();
+    } catch (_) {}
   }
 
   @override
@@ -908,7 +907,7 @@ class JustAudioPlayerAdapter implements MobileAudioPlayerAdapter {
 
   @override
   Future<void> setAudioSources(
-    List<UriAudioSource> sources, {
+    List<AudioSource> sources, {
     required int initialIndex,
     required Duration initialPosition,
   }) async {

@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mikudrome/api/config.dart';
+import 'package:mikudrome/config/app_config_controller.dart';
 import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/screens/library_home_screen.dart';
 import 'package:mikudrome/screens/player_screen.dart';
@@ -103,6 +105,48 @@ void main() {
     expect(handled, isTrue);
     expect(find.text('专辑推荐'), findsOneWidget);
     expect(find.text('服务器'), findsNothing);
+  });
+
+  testWidgets('successful server edit clears mobile audio cache', (
+    tester,
+  ) async {
+    final service = _RecordingMobileAudioPlaybackService();
+    final store = _MemoryAppConfigStore(
+      serverUrl: 'http://old.example.test',
+      serverCookie: 'session=old',
+    );
+    final controller = AppConfigController(
+      store: store,
+      connectionTester: (_, {serverCookie}) async {},
+    );
+    await controller.load();
+    addTearDown(service.dispose);
+    addTearDown(controller.dispose);
+    addTearDown(ApiConfig.resetRuntimeConfigForTests);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(
+        tester,
+        mobileAudioPlaybackService: service,
+        appConfigController: controller,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('设置'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('服务器'));
+      await tester.pumpAndSettle();
+
+      final fields = find.byType(TextField);
+      await tester.enterText(fields.at(0), 'http://new.example.test');
+      await tester.enterText(fields.at(1), 'session=new');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(service.clearCacheCalls, 1);
+    expect(store.serverUrl, 'http://new.example.test');
+    expect(store.serverCookie, 'session=new');
   });
 
   testWidgets(
@@ -1342,6 +1386,13 @@ class _RecordingMobileAudioPlaybackService
   final seekPositions = <Duration>[];
   TrackFavoriteStatus? lastIsTrackFavorited;
   TrackFavoriteToggle? lastToggleTrackFavorite;
+  int clearCacheCalls = 0;
+
+  @override
+  Future<void> clearCache() async {
+    clearCacheCalls += 1;
+    await super.clearCache();
+  }
 
   @override
   Future<void> playQueue({
@@ -1562,6 +1613,7 @@ Future<void> _pumpUntil(
 Future<void> _pumpMobileLibrary(
   WidgetTester tester, {
   MobileAudioPlaybackService? mobileAudioPlaybackService,
+  AppConfigController? appConfigController,
   Size size = const Size(390, 844),
 }) {
   tester.view.physicalSize = size;
@@ -1574,8 +1626,42 @@ Future<void> _pumpMobileLibrary(
   return tester.pumpWidget(
     MaterialApp(
       home: LibraryHomeScreen(
+        appConfigController: appConfigController,
         mobileAudioPlaybackService: mobileAudioPlaybackService,
       ),
     ),
   );
+}
+
+class _MemoryAppConfigStore implements AppConfigStore {
+  _MemoryAppConfigStore({this.serverUrl, this.serverCookie});
+
+  String? serverUrl;
+  String? serverCookie;
+
+  @override
+  Future<String?> loadServerUrl() async => serverUrl;
+
+  @override
+  Future<String?> loadServerCookie() async => serverCookie;
+
+  @override
+  Future<void> saveServerUrl(String serverUrl) async {
+    this.serverUrl = serverUrl;
+  }
+
+  @override
+  Future<void> saveServerCookie(String? serverCookie) async {
+    this.serverCookie = serverCookie;
+  }
+
+  @override
+  Future<void> clearServerUrl() async {
+    serverUrl = null;
+  }
+
+  @override
+  Future<void> clearServerCookie() async {
+    serverCookie = null;
+  }
 }
