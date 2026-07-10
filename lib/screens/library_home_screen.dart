@@ -164,14 +164,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   bool _isMobileAudioStarting = false;
   double? _resumeProgress;
   int _restoredMobileAudioStartRequest = 0;
-  int? _pendingRestoredMobileAudioStartRequest;
-  Track? _pendingRestoredMobileAudioStartTrack;
-  int? _pendingRestoredMobileAudioStartIndex;
   VideoPlayerController? _videoController;
   int _mobileVideoCollapseRequest = 0;
-  int? _pendingMobileVideoCollapseAudioRequest;
-  Track? _pendingMobileVideoCollapseAudioTrack;
-  int? _pendingMobileVideoCollapseAudioIndex;
 
   @override
   void initState() {
@@ -858,13 +852,6 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
         _playbackMode != PlaybackMode.audio) {
       return;
     }
-    if (_isStaleMobileVideoCollapseAudioState(state)) {
-      return;
-    }
-    if (_isStaleRestoredMobileAudioStartState(state)) {
-      return;
-    }
-
     final previousTrackId = _currentTrack?.id;
     final track = state.track;
     final effectiveDuration = state.duration > Duration.zero
@@ -1166,14 +1153,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
 
   Future<void> _startRestoredMobileAudioPlayback() async {
     if (_isMobileAudioStarting || !_restoredNotStarted) return;
-    final track = _currentTrack;
-    if (track == null) return;
-    final index = _playerIndex;
     final resumeProgress = _resumeProgress ?? _playbackProgress;
     final request = ++_restoredMobileAudioStartRequest;
-    _pendingRestoredMobileAudioStartRequest = request;
-    _pendingRestoredMobileAudioStartTrack = track;
-    _pendingRestoredMobileAudioStartIndex = index;
 
     setState(() {
       _isMobileAudioStarting = true;
@@ -1184,20 +1165,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       await _playRestoredMobileAudioQueue(resumeProgress);
     } catch (error, stackTrace) {
       _debugRestoredMobileAudioStartFailure(error, stackTrace);
-      if (!mounted) {
-        _clearPendingRestoredMobileAudioStart(request);
-        return;
-      }
-      if (!_isCurrentRestoredMobileAudioStart(
-        request: request,
-        track: track,
-        index: index,
-      )) {
-        _clearPendingRestoredMobileAudioStart(request);
-        await _repairMobileAudioAfterStaleRestoredStart();
-        return;
-      }
-      _clearPendingRestoredMobileAudioStart(request);
+      if (!mounted || request != _restoredMobileAudioStartRequest) return;
       setState(() {
         _isPlaying = false;
         _isMobileAudioStarting = false;
@@ -1206,78 +1174,12 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       return;
     }
 
-    if (!mounted) {
-      _clearPendingRestoredMobileAudioStart(request);
-      return;
-    }
-    if (!_isCurrentRestoredMobileAudioStart(
-      request: request,
-      track: track,
-      index: index,
-    )) {
-      _clearPendingRestoredMobileAudioStart(request);
-      await _repairMobileAudioAfterStaleRestoredStart();
-      return;
-    }
-    _clearPendingRestoredMobileAudioStart(request);
+    if (!mounted || request != _restoredMobileAudioStartRequest) return;
     setState(() {
       _restoredNotStarted = false;
       _resumeProgress = null;
       _isMobileAudioStarting = false;
     });
-  }
-
-  bool _isStaleRestoredMobileAudioStartState(MobileAudioPlaybackState state) {
-    final request = _pendingRestoredMobileAudioStartRequest;
-    final track = _pendingRestoredMobileAudioStartTrack;
-    final index = _pendingRestoredMobileAudioStartIndex;
-    final stateTrack = state.track;
-    if (request == null ||
-        track == null ||
-        index == null ||
-        stateTrack?.id != track.id ||
-        state.index != index) {
-      return false;
-    }
-    return !_isCurrentRestoredMobileAudioStart(
-      request: request,
-      track: track,
-      index: index,
-    );
-  }
-
-  bool _isCurrentRestoredMobileAudioStart({
-    required int request,
-    required Track track,
-    required int index,
-  }) {
-    return _pendingRestoredMobileAudioStartRequest == request &&
-        request == _restoredMobileAudioStartRequest &&
-        _isMobilePlaybackSurface &&
-        _playbackMode == PlaybackMode.audio &&
-        _restoredNotStarted &&
-        _isMobileAudioStarting &&
-        _playerIndex == index &&
-        _currentTrack?.id == track.id;
-  }
-
-  void _clearPendingRestoredMobileAudioStart(int request) {
-    if (_pendingRestoredMobileAudioStartRequest != request) return;
-    _pendingRestoredMobileAudioStartRequest = null;
-    _pendingRestoredMobileAudioStartTrack = null;
-    _pendingRestoredMobileAudioStartIndex = null;
-  }
-
-  Future<void> _repairMobileAudioAfterStaleRestoredStart() async {
-    try {
-      if (_playerQueue.isEmpty) {
-        await _mobileAudioPlaybackService.stop();
-        return;
-      }
-      await _routeMobileAudioPlaybackForCurrentMode();
-    } catch (error, stackTrace) {
-      _debugRestoredMobileAudioStartFailure(error, stackTrace);
-    }
   }
 
   void _showRestoredMobileAudioStartError() {
@@ -1444,7 +1346,6 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     }
     _invalidateRestoredMobileAudioStart();
     final request = ++_mobileVideoCollapseRequest;
-    final index = _playerIndex;
     final progress = _playbackProgress.clamp(0.0, 1.0).toDouble();
     final initialPosition = currentTrack.durationSeconds > 0
         ? Duration(
@@ -1452,9 +1353,6 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
                 .round(),
           )
         : Duration.zero;
-    _pendingMobileVideoCollapseAudioRequest = request;
-    _pendingMobileVideoCollapseAudioTrack = currentTrack;
-    _pendingMobileVideoCollapseAudioIndex = index;
     try {
       await _playMobileAudioQueue(
         queue: _playerQueue,
@@ -1462,15 +1360,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
         initialPosition: initialPosition,
       );
     } catch (_) {
-      if (!mounted) return;
-      _clearPendingMobileVideoCollapseAudio(request);
-      if (!_isCurrentMobileVideoCollapseRequest(
-        request: request,
-        track: currentTrack,
-        index: index,
-      )) {
-        return;
-      }
+      if (!mounted || request != _mobileVideoCollapseRequest) return;
       setState(() {
         _playbackMode = PlaybackMode.video;
         _showPlayer = true;
@@ -1478,66 +1368,12 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       });
       return;
     }
-    if (!mounted) return;
-    if (!_isCurrentMobileVideoCollapseRequest(
-      request: request,
-      track: currentTrack,
-      index: index,
-    )) {
-      _clearPendingMobileVideoCollapseAudio(request);
-      await _repairMobileAudioAfterStaleCollapse();
-      return;
-    }
-    _clearPendingMobileVideoCollapseAudio(request);
+    if (!mounted || request != _mobileVideoCollapseRequest) return;
     setState(() {
       _playbackMode = PlaybackMode.audio;
       _showPlayer = false;
       _preferVideoOnExpand = currentTrack.hasVideo;
     });
-  }
-
-  bool _isStaleMobileVideoCollapseAudioState(MobileAudioPlaybackState state) {
-    final request = _pendingMobileVideoCollapseAudioRequest;
-    final track = _pendingMobileVideoCollapseAudioTrack;
-    final index = _pendingMobileVideoCollapseAudioIndex;
-    final stateTrack = state.track;
-    if (request == null ||
-        track == null ||
-        index == null ||
-        stateTrack?.id != track.id ||
-        state.index != index) {
-      return false;
-    }
-    return !_isCurrentMobileVideoCollapseRequest(
-      request: request,
-      track: track,
-      index: index,
-    );
-  }
-
-  void _clearPendingMobileVideoCollapseAudio(int request) {
-    if (_pendingMobileVideoCollapseAudioRequest != request) return;
-    _pendingMobileVideoCollapseAudioRequest = null;
-    _pendingMobileVideoCollapseAudioTrack = null;
-    _pendingMobileVideoCollapseAudioIndex = null;
-  }
-
-  Future<void> _repairMobileAudioAfterStaleCollapse() async {
-    try {
-      await _routeMobileAudioPlaybackForCurrentMode();
-    } catch (_) {}
-  }
-
-  bool _isCurrentMobileVideoCollapseRequest({
-    required int request,
-    required Track track,
-    required int index,
-  }) {
-    return request == _mobileVideoCollapseRequest &&
-        _isMobilePlaybackSurface &&
-        _playbackMode == PlaybackMode.video &&
-        _playerIndex == index &&
-        _currentTrack?.id == track.id;
   }
 
   double _lastSavedProgress = 0;
