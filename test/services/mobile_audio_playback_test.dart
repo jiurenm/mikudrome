@@ -822,6 +822,57 @@ void main() {
     },
   );
 
+  test('clear cache waits for an active recovery source mutation', () async {
+    final player = OrderedDelayedSetAudioSourcesFakeJustAudioPlayer(
+      delayedInvocation: 2,
+    );
+    var clearCalls = 0;
+    final service = audio_service.JustAudioMobileAudioPlaybackService(
+      player: player,
+      cacheClearer: () async {
+        clearCalls += 1;
+        player.operations.add('clear');
+      },
+    );
+
+    await service.playQueue(
+      queue: [_track(1)],
+      index: 0,
+      audioUrlForTrack: (_) => 'http://server/audio/first',
+    );
+    player.setPosition(const Duration(seconds: 42));
+    player.emitError(PlayerException(1, 'connection lost', 0));
+    await player.delayedSetStarted;
+    final clear = service.clearCache();
+    addTearDown(() async {
+      player.completeDelayedSet();
+      await clear;
+      await service.dispose();
+    });
+
+    await pumpEventQueue();
+
+    expect(player.activeSetAudioSourcesCalls, 1);
+    expect(player.stopCalls, 0);
+    expect(clearCalls, 0);
+
+    player.completeDelayedSet();
+    await clear;
+    await pumpEventQueue();
+
+    expect(player.stopCalls, 1);
+    expect(clearCalls, 1);
+    expect(player.operations, [
+      'source:http://server/audio/first',
+      contains('source:http://server/audio/first?quality=low'),
+      'stop',
+      'clear',
+    ]);
+    expect(player.seekPositions, isEmpty);
+    expect(player.playCalls, 1);
+    expect(service.currentState.queue, isEmpty);
+  });
+
   test(
     'queue replacement waits for recovery seek and keeps initial position',
     () async {
@@ -1402,6 +1453,42 @@ void main() {
     },
   );
 
+  test('stop still runs when a later queue supersedes its state', () async {
+    final player = OrderedDelayedSetAudioSourcesFakeJustAudioPlayer();
+    final service = audio_service.JustAudioMobileAudioPlaybackService(
+      player: player,
+    );
+
+    final firstLoad = service.playQueue(
+      queue: [_track(1)],
+      index: 0,
+      audioUrlForTrack: (_) => 'http://server/audio/first',
+    );
+    await player.delayedSetStarted;
+    final stop = service.stop();
+    final secondLoad = service.playQueue(
+      queue: [_track(2)],
+      index: 0,
+      audioUrlForTrack: (_) => 'http://server/audio/second',
+    );
+    addTearDown(() async {
+      player.completeDelayedSet();
+      await Future.wait([firstLoad, stop, secondLoad]);
+      await service.dispose();
+    });
+
+    player.completeDelayedSet();
+    await Future.wait([firstLoad, stop, secondLoad]);
+
+    expect(player.stopCalls, 1);
+    expect(player.operations, [
+      'source:http://server/audio/first',
+      'stop',
+      'source:http://server/audio/second',
+    ]);
+    expect(service.currentState.track?.id, 2);
+  });
+
   test('just_audio service stops playback before clearing cache', () async {
     final player = FakeJustAudioPlayer();
     var stopCallsObservedByClearer = -1;
@@ -1471,6 +1558,46 @@ void main() {
       expect(states.where((state) => state.queue.isNotEmpty), isEmpty);
     },
   );
+
+  test('clear cache still runs before a later queue load', () async {
+    final player = OrderedDelayedSetAudioSourcesFakeJustAudioPlayer();
+    final service = audio_service.JustAudioMobileAudioPlaybackService(
+      player: player,
+      cacheClearer: () async {
+        player.operations.add('clear');
+      },
+    );
+
+    final firstLoad = service.playQueue(
+      queue: [_track(1)],
+      index: 0,
+      audioUrlForTrack: (_) => 'http://server/audio/first',
+    );
+    await player.delayedSetStarted;
+    final clear = service.clearCache();
+    final secondLoad = service.playQueue(
+      queue: [_track(2)],
+      index: 0,
+      audioUrlForTrack: (_) => 'http://server/audio/second',
+    );
+    addTearDown(() async {
+      player.completeDelayedSet();
+      await Future.wait([firstLoad, clear, secondLoad]);
+      await service.dispose();
+    });
+
+    player.completeDelayedSet();
+    await Future.wait([firstLoad, clear, secondLoad]);
+
+    expect(player.stopCalls, 1);
+    expect(player.operations, [
+      'source:http://server/audio/first',
+      'stop',
+      'clear',
+      'source:http://server/audio/second',
+    ]);
+    expect(service.currentState.track?.id, 2);
+  });
 
   test('just_audio service ignores temporary cache clear failures', () async {
     final player = FakeJustAudioPlayer();
@@ -1614,6 +1741,101 @@ void main() {
   );
 
   test(
+    'dispose waits for a single-flight load started outside queue work',
+    () async {
+      final player = FakeJustAudioPlayer();
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+      final handlerCompleter = Completer<audio_service.MikudromeAudioHandler>();
+      final loaderStarted = Completer<void>();
+      var loaderCalls = 0;
+      final service = audio_service.JustAudioMobileAudioPlaybackService(
+        handlerLoader: () {
+          loaderCalls += 1;
+          if (!loaderStarted.isCompleted) {
+            loaderStarted.complete();
+          }
+          return handlerCompleter.future;
+        },
+      );
+
+      final pause = service.pause();
+      await loaderStarted.future;
+      final seek = service.seek(const Duration(seconds: 12));
+      var disposeCompleted = false;
+      final dispose = service.dispose().then((_) {
+        disposeCompleted = true;
+      });
+      addTearDown(() async {
+        if (!handlerCompleter.isCompleted) {
+          handlerCompleter.complete(handler);
+        }
+        await Future.wait([pause, seek, dispose]);
+        if (player.disposeCalls == 0) {
+          await handler.dispose();
+        }
+      });
+
+      await pumpEventQueue();
+
+      expect(loaderCalls, 1);
+      expect(disposeCompleted, isFalse);
+      expect(player.disposeCalls, 0);
+
+      handlerCompleter.complete(handler);
+      await Future.wait([pause, seek, dispose]);
+
+      expect(player.pauseCalls, 0);
+      expect(player.seekPositions, isEmpty);
+      expect(player.disposeCalls, 1);
+    },
+  );
+
+  test(
+    'single-flight loader errors reach callers while dispose completes',
+    () async {
+      final handlerCompleter = Completer<audio_service.MikudromeAudioHandler>();
+      final loaderStarted = Completer<void>();
+      var loaderCalls = 0;
+      final service = audio_service.JustAudioMobileAudioPlaybackService(
+        handlerLoader: () {
+          loaderCalls += 1;
+          if (!loaderStarted.isCompleted) {
+            loaderStarted.complete();
+          }
+          return handlerCompleter.future;
+        },
+      );
+
+      final pauseExpectation = expectLater(service.pause(), throwsStateError);
+      await loaderStarted.future;
+      final seekExpectation = expectLater(
+        service.seek(const Duration(seconds: 12)),
+        throwsStateError,
+      );
+      var disposeCompleted = false;
+      final dispose = service.dispose().then((_) {
+        disposeCompleted = true;
+      });
+      addTearDown(() async {
+        if (!handlerCompleter.isCompleted) {
+          handlerCompleter.completeError(StateError('load failed'));
+        }
+        await Future.wait([pauseExpectation, seekExpectation, dispose]);
+      });
+
+      await pumpEventQueue();
+
+      expect(loaderCalls, 1);
+      expect(disposeCompleted, isFalse);
+
+      handlerCompleter.completeError(StateError('load failed'));
+      await Future.wait([pauseExpectation, seekExpectation, dispose]);
+
+      expect(disposeCompleted, isTrue);
+    },
+  );
+
+  test(
     'dispose waits for an active source apply before disposing player',
     () async {
       final player = DisposeGateDelayedSetAudioSourcesFakeJustAudioPlayer();
@@ -1662,6 +1884,55 @@ void main() {
       expect(player.disposeCalls, 1);
     },
   );
+
+  test('dispose waits for an active recovery source mutation', () async {
+    final player = DisposeGateDelayedSetAudioSourcesFakeJustAudioPlayer(
+      delayedInvocation: 2,
+    );
+    final service = audio_service.JustAudioMobileAudioPlaybackService(
+      player: player,
+    );
+    final states = <MobileAudioPlaybackState>[];
+    final sub = service.states.listen(states.add);
+
+    await service.playQueue(
+      queue: [_track(1)],
+      index: 0,
+      audioUrlForTrack: (_) => 'http://server/audio/first',
+    );
+    player.setPosition(const Duration(seconds: 42));
+    player.emitError(PlayerException(1, 'connection lost', 0));
+    await player.delayedSetStarted;
+    final stateCountBeforeDispose = states.length;
+    final dispose = service.dispose();
+    addTearDown(() async {
+      player.completeDelayedSet();
+      player.completeDispose();
+      await dispose;
+      await sub.cancel();
+    });
+
+    await pumpEventQueue();
+
+    expect(player.activeSetAudioSourcesCalls, 1);
+    expect(player.disposeInvocations, 0);
+    expect(player.disposeCalls, 0);
+
+    player.completeDelayedSet();
+    await player.disposeStarted;
+
+    expect(player.activeSetAudioSourcesCalls, 0);
+    expect(player.seekPositions, isEmpty);
+    expect(player.playCalls, 1);
+    expect(states, hasLength(stateCountBeforeDispose));
+    expect(player.disposeCalls, 0);
+
+    player.completeDispose();
+    await dispose;
+
+    expect(player.disposeInvocations, 1);
+    expect(player.disposeCalls, 1);
+  });
 
   test('play failure is handled and leaves selected track paused', () async {
     final player = FakeJustAudioPlayer()..playError = StateError('play failed');
@@ -2201,10 +2472,44 @@ class DelayedSetAudioSourcesFakeJustAudioPlayer extends FakeJustAudioPlayer {
   }
 }
 
+class OrderedDelayedSetAudioSourcesFakeJustAudioPlayer
+    extends DelayedSetAudioSourcesFakeJustAudioPlayer {
+  OrderedDelayedSetAudioSourcesFakeJustAudioPlayer({super.delayedInvocation});
+
+  final operations = <String>[];
+
+  @override
+  Future<void> setAudioSources(
+    List<AudioSource> sources, {
+    required int initialIndex,
+    required Duration initialPosition,
+  }) async {
+    await super.setAudioSources(
+      sources,
+      initialIndex: initialIndex,
+      initialPosition: initialPosition,
+    );
+    operations.add('source:${_sourceUri(sources.single)}');
+  }
+
+  @override
+  Future<void> stop() async {
+    operations.add('stop');
+    await super.stop();
+  }
+}
+
 class DisposeGateDelayedSetAudioSourcesFakeJustAudioPlayer
     extends DelayedSetAudioSourcesFakeJustAudioPlayer {
+  DisposeGateDelayedSetAudioSourcesFakeJustAudioPlayer({
+    super.delayedInvocation,
+  });
+
   final _releaseDispose = Completer<void>();
+  final _disposeStarted = Completer<void>();
   int disposeInvocations = 0;
+
+  Future<void> get disposeStarted => _disposeStarted.future;
 
   void completeDispose() {
     if (!_releaseDispose.isCompleted) {
@@ -2215,6 +2520,9 @@ class DisposeGateDelayedSetAudioSourcesFakeJustAudioPlayer
   @override
   Future<void> dispose() async {
     disposeInvocations += 1;
+    if (!_disposeStarted.isCompleted) {
+      _disposeStarted.complete();
+    }
     await _releaseDispose.future;
     await super.dispose();
   }
