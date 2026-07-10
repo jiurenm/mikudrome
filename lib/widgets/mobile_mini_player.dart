@@ -103,6 +103,7 @@ class MobileMiniPlayer extends StatelessWidget {
                                 ),
                                 color: AppTheme.mikuGreen,
                                 strokeWidth: 2.5,
+                                semanticsLabel: '音频加载中',
                               ),
                             )
                           : Icon(

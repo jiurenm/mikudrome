@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/models/track.dart';
 import 'package:mikudrome/screens/library_home_screen.dart';
 import 'package:mikudrome/screens/player_screen.dart';
+import 'package:mikudrome/theme/vocal_theme.dart';
 import 'package:mikudrome/widgets/player/asset_slider_thumb_shape.dart';
 
 const _track = Track(
@@ -25,9 +26,75 @@ const _timedLyricTrack = Track(
   lyrics: '[00:00.00]first line\n[00:30.00]second line',
 );
 
+const _darkAccent = Color(0xFF0000FF);
+const _darkAccentTrack = Track(
+  id: 3,
+  title: 'Dark accent external audio',
+  audioPath: '/tmp/3.flac',
+  videoPath: '',
+  durationSeconds: 120,
+  vocal: 'KAITO',
+);
+
+const _brightAccent = Color(0xFFFFE211);
+const _brightAccentTrack = Track(
+  id: 4,
+  title: 'Bright accent external audio',
+  audioPath: '/tmp/4.flac',
+  videoPath: '',
+  durationSeconds: 120,
+  vocal: '鏡音レン',
+);
+
+const _videoTrack = Track(
+  id: 5,
+  title: 'Video track',
+  audioPath: '/tmp/5.flac',
+  videoPath: '/tmp/5.mp4',
+  durationSeconds: 120,
+);
+
+double _contrastRatio(Color first, Color second) {
+  final firstLuminance = first.computeLuminance();
+  final secondLuminance = second.computeLuminance();
+  final lighter = firstLuminance > secondLuminance
+      ? firstLuminance
+      : secondLuminance;
+  final darker = firstLuminance > secondLuminance
+      ? secondLuminance
+      : firstLuminance;
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+void _expectLoadingControlContrast(
+  WidgetTester tester, {
+  required Color accentColor,
+}) {
+  final indicatorFinder = find.byKey(
+    const ValueKey('player-external-audio-loading-indicator'),
+  );
+  final buttonFinder = find.ancestor(
+    of: indicatorFinder,
+    matching: find.byType(IconButton),
+  );
+  final indicator = tester.widget<CircularProgressIndicator>(indicatorFinder);
+  final button = tester.widget<IconButton>(buttonFinder);
+  final disabledBackground = button.style?.backgroundColor?.resolve({
+    WidgetState.disabled,
+  });
+
+  expect(disabledBackground, accentColor);
+  expect(indicator.semanticsLabel, '音频加载中');
+  expect(
+    _contrastRatio(indicator.color!, disabledBackground!),
+    greaterThanOrEqualTo(4.5),
+  );
+}
+
 Widget _buildPlayer({
   Track track = _track,
   Size surfaceSize = const Size(430, 900),
+  PlaybackMode playbackMode = PlaybackMode.audio,
   required double externalProgress,
   required bool externalIsPlaying,
   bool externalIsLoading = false,
@@ -46,29 +113,32 @@ Widget _buildPlayer({
   return MaterialApp(
     home: MediaQuery(
       data: MediaQueryData(size: surfaceSize),
-      child: PlayerScreen(
+      child: VocalThemeProvider(
         track: track,
-        queue: [track],
-        currentIndex: 0,
-        contextLabel: 'External Audio Test',
-        playbackMode: PlaybackMode.audio,
-        onSelectTrack: (_) {},
-        onPrevious: () {},
-        onNext: () {},
-        onClose: () {},
-        onSwitchPlaybackMode: (_) {},
-        playbackOrderMode: PlaybackOrderMode.sequential,
-        onCyclePlaybackOrderMode: () {},
-        onPlaybackStateChanged: onPlaybackStateChanged,
-        onControlsReady: onControlsReady,
-        initializeControllerOnStart: false,
-        useExternalAudioPlayback: true,
-        externalIsPlaying: externalIsPlaying,
-        externalIsLoading: externalIsLoading,
-        externalProgress: externalProgress,
-        onExternalPlay: onExternalPlay,
-        onExternalPause: onExternalPause,
-        onExternalSeekToFraction: onExternalSeekToFraction,
+        child: PlayerScreen(
+          track: track,
+          queue: [track],
+          currentIndex: 0,
+          contextLabel: 'External Audio Test',
+          playbackMode: playbackMode,
+          onSelectTrack: (_) {},
+          onPrevious: () {},
+          onNext: () {},
+          onClose: () {},
+          onSwitchPlaybackMode: (_) {},
+          playbackOrderMode: PlaybackOrderMode.sequential,
+          onCyclePlaybackOrderMode: () {},
+          onPlaybackStateChanged: onPlaybackStateChanged,
+          onControlsReady: onControlsReady,
+          initializeControllerOnStart: false,
+          useExternalAudioPlayback: true,
+          externalIsPlaying: externalIsPlaying,
+          externalIsLoading: externalIsLoading,
+          externalProgress: externalProgress,
+          onExternalPlay: onExternalPlay,
+          onExternalPause: onExternalPause,
+          onExternalSeekToFraction: onExternalSeekToFraction,
+        ),
       ),
     ),
   );
@@ -84,6 +154,7 @@ void main() {
 
     await tester.pumpWidget(
       _buildPlayer(
+        track: _darkAccentTrack,
         externalProgress: 0.25,
         externalIsPlaying: false,
         externalIsLoading: true,
@@ -113,6 +184,7 @@ void main() {
     expect(indicator, findsOneWidget);
     expect(centralButton, findsOneWidget);
     expect(tester.widget<IconButton>(centralButton).onPressed, isNull);
+    _expectLoadingControlContrast(tester, accentColor: _darkAccent);
 
     await tester.tap(centralButton);
     await tester.pump();
@@ -132,6 +204,7 @@ void main() {
       try {
         await tester.pumpWidget(
           _buildPlayer(
+            track: _darkAccentTrack,
             surfaceSize: const Size(844, 390),
             externalProgress: 0.25,
             externalIsPlaying: false,
@@ -165,6 +238,7 @@ void main() {
         );
         expect(indicator, findsOneWidget);
         expect(tester.widget<IconButton>(centralButton).onPressed, isNull);
+        _expectLoadingControlContrast(tester, accentColor: _darkAccent);
 
         await tester.tap(centralButton);
         await tester.pump();
@@ -175,6 +249,45 @@ void main() {
       }
     },
   );
+
+  testWidgets('bright external accent uses a dark loading foreground', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _buildPlayer(
+        track: _brightAccentTrack,
+        externalProgress: 0.25,
+        externalIsPlaying: false,
+        externalIsLoading: true,
+        onExternalPause: () async {},
+        onExternalSeekToFraction: (_) async {},
+        onControlsReady:
+            ({required togglePlayback, required seekToFraction}) {},
+        onPlaybackStateChanged:
+            ({
+              required bool isPlaying,
+              required double progress,
+              required String elapsedLabel,
+              required String durationLabel,
+            }) {},
+      ),
+    );
+
+    _expectLoadingControlContrast(tester, accentColor: _brightAccent);
+    expect(
+      tester
+          .widget<CircularProgressIndicator>(
+            find.byKey(
+              const ValueKey('player-external-audio-loading-indicator'),
+            ),
+          )
+          .color,
+      Colors.black,
+    );
+  });
 
   testWidgets(
     'non-loading external audio keeps mobile play and pause actions',
@@ -261,6 +374,45 @@ void main() {
     await tester.pump();
 
     expect(playCalls, 1);
+  });
+
+  testWidgets('external loading does not disable mobile video controls', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _buildPlayer(
+        track: _videoTrack,
+        playbackMode: PlaybackMode.video,
+        externalProgress: 0.25,
+        externalIsPlaying: false,
+        externalIsLoading: true,
+        onExternalPause: () async {},
+        onExternalSeekToFraction: (_) async {},
+        onControlsReady:
+            ({required togglePlayback, required seekToFraction}) {},
+        onPlaybackStateChanged:
+            ({
+              required bool isPlaying,
+              required double progress,
+              required String elapsedLabel,
+              required String durationLabel,
+            }) {},
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('player-external-audio-loading-indicator')),
+      findsNothing,
+    );
+    final playButton = find.ancestor(
+      of: find.byIcon(Icons.play_circle),
+      matching: find.byType(IconButton),
+    );
+    expect(playButton, findsOneWidget);
+    expect(tester.widget<IconButton>(playButton).onPressed, isNotNull);
   });
 
   testWidgets('external audio pause does not emit stale zero progress', (

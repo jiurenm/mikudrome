@@ -849,12 +849,21 @@ void main() {
 
       expect(service.playQueueAttempts, 1);
 
-      tester
-          .widget<MobilePlayerSheet>(find.byType(MobilePlayerSheet))
-          .onExpandedChanged!
-          .call(true);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(MobileMiniPlayer),
+          matching: find.text('Resume Two'),
+        ),
+      );
+      await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 
+      expect(
+        tester
+            .widget<MobilePlayerSheet>(find.byType(MobilePlayerSheet))
+            .expanded,
+        isTrue,
+      );
       expect(
         find.byKey(const ValueKey('mobile-player-immersive')),
         findsOneWidget,
@@ -901,6 +910,99 @@ void main() {
     expect(service.playQueueAttempts, 1);
     expect(service.playedIndexes, [1]);
     expect(service.playCalls, 0);
+  });
+
+  testWidgets('delayed restored failure clears loading and allows retry', (
+    tester,
+  ) async {
+    final service = _DelayedFailingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+    await _seedPlaybackState(progress: 0.5);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(MobileMiniPlayer),
+          matching: find.byIcon(Icons.play_arrow),
+        ),
+      );
+      await tester.pump();
+
+      final miniLoadingIndicator = find.byKey(
+        const ValueKey('mobile-mini-player-loading-indicator'),
+        skipOffstage: false,
+      );
+      final miniPlayButton = find.ancestor(
+        of: miniLoadingIndicator,
+        matching: find.byType(IconButton),
+      );
+      expect(miniLoadingIndicator, findsOneWidget);
+      expect(tester.widget<IconButton>(miniPlayButton).onPressed, isNull);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(MobileMiniPlayer),
+          matching: find.text('Resume Two'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final expandedLoadingIndicator = find.byKey(
+        const ValueKey('player-external-audio-loading-indicator'),
+      );
+      final expandedPlayButton = find.ancestor(
+        of: expandedLoadingIndicator,
+        matching: find.byType(IconButton),
+      );
+      expect(expandedLoadingIndicator, findsOneWidget);
+      expect(tester.widget<IconButton>(expandedPlayButton).onPressed, isNull);
+      expect(service.playQueueAttempts, 1);
+
+      service.releaseFailure();
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const ValueKey('player-external-audio-loading-indicator'))
+            .evaluate()
+            .isEmpty,
+        attempts: 20,
+      );
+
+      expect(expandedLoadingIndicator, findsNothing);
+      expect(miniLoadingIndicator, findsNothing);
+      expect(find.text('播放启动失败，请重试'), findsOneWidget);
+
+      final playIcon = find.descendant(
+        of: find.byKey(const ValueKey('mobile-player-immersive')),
+        matching: find.byIcon(Icons.play_arrow),
+      );
+      final playButton = find.ancestor(
+        of: playIcon,
+        matching: find.byType(IconButton),
+      );
+      expect(playIcon, findsOneWidget);
+      expect(tester.widget<IconButton>(playButton).onPressed, isNotNull);
+
+      await tester.tap(playButton);
+      await _pumpUntil(tester, () => service.playQueueAttempts == 2);
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(service.playQueueAttempts, 2);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('mobile-player-immersive')),
+          matching: find.byIcon(Icons.pause),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('播放启动失败，请重试'), findsOneWidget);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('stale restored failure cannot finish newer UI intent', (
@@ -2119,6 +2221,52 @@ class _DelayedMobileAudioPlaybackService
   @override
   Future<void> dispose() async {
     completePlayQueue();
+    await super.dispose();
+  }
+}
+
+class _DelayedFailingMobileAudioPlaybackService
+    extends _RecordingMobileAudioPlaybackService {
+  final Completer<void> _failureRelease = Completer<void>();
+  int playQueueAttempts = 0;
+
+  void releaseFailure() {
+    if (!_failureRelease.isCompleted) {
+      _failureRelease.complete();
+    }
+  }
+
+  @override
+  Future<void> playQueue({
+    required List<Track> queue,
+    required int index,
+    required AudioUrlForTrack audioUrlForTrack,
+    CoverUrlForTrack? coverUrlForTrack,
+    MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
+    Duration initialPosition = Duration.zero,
+    TrackFavoriteStatus? isTrackFavorited,
+    TrackFavoriteToggle? toggleTrackFavorite,
+  }) async {
+    playQueueAttempts += 1;
+    if (playQueueAttempts == 1) {
+      await _failureRelease.future;
+      throw StateError('delayed audio startup failed');
+    }
+    await super.playQueue(
+      queue: queue,
+      index: index,
+      audioUrlForTrack: audioUrlForTrack,
+      coverUrlForTrack: coverUrlForTrack,
+      orderMode: orderMode,
+      initialPosition: initialPosition,
+      isTrackFavorited: isTrackFavorited,
+      toggleTrackFavorite: toggleTrackFavorite,
+    );
+  }
+
+  @override
+  Future<void> dispose() async {
+    releaseFailure();
     await super.dispose();
   }
 }

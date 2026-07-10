@@ -43,6 +43,7 @@ void main() {
     expect(indicator, findsOneWidget);
     expect(tester.getSize(indicator), const Size.square(24));
     expect(progressIndicator.color, AppTheme.mikuGreen);
+    expect(progressIndicator.semanticsLabel, '音频加载中');
     expect(playPauseButton.onPressed, isNull);
 
     await tester.tap(find.byType(IconButton));

@@ -971,13 +971,29 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _buildExternalAudioLoadingIndicator(Color accentColor) {
+    final foregroundColor =
+        ThemeData.estimateBrightnessForColor(accentColor) == Brightness.dark
+        ? Colors.white
+        : Colors.black;
     return SizedBox.square(
       dimension: 24,
       child: CircularProgressIndicator(
         key: const ValueKey('player-external-audio-loading-indicator'),
-        color: accentColor,
+        color: foregroundColor,
         strokeWidth: 2.5,
+        semanticsLabel: '音频加载中',
       ),
+    );
+  }
+
+  ButtonStyle _externalAudioPlayButtonStyle({
+    required Color accentColor,
+    required Size fixedSize,
+  }) {
+    return IconButton.styleFrom(
+      backgroundColor: accentColor,
+      disabledBackgroundColor: accentColor,
+      fixedSize: fixedSize,
     );
   }
 
@@ -1402,8 +1418,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     size: 42,
                     color: const Color(0xFF071015),
                   ),
-            style: IconButton.styleFrom(
-              backgroundColor: accentColor,
+            style: _externalAudioPlayButtonStyle(
+              accentColor: accentColor,
               fixedSize: const Size(64, 64),
             ),
           ),
@@ -1703,8 +1719,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 size: 46,
                                 color: const Color(0xFF071015),
                               ),
-                        style: IconButton.styleFrom(
-                          backgroundColor: accentColor,
+                        style: _externalAudioPlayButtonStyle(
+                          accentColor: accentColor,
                           fixedSize: const Size(74, 74),
                         ),
                       ),
