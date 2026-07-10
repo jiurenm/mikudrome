@@ -809,6 +809,7 @@ class JustAudioMobileAudioPlaybackService
   final List<StreamSubscription<Object?>> _subscriptions = [];
   MobileAudioPlaybackState _currentState = MobileAudioPlaybackState.empty();
   MikudromeAudioHandler? _boundHandler;
+  MikudromeAudioHandler? _loadedHandler;
   Future<void> _queueMutationTail = Future<void>.value();
   int _latestQueueGeneration = 0;
   int _appliedQueueGeneration = 0;
@@ -837,19 +838,11 @@ class JustAudioMobileAudioPlaybackService
 
     final generation = ++_latestQueueGeneration;
     final nextQueue = List<Track>.unmodifiable(queue);
-    return _enqueueQueueMutation(() async {
-      if (_disposed || generation != _latestQueueGeneration) return;
-
-      final handler = await _effectiveHandler();
-      if (_disposed || generation != _latestQueueGeneration) return;
-
-      final nextAudioUrls = List<String>.unmodifiable(
-        nextQueue.map(audioUrlForTrack),
-      );
-      _applyingQueueGeneration = generation;
-      _applyingQueueState = null;
-      MobileAudioPlaybackState? appliedState;
-      try {
+    return _enqueueQueueMutation(() {
+      return _applyQueueGeneration(generation, (handler) async {
+        final nextAudioUrls = List<String>.unmodifiable(
+          nextQueue.map(audioUrlForTrack),
+        );
         await handler.setMikudromeQueue(
           tracks: nextQueue,
           audioUrls: nextAudioUrls,
@@ -860,18 +853,35 @@ class JustAudioMobileAudioPlaybackService
           isTrackFavorited: isTrackFavorited,
           toggleTrackFavorite: toggleTrackFavorite,
         );
-        _appliedQueueGeneration = generation;
-        appliedState = _applyingQueueState;
-      } finally {
-        if (_applyingQueueGeneration == generation) {
-          _applyingQueueGeneration = null;
-          _applyingQueueState = null;
-        }
-      }
-      if (appliedState != null) {
-        _emit(appliedState);
-      }
+      });
     });
+  }
+
+  Future<bool> _applyQueueGeneration(
+    int generation,
+    Future<void> Function(MikudromeAudioHandler handler) mutation,
+  ) async {
+    if (_disposed || generation != _latestQueueGeneration) return false;
+    final handler = await _effectiveHandler();
+    if (_disposed || generation != _latestQueueGeneration) return false;
+
+    _applyingQueueGeneration = generation;
+    _applyingQueueState = null;
+    MobileAudioPlaybackState? appliedState;
+    try {
+      await mutation(handler);
+      _appliedQueueGeneration = generation;
+      appliedState = _applyingQueueState;
+    } finally {
+      if (_applyingQueueGeneration == generation) {
+        _applyingQueueGeneration = null;
+        _applyingQueueState = null;
+      }
+    }
+    if (appliedState != null) {
+      _emit(appliedState);
+    }
+    return true;
   }
 
   Future<void> _enqueueQueueMutation(Future<void> Function() mutation) {
@@ -888,10 +898,14 @@ class JustAudioMobileAudioPlaybackService
   }
 
   @override
-  Future<void> setPlaybackOrderMode(MobilePlaybackOrderMode orderMode) async {
-    if (_disposed) return;
-    final handler = await _effectiveHandler();
-    await handler.setPlaybackOrderMode(orderMode);
+  Future<void> setPlaybackOrderMode(MobilePlaybackOrderMode orderMode) {
+    if (_disposed) return Future<void>.value();
+    return _enqueueQueueMutation(() async {
+      if (_disposed) return;
+      final handler = await _effectiveHandler();
+      if (_disposed) return;
+      await handler.setPlaybackOrderMode(orderMode);
+    });
   }
 
   @override
@@ -922,19 +936,28 @@ class JustAudioMobileAudioPlaybackService
   }
 
   @override
-  Future<void> stop() async {
-    if (_disposed) return;
-    final handler = await _effectiveHandler();
-    await handler.stop();
+  Future<void> stop() {
+    if (_disposed) return Future<void>.value();
+    final generation = ++_latestQueueGeneration;
+    return _enqueueQueueMutation(() async {
+      await _applyQueueGeneration(generation, (handler) => handler.stop());
+    });
   }
 
   @override
-  Future<void> clearCache() async {
-    if (_disposed) return;
-    await stop();
-    try {
-      await _cacheClearer();
-    } catch (_) {}
+  Future<void> clearCache() {
+    if (_disposed) return Future<void>.value();
+    final generation = ++_latestQueueGeneration;
+    return _enqueueQueueMutation(() async {
+      final didStop = await _applyQueueGeneration(
+        generation,
+        (handler) => handler.stop(),
+      );
+      if (!didStop) return;
+      try {
+        await _cacheClearer();
+      } catch (_) {}
+    });
   }
 
   @override
@@ -955,19 +978,23 @@ class JustAudioMobileAudioPlaybackService
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    _latestQueueGeneration += 1;
+    await _queueMutationTail;
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
-    await (_handler ?? _fallbackHandler ?? _boundHandler)?.dispose();
+    await (_handler ?? _fallbackHandler ?? _boundHandler ?? _loadedHandler)
+        ?.dispose();
     await _states.close();
   }
 
   Future<MikudromeAudioHandler> _effectiveHandler() async {
     final immediateHandler = _handler ?? _fallbackHandler;
     if (immediateHandler != null) return immediateHandler;
-    final existing = _boundHandler;
+    final existing = _boundHandler ?? _loadedHandler;
     if (existing != null) return existing;
     final handler = await _handlerLoader!();
+    _loadedHandler = handler;
     if (!_disposed) {
       _bindHandler(handler);
     }
