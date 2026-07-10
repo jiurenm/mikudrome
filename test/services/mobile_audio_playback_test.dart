@@ -841,7 +841,7 @@ void main() {
   );
 
   test('late recovery play error does not pause replacement queue', () async {
-    final player = DelayedRecoveryPlayErrorFakeJustAudioPlayer();
+    final player = DelayedPlayErrorFakeJustAudioPlayer();
     final service = audio_service.JustAudioMobileAudioPlaybackService(
       player: player,
     );
@@ -856,7 +856,7 @@ void main() {
     player.setPosition(const Duration(seconds: 24));
 
     player.emitError(PlayerException(1, 'connection lost', 0));
-    await player.recoveryPlayStarted;
+    await player.delayedPlayStarted;
     await service.playQueue(
       queue: [_track(2)],
       index: 0,
@@ -864,19 +864,96 @@ void main() {
       initialPosition: const Duration(seconds: 31),
     );
     addTearDown(() async {
-      player.failRecoveryPlay();
+      player.failDelayedPlay();
       await pumpEventQueue();
       await sub.cancel();
       await service.dispose();
     });
     states.clear();
 
-    player.failRecoveryPlay();
+    player.failDelayedPlay();
     await pumpEventQueue();
 
     expect(states, isEmpty);
     expect(service.currentState.track?.id, 2);
     expect(service.currentState.position, const Duration(seconds: 31));
+    expect(service.currentState.isPlaying, isTrue);
+  });
+
+  test(
+    'late initial queue play error does not pause replacement queue',
+    () async {
+      final player = DelayedPlayErrorFakeJustAudioPlayer(
+        delayedPlayInvocation: 1,
+      );
+      final service = audio_service.JustAudioMobileAudioPlaybackService(
+        player: player,
+      );
+      final states = <MobileAudioPlaybackState>[];
+      final sub = service.states.listen(states.add);
+
+      await service.playQueue(
+        queue: [_track(1)],
+        index: 0,
+        audioUrlForTrack: (_) => 'http://server/audio/first',
+      );
+      await player.delayedPlayStarted;
+      await service.playQueue(
+        queue: [_track(2)],
+        index: 0,
+        audioUrlForTrack: (_) => 'http://server/audio/second',
+      );
+      addTearDown(() async {
+        player.failDelayedPlay();
+        await pumpEventQueue();
+        await sub.cancel();
+        await service.dispose();
+      });
+      expect(player.playAttemptNumbers, [1, 2]);
+      states.clear();
+
+      player.failDelayedPlay();
+      await pumpEventQueue();
+
+      expect(states, isEmpty);
+      expect(service.currentState.track?.id, 2);
+      expect(service.currentState.isPlaying, isTrue);
+    },
+  );
+
+  test('late recovery attempt error does not undo newer recovery', () async {
+    final player = DelayedPlayErrorFakeJustAudioPlayer();
+    final service = audio_service.JustAudioMobileAudioPlaybackService(
+      player: player,
+    );
+    final states = <MobileAudioPlaybackState>[];
+    final sub = service.states.listen(states.add);
+
+    await service.playQueue(
+      queue: [_track(1)],
+      index: 0,
+      audioUrlForTrack: (_) => 'http://server/audio/first',
+    );
+
+    player.emitError(PlayerException(1, 'recovery A', 0));
+    await player.delayedPlayStarted;
+    await pumpEventQueue();
+    player.emitError(PlayerException(1, 'recovery B', 0));
+    await pumpEventQueue();
+    addTearDown(() async {
+      player.failDelayedPlay();
+      await pumpEventQueue();
+      await sub.cancel();
+      await service.dispose();
+    });
+    expect(player.playAttemptNumbers, [1, 2, 3]);
+    states.clear();
+
+    player.failDelayedPlay();
+    await pumpEventQueue();
+
+    expect(states, isEmpty);
+    expect(service.currentState.track?.id, 1);
     expect(service.currentState.isPlaying, isTrue);
   });
 
@@ -1934,32 +2011,37 @@ class DelayedRecoverySeekFakeJustAudioPlayer extends FakeJustAudioPlayer {
   }
 }
 
-class DelayedRecoveryPlayErrorFakeJustAudioPlayer extends FakeJustAudioPlayer {
-  final _recoveryPlayStarted = Completer<void>();
-  final _recoveryPlay = Completer<void>();
+class DelayedPlayErrorFakeJustAudioPlayer extends FakeJustAudioPlayer {
+  DelayedPlayErrorFakeJustAudioPlayer({this.delayedPlayInvocation = 2});
 
-  Future<void> get recoveryPlayStarted => _recoveryPlayStarted.future;
+  final int delayedPlayInvocation;
+  final _delayedPlayStarted = Completer<void>();
+  final _delayedPlay = Completer<void>();
+  final playAttemptNumbers = <int>[];
 
-  void failRecoveryPlay() {
-    if (!_recoveryPlay.isCompleted) {
-      _recoveryPlay.completeError(StateError('recovery play failed'));
+  Future<void> get delayedPlayStarted => _delayedPlayStarted.future;
+
+  void failDelayedPlay() {
+    if (!_delayedPlay.isCompleted) {
+      _delayedPlay.completeError(StateError('delayed play failed'));
     }
   }
 
   @override
   Future<void> play() {
     playCalls += 1;
+    playAttemptNumbers.add(playCalls);
     setPlaying(true);
-    if (playCalls == 2) {
-      _recoveryPlayStarted.complete();
-      return _recoveryPlay.future;
+    if (playCalls == delayedPlayInvocation) {
+      _delayedPlayStarted.complete();
+      return _delayedPlay.future;
     }
     return Future<void>.value();
   }
 
   @override
   Future<void> dispose() async {
-    failRecoveryPlay();
+    failDelayedPlay();
     await super.dispose();
   }
 }

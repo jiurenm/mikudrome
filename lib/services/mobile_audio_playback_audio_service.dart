@@ -96,6 +96,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
   TrackFavoriteToggle? _toggleTrackFavorite;
   Future<void> _sourceMutationTail = Future<void>.value();
   int _sourceGeneration = 0;
+  int _latestPlayAttempt = 0;
   bool _isApplyingQueueSource = false;
   bool _disposed = false;
 
@@ -114,6 +115,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
   }) {
     if (_disposed) return Future<void>.value();
     final generation = ++_sourceGeneration;
+    _invalidatePlayAttempt();
     final nextTracks = List<Track>.unmodifiable(tracks);
     final nextAudioUrls = List<String>.unmodifiable(audioUrls);
     final artHeaders = ApiConfig.defaultHeaders.isEmpty
@@ -246,6 +248,8 @@ class MikudromeAudioHandler extends BaseAudioHandler
   @override
   Future<void> play() async {
     if (_disposed) return;
+    final sourceGeneration = _sourceGeneration;
+    final playAttempt = _beginPlayAttempt();
     _lastPausedSeekPosition = null;
     _isCompleted = false;
     _playbackRequested = true;
@@ -258,20 +262,35 @@ class MikudromeAudioHandler extends BaseAudioHandler
       }
       unawaited(
         playFuture.catchError((Object _) {
-          if (!_disposed && _tracks.isNotEmpty) {
-            _playbackRequested = false;
-            _publishPlaybackState(isPlaying: false);
-            _emitMikudromeState(isPlaying: false);
-          }
+          _handlePlayFailure(sourceGeneration, playAttempt);
         }),
       );
     } catch (_) {
-      if (!_disposed && _tracks.isNotEmpty) {
-        _playbackRequested = false;
-        _publishPlaybackState(isPlaying: false);
-        _emitMikudromeState(isPlaying: false);
-      }
+      _handlePlayFailure(sourceGeneration, playAttempt);
     }
+  }
+
+  int _beginPlayAttempt() => ++_latestPlayAttempt;
+
+  void _invalidatePlayAttempt() {
+    _latestPlayAttempt += 1;
+  }
+
+  bool _ownsPlayAttempt(int sourceGeneration, int playAttempt) {
+    return !_disposed &&
+        sourceGeneration == _sourceGeneration &&
+        playAttempt == _latestPlayAttempt;
+  }
+
+  void _handlePlayFailure(int sourceGeneration, int playAttempt) {
+    if (!_ownsPlayAttempt(sourceGeneration, playAttempt) ||
+        !_playbackRequested ||
+        _tracks.isEmpty) {
+      return;
+    }
+    _playbackRequested = false;
+    _publishPlaybackState(isPlaying: false);
+    _emitMikudromeState(isPlaying: false);
   }
 
   @override
@@ -510,41 +529,49 @@ class MikudromeAudioHandler extends BaseAudioHandler
   Future<void> _recoverPlaybackAt(Duration position) async {
     _isRecoveringPlayback = true;
     final sourceGeneration = _sourceGeneration;
+    final playAttempt = _beginPlayAttempt();
     try {
       await _enqueueSourceMutation(() async {
-        if (!_canContinueRecovery(sourceGeneration)) return;
+        if (!_canContinueRecovery(sourceGeneration, playAttempt)) return;
         final sourceReady = await _switchCurrentTrackToLowQuality(
           position,
           sourceGeneration: sourceGeneration,
+          playAttempt: playAttempt,
         );
-        if (!sourceReady || !_canContinueRecovery(sourceGeneration)) return;
+        if (!sourceReady ||
+            !_canContinueRecovery(sourceGeneration, playAttempt)) {
+          return;
+        }
 
         await _player.seek(position);
-        if (!_canContinueRecovery(sourceGeneration)) return;
+        if (!_canContinueRecovery(sourceGeneration, playAttempt)) return;
 
         final playFuture = _player.play();
         unawaited(
           playFuture.catchError((Object _) {
-            _handleRecoveryFailure(position, sourceGeneration);
+            _handleRecoveryFailure(position, sourceGeneration, playAttempt);
           }),
         );
       });
     } catch (_) {
-      _handleRecoveryFailure(position, sourceGeneration);
+      _handleRecoveryFailure(position, sourceGeneration, playAttempt);
     } finally {
       _isRecoveringPlayback = false;
     }
   }
 
-  bool _canContinueRecovery(int sourceGeneration) {
-    return !_disposed &&
-        sourceGeneration == _sourceGeneration &&
+  bool _canContinueRecovery(int sourceGeneration, int playAttempt) {
+    return _ownsPlayAttempt(sourceGeneration, playAttempt) &&
         _playbackRequested &&
         _tracks.isNotEmpty;
   }
 
-  void _handleRecoveryFailure(Duration position, int sourceGeneration) {
-    if (!_canContinueRecovery(sourceGeneration)) return;
+  void _handleRecoveryFailure(
+    Duration position,
+    int sourceGeneration,
+    int playAttempt,
+  ) {
+    if (!_canContinueRecovery(sourceGeneration, playAttempt)) return;
     _playbackRequested = false;
     _publishPlaybackState(isPlaying: false);
     _emitMikudromeState(position: position, isPlaying: false);
@@ -553,8 +580,10 @@ class MikudromeAudioHandler extends BaseAudioHandler
   Future<bool> _switchCurrentTrackToLowQuality(
     Duration position, {
     required int sourceGeneration,
+    required int playAttempt,
   }) async {
-    if (!_canContinueRecovery(sourceGeneration) || _audioUrls.isEmpty) {
+    if (!_canContinueRecovery(sourceGeneration, playAttempt) ||
+        _audioUrls.isEmpty) {
       return false;
     }
     final index = (_currentIndex ?? _player.currentIndex ?? 0).clamp(
@@ -577,7 +606,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
       initialIndex: index,
       initialPosition: position,
     );
-    if (!_canContinueRecovery(sourceGeneration)) return false;
+    if (!_canContinueRecovery(sourceGeneration, playAttempt)) return false;
     _audioUrls = List<String>.unmodifiable(nextAudioUrls);
     queue.add(List<MediaItem>.unmodifiable(nextQueue));
     if (index < nextQueue.length) {
