@@ -202,6 +202,8 @@ class MikudromeAudioHandler extends BaseAudioHandler
 
   AudioSource _audioSourceForUrl(String url) {
     final headers = ApiConfig.defaultHeaders;
+    // LockCachingAudioSource is just_audio's native transparent cache API.
+    // ignore: experimental_member_use
     return LockCachingAudioSource(
       Uri.parse(url),
       headers: headers.isEmpty ? null : headers,

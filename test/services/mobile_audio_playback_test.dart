@@ -1,3 +1,5 @@
+// ignore_for_file: experimental_member_use
+
 import 'dart:async';
 import 'dart:io';
 
@@ -958,7 +960,7 @@ void main() {
     final player = FakeJustAudioPlayer();
     final service = audio_service.JustAudioMobileAudioPlaybackService(
       player: player,
-      cacheClearer: () async => throw FileSystemException('cache busy'),
+      cacheClearer: () async => throw const FileSystemException('cache busy'),
     );
 
     await service.playQueue(
