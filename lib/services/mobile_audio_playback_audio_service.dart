@@ -46,7 +46,7 @@ abstract class MobileAudioPlayerAdapter {
   Duration? get duration;
 
   Future<void> setAudioSources(
-    List<UriAudioSource> sources, {
+    List<AudioSource> sources, {
     required int initialIndex,
     required Duration initialPosition,
   });
@@ -155,14 +155,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     ];
 
     await _player.setAudioSources(
-      nextAudioUrls
-          .map(
-            (url) => AudioSource.uri(
-              Uri.parse(url),
-              headers: ApiConfig.defaultHeaders,
-            ),
-          )
-          .toList(growable: false),
+      nextAudioUrls.map(_audioSourceForUrl).toList(growable: false),
       initialIndex: clampedIndex,
       initialPosition: clampedPosition,
     );
@@ -205,6 +198,14 @@ class MikudromeAudioHandler extends BaseAudioHandler
     final coverUrl = coverUrlForTrack?.call(track).trim() ?? '';
     if (coverUrl.isEmpty) return null;
     return Uri.tryParse(coverUrl);
+  }
+
+  AudioSource _audioSourceForUrl(String url) {
+    final headers = ApiConfig.defaultHeaders;
+    return LockCachingAudioSource(
+      Uri.parse(url),
+      headers: headers.isEmpty ? null : headers,
+    );
   }
 
   Duration _clampPositionForTrack(Duration position, Track track) {
@@ -516,14 +517,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
     }
 
     await _player.setAudioSources(
-      nextAudioUrls
-          .map(
-            (url) => AudioSource.uri(
-              Uri.parse(url),
-              headers: ApiConfig.defaultHeaders,
-            ),
-          )
-          .toList(growable: false),
+      nextAudioUrls.map(_audioSourceForUrl).toList(growable: false),
       initialIndex: index,
       initialPosition: position,
     );
@@ -899,7 +893,7 @@ class JustAudioPlayerAdapter implements MobileAudioPlayerAdapter {
 
   @override
   Future<void> setAudioSources(
-    List<UriAudioSource> sources, {
+    List<AudioSource> sources, {
     required int initialIndex,
     required Duration initialPosition,
   }) async {
