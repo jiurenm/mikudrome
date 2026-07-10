@@ -46,11 +46,21 @@ const _brightAccentTrack = Track(
   vocal: '鏡音レン',
 );
 
-const _videoTrack = Track(
+const _midtoneAccent = Color(0xFF60A6C3);
+const _midtoneAccentTrack = Track(
   id: 5,
-  title: 'Video track',
+  title: 'Multi-vocal midtone external audio',
   audioPath: '/tmp/5.flac',
-  videoPath: '/tmp/5.mp4',
+  videoPath: '',
+  durationSeconds: 120,
+  vocal: '初音ミク;朝比奈まふゆ',
+);
+
+const _videoTrack = Track(
+  id: 6,
+  title: 'Video track',
+  audioPath: '/tmp/6.flac',
+  videoPath: '/tmp/6.mp4',
   durationSeconds: 120,
 );
 
@@ -69,6 +79,7 @@ double _contrastRatio(Color first, Color second) {
 void _expectLoadingControlContrast(
   WidgetTester tester, {
   required Color accentColor,
+  Color? expectedForegroundColor,
 }) {
   final indicatorFinder = find.byKey(
     const ValueKey('player-external-audio-loading-indicator'),
@@ -85,9 +96,39 @@ void _expectLoadingControlContrast(
 
   expect(disabledBackground, accentColor);
   expect(indicator.semanticsLabel, '音频加载中');
+  if (expectedForegroundColor != null) {
+    expect(indicator.color, expectedForegroundColor);
+    expect(
+      _contrastRatio(indicator.color!, disabledBackground!),
+      closeTo(_contrastRatio(expectedForegroundColor, accentColor), 0.001),
+    );
+  }
   expect(
     _contrastRatio(indicator.color!, disabledBackground!),
     greaterThanOrEqualTo(4.5),
+  );
+}
+
+Widget _buildLoadingPlayer({
+  required Track track,
+  Size surfaceSize = const Size(430, 900),
+}) {
+  return _buildPlayer(
+    track: track,
+    surfaceSize: surfaceSize,
+    externalProgress: 0.25,
+    externalIsPlaying: false,
+    externalIsLoading: true,
+    onExternalPause: () async {},
+    onExternalSeekToFraction: (_) async {},
+    onControlsReady: ({required togglePlayback, required seekToFraction}) {},
+    onPlaybackStateChanged:
+        ({
+          required bool isPlaying,
+          required double progress,
+          required String elapsedLabel,
+          required String durationLabel,
+        }) {},
   );
 }
 
@@ -244,6 +285,56 @@ void main() {
         await tester.pump();
 
         expect(playCalls, 0);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    },
+  );
+
+  testWidgets('multi-vocal midtone uses maximum contrast in mobile portrait', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final resolvedAccent = VocalColors.resolveColor(_midtoneAccentTrack);
+
+    expect(resolvedAccent, _midtoneAccent);
+    await tester.pumpWidget(_buildLoadingPlayer(track: _midtoneAccentTrack));
+
+    _expectLoadingControlContrast(
+      tester,
+      accentColor: resolvedAccent,
+      expectedForegroundColor: Colors.black,
+    );
+  });
+
+  testWidgets(
+    'multi-vocal midtone uses maximum contrast in native phone landscape',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      await tester.binding.setSurfaceSize(const Size(844, 390));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final resolvedAccent = VocalColors.resolveColor(_midtoneAccentTrack);
+
+      try {
+        expect(resolvedAccent, _midtoneAccent);
+        await tester.pumpWidget(
+          _buildLoadingPlayer(
+            track: _midtoneAccentTrack,
+            surfaceSize: const Size(844, 390),
+          ),
+        );
+
+        expect(
+          find.byKey(const ValueKey('mobile-landscape-player')),
+          findsOneWidget,
+        );
+        _expectLoadingControlContrast(
+          tester,
+          accentColor: resolvedAccent,
+          expectedForegroundColor: Colors.black,
+        );
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

@@ -970,11 +970,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
+  Color _highestContrastMonochromeForeground(Color backgroundColor) {
+    final luminance = backgroundColor.computeLuminance();
+    final whiteContrast = 1.05 / (luminance + 0.05);
+    final blackContrast = (luminance + 0.05) / 0.05;
+    return blackContrast >= whiteContrast ? Colors.black : Colors.white;
+  }
+
   Widget _buildExternalAudioLoadingIndicator(Color accentColor) {
-    final foregroundColor =
-        ThemeData.estimateBrightnessForColor(accentColor) == Brightness.dark
-        ? Colors.white
-        : Colors.black;
+    final foregroundColor = _highestContrastMonochromeForeground(accentColor);
     return SizedBox.square(
       dimension: 24,
       child: CircularProgressIndicator(
