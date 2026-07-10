@@ -474,6 +474,41 @@ void main() {
   );
 
   testWidgets(
+    'restored mobile playback starts from saved progress after opening details',
+    (tester) async {
+      final service = _RecordingMobileAudioPlaybackService();
+      addTearDown(service.dispose);
+      await _seedPlaybackState(progress: 0.5);
+
+      await HttpOverrides.runZoned(() async {
+        await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byType(MobileMiniPlayer));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+
+        final player = find.byKey(const ValueKey('mobile-player-immersive'));
+        final playButton = find.descendant(
+          of: player,
+          matching: find.byIcon(Icons.play_arrow),
+        );
+        expect(playButton, findsOneWidget);
+
+        await tester.tap(playButton);
+        await tester.pump(const Duration(milliseconds: 500));
+      }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+      expect(service.playedQueues, hasLength(1));
+      expect(service.playedQueues.single.map((track) => track.id), [401, 402]);
+      expect(service.playedIndexes.single, 1);
+      expect(service.orderModes.single, MobilePlaybackOrderMode.listLoop);
+      expect(service.initialPositions.single, const Duration(seconds: 75));
+      expect(service.playCalls, 0);
+    },
+  );
+
+  testWidgets(
     'restored mobile playback at zero progress starts without seeking',
     (tester) async {
       final service = _RecordingMobileAudioPlaybackService();
@@ -1387,6 +1422,13 @@ class _RecordingMobileAudioPlaybackService
   TrackFavoriteStatus? lastIsTrackFavorited;
   TrackFavoriteToggle? lastToggleTrackFavorite;
   int clearCacheCalls = 0;
+  int playCalls = 0;
+
+  @override
+  Future<void> play() async {
+    playCalls += 1;
+    await super.play();
+  }
 
   @override
   Future<void> clearCache() async {
