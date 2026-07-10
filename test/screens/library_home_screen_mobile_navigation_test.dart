@@ -535,6 +535,24 @@ void main() {
     },
   );
 
+  testWidgets('restored desktop playback opens player details', (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 0.6;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await _seedPlaybackState(progress: 0.5);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, size: const Size(1440, 900));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PlayerScreen), findsNothing);
+
+      await tester.tap(find.byTooltip('Open player'));
+      await tester.pump();
+
+      expect(find.byType(PlayerScreen), findsOneWidget);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+  });
+
   testWidgets('mobile back collapses MV into mobile audio playback', (
     tester,
   ) async {

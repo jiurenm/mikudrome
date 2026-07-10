@@ -1235,6 +1235,9 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     if (currentTrack == null) return;
     _invalidateMobileVideoCollapseRequest();
     setState(() {
+      if (!_isMobilePlaybackSurface) {
+        _restoredNotStarted = false;
+      }
       _showPlayer = true;
       _playbackMode = resolvePlaybackModeForIntent(
         track: currentTrack,
