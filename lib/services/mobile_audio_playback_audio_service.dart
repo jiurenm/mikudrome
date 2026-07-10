@@ -511,83 +511,80 @@ class MikudromeAudioHandler extends BaseAudioHandler
     _isRecoveringPlayback = true;
     final sourceGeneration = _sourceGeneration;
     try {
-      final sourceReady = await _switchCurrentTrackToLowQuality(
-        position,
-        sourceGeneration: sourceGeneration,
-      );
-      if (!sourceReady || sourceGeneration != _sourceGeneration) return;
-      await _player.seek(position);
-      if (_disposed ||
-          sourceGeneration != _sourceGeneration ||
-          !_playbackRequested ||
-          _tracks.isEmpty) {
-        return;
-      }
-      await _player.play();
+      await _enqueueSourceMutation(() async {
+        if (!_canContinueRecovery(sourceGeneration)) return;
+        final sourceReady = await _switchCurrentTrackToLowQuality(
+          position,
+          sourceGeneration: sourceGeneration,
+        );
+        if (!sourceReady || !_canContinueRecovery(sourceGeneration)) return;
+
+        await _player.seek(position);
+        if (!_canContinueRecovery(sourceGeneration)) return;
+
+        final playFuture = _player.play();
+        unawaited(
+          playFuture.catchError((Object _) {
+            _handleRecoveryFailure(position, sourceGeneration);
+          }),
+        );
+      });
     } catch (_) {
-      if (!_disposed && _tracks.isNotEmpty) {
-        _playbackRequested = false;
-        _publishPlaybackState(isPlaying: false);
-        _emitMikudromeState(position: position, isPlaying: false);
-      }
+      _handleRecoveryFailure(position, sourceGeneration);
     } finally {
       _isRecoveringPlayback = false;
     }
   }
 
+  bool _canContinueRecovery(int sourceGeneration) {
+    return !_disposed &&
+        sourceGeneration == _sourceGeneration &&
+        _playbackRequested &&
+        _tracks.isNotEmpty;
+  }
+
+  void _handleRecoveryFailure(Duration position, int sourceGeneration) {
+    if (!_canContinueRecovery(sourceGeneration)) return;
+    _playbackRequested = false;
+    _publishPlaybackState(isPlaying: false);
+    _emitMikudromeState(position: position, isPlaying: false);
+  }
+
   Future<bool> _switchCurrentTrackToLowQuality(
     Duration position, {
     required int sourceGeneration,
-    bool resumePlayback = false,
   }) async {
-    var sourceReady = false;
-    await _enqueueSourceMutation(() async {
-      if (_disposed ||
-          sourceGeneration != _sourceGeneration ||
-          _tracks.isEmpty ||
-          _audioUrls.isEmpty) {
-        return;
-      }
-      final index = (_currentIndex ?? _player.currentIndex ?? 0).clamp(
-        0,
-        _audioUrls.length - 1,
-      );
-      final currentUrl = _audioUrls[index];
-      final lowQualityUrl = _withLowQualityAudio(currentUrl);
-      if (lowQualityUrl == currentUrl) {
-        sourceReady = true;
-        return;
-      }
+    if (!_canContinueRecovery(sourceGeneration) || _audioUrls.isEmpty) {
+      return false;
+    }
+    final index = (_currentIndex ?? _player.currentIndex ?? 0).clamp(
+      0,
+      _audioUrls.length - 1,
+    );
+    final currentUrl = _audioUrls[index];
+    final lowQualityUrl = _withLowQualityAudio(currentUrl);
+    if (lowQualityUrl == currentUrl) return true;
 
-      final nextAudioUrls = List<String>.from(_audioUrls);
-      nextAudioUrls[index] = lowQualityUrl;
-      final nextQueue = List<MediaItem>.from(queue.value);
-      if (index < nextQueue.length) {
-        nextQueue[index] = nextQueue[index].copyWith(id: lowQualityUrl);
-      }
+    final nextAudioUrls = List<String>.from(_audioUrls);
+    nextAudioUrls[index] = lowQualityUrl;
+    final nextQueue = List<MediaItem>.from(queue.value);
+    if (index < nextQueue.length) {
+      nextQueue[index] = nextQueue[index].copyWith(id: lowQualityUrl);
+    }
 
-      await _player.setAudioSources(
-        nextAudioUrls.map(_audioSourceForUrl).toList(growable: false),
-        initialIndex: index,
-        initialPosition: position,
-      );
-      if (_disposed ||
-          sourceGeneration != _sourceGeneration ||
-          _tracks.isEmpty) {
-        return;
-      }
-      _audioUrls = List<String>.unmodifiable(nextAudioUrls);
-      queue.add(List<MediaItem>.unmodifiable(nextQueue));
-      if (index < nextQueue.length) {
-        mediaItem.add(nextQueue[index]);
-      }
-      _emitMikudromeState(index: index, position: position);
-      if (resumePlayback && _playbackRequested) {
-        await _player.play();
-      }
-      sourceReady = true;
-    });
-    return sourceReady;
+    await _player.setAudioSources(
+      nextAudioUrls.map(_audioSourceForUrl).toList(growable: false),
+      initialIndex: index,
+      initialPosition: position,
+    );
+    if (!_canContinueRecovery(sourceGeneration)) return false;
+    _audioUrls = List<String>.unmodifiable(nextAudioUrls);
+    queue.add(List<MediaItem>.unmodifiable(nextQueue));
+    if (index < nextQueue.length) {
+      mediaItem.add(nextQueue[index]);
+    }
+    _emitMikudromeState(index: index, position: position);
+    return true;
   }
 
   String _withLowQualityAudio(String url) {

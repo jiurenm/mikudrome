@@ -796,6 +796,91 @@ void main() {
   );
 
   test(
+    'queue replacement waits for recovery seek and keeps initial position',
+    () async {
+      final player = DelayedRecoverySeekFakeJustAudioPlayer();
+      final service = audio_service.JustAudioMobileAudioPlaybackService(
+        player: player,
+      );
+
+      await service.playQueue(
+        queue: [_track(1)],
+        index: 0,
+        audioUrlForTrack: (_) => 'http://server/audio/first',
+      );
+      player.setPosition(const Duration(seconds: 42));
+
+      player.emitError(PlayerException(1, 'connection lost', 0));
+      await player.recoverySeekStarted;
+      final replacement = service.playQueue(
+        queue: [_track(2)],
+        index: 0,
+        audioUrlForTrack: (_) => 'http://server/audio/second',
+        initialPosition: const Duration(seconds: 37),
+      );
+      addTearDown(() async {
+        player.completeRecoverySeek();
+        await replacement;
+        await service.dispose();
+      });
+
+      await pumpEventQueue();
+      final sourceCallsBeforeSeekCompleted = player.setAudioSourcesCalls;
+
+      player.completeRecoverySeek();
+      await replacement;
+      await pumpEventQueue();
+
+      expect(sourceCallsBeforeSeekCompleted, 2);
+      expect(player.setAudioSourcesCalls, 3);
+      expect(_sourceUri(player.sources.single).toString(), endsWith('/second'));
+      expect(player.initialPosition, const Duration(seconds: 37));
+      expect(service.currentState.track?.id, 2);
+      expect(service.currentState.position, const Duration(seconds: 37));
+    },
+  );
+
+  test('late recovery play error does not pause replacement queue', () async {
+    final player = DelayedRecoveryPlayErrorFakeJustAudioPlayer();
+    final service = audio_service.JustAudioMobileAudioPlaybackService(
+      player: player,
+    );
+    final states = <MobileAudioPlaybackState>[];
+    final sub = service.states.listen(states.add);
+
+    await service.playQueue(
+      queue: [_track(1)],
+      index: 0,
+      audioUrlForTrack: (_) => 'http://server/audio/first',
+    );
+    player.setPosition(const Duration(seconds: 24));
+
+    player.emitError(PlayerException(1, 'connection lost', 0));
+    await player.recoveryPlayStarted;
+    await service.playQueue(
+      queue: [_track(2)],
+      index: 0,
+      audioUrlForTrack: (_) => 'http://server/audio/second',
+      initialPosition: const Duration(seconds: 31),
+    );
+    addTearDown(() async {
+      player.failRecoveryPlay();
+      await pumpEventQueue();
+      await sub.cancel();
+      await service.dispose();
+    });
+    states.clear();
+
+    player.failRecoveryPlay();
+    await pumpEventQueue();
+
+    expect(states, isEmpty);
+    expect(service.currentState.track?.id, 2);
+    expect(service.currentState.position, const Duration(seconds: 31));
+    expect(service.currentState.isPlaying, isTrue);
+  });
+
+  test(
     'audio handler throttles position-only app state updates within same second',
     () async {
       final player = FakeJustAudioPlayer();
@@ -1816,6 +1901,65 @@ class DelayedSetAudioSourcesFakeJustAudioPlayer extends FakeJustAudioPlayer {
   @override
   Future<void> dispose() async {
     completeDelayedSet();
+    await super.dispose();
+  }
+}
+
+class DelayedRecoverySeekFakeJustAudioPlayer extends FakeJustAudioPlayer {
+  final _recoverySeekStarted = Completer<void>();
+  final _releaseRecoverySeek = Completer<void>();
+
+  Future<void> get recoverySeekStarted => _recoverySeekStarted.future;
+
+  void completeRecoverySeek() {
+    if (!_releaseRecoverySeek.isCompleted) {
+      _releaseRecoverySeek.complete();
+    }
+  }
+
+  @override
+  Future<void> seek(Duration position) async {
+    if (!_recoverySeekStarted.isCompleted) {
+      _recoverySeekStarted.complete();
+    }
+    await _releaseRecoverySeek.future;
+    seekPositions.add(position);
+    setPosition(position);
+  }
+
+  @override
+  Future<void> dispose() async {
+    completeRecoverySeek();
+    await super.dispose();
+  }
+}
+
+class DelayedRecoveryPlayErrorFakeJustAudioPlayer extends FakeJustAudioPlayer {
+  final _recoveryPlayStarted = Completer<void>();
+  final _recoveryPlay = Completer<void>();
+
+  Future<void> get recoveryPlayStarted => _recoveryPlayStarted.future;
+
+  void failRecoveryPlay() {
+    if (!_recoveryPlay.isCompleted) {
+      _recoveryPlay.completeError(StateError('recovery play failed'));
+    }
+  }
+
+  @override
+  Future<void> play() {
+    playCalls += 1;
+    setPlaying(true);
+    if (playCalls == 2) {
+      _recoveryPlayStarted.complete();
+      return _recoveryPlay.future;
+    }
+    return Future<void>.value();
+  }
+
+  @override
+  Future<void> dispose() async {
+    failRecoveryPlay();
     await super.dispose();
   }
 }
