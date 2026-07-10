@@ -927,6 +927,52 @@ void main() {
     expect(service.currentState.queue, isEmpty);
   });
 
+  test('just_audio service stops playback before clearing cache', () async {
+    final player = FakeJustAudioPlayer();
+    var stopCallsObservedByClearer = -1;
+    var clearCalls = 0;
+    final service = audio_service.JustAudioMobileAudioPlaybackService(
+      player: player,
+      cacheClearer: () async {
+        clearCalls += 1;
+        stopCallsObservedByClearer = player.stopCalls;
+      },
+    );
+
+    await service.playQueue(
+      queue: [_track(1)],
+      index: 0,
+      audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+    );
+
+    await service.clearCache();
+
+    expect(clearCalls, 1);
+    expect(stopCallsObservedByClearer, 1);
+    expect(service.currentState.queue, isEmpty);
+
+    await service.dispose();
+  });
+
+  test('just_audio service ignores temporary cache clear failures', () async {
+    final player = FakeJustAudioPlayer();
+    final service = audio_service.JustAudioMobileAudioPlaybackService(
+      player: player,
+      cacheClearer: () async => throw FileSystemException('cache busy'),
+    );
+
+    await service.playQueue(
+      queue: [_track(1)],
+      index: 0,
+      audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+    );
+
+    await expectLater(service.clearCache(), completes);
+    expect(service.currentState.queue, isEmpty);
+
+    await service.dispose();
+  });
+
   test('setAudioSources failure leaves service stopped', () async {
     final player = FakeJustAudioPlayer()
       ..setAudioSourcesError = StateError('load failed');

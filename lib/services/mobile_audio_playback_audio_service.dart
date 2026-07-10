@@ -700,9 +700,11 @@ class JustAudioMobileAudioPlaybackService
     MikudromeAudioHandler? handler,
     Future<MikudromeAudioHandler> Function()? handlerLoader,
     MobileAudioPlayerAdapter? player,
+    Future<void> Function()? cacheClearer,
     this.usesAudioService = false,
   }) : _handler = handler,
        _handlerLoader = handlerLoader,
+       _cacheClearer = cacheClearer ?? AudioPlayer.clearAssetCache,
        _fallbackHandler = handler == null && handlerLoader == null
            ? MikudromeAudioHandler(player: player)
            : null,
@@ -718,6 +720,7 @@ class JustAudioMobileAudioPlaybackService
   final MikudromeAudioHandler? _handler;
   final MikudromeAudioHandler? _fallbackHandler;
   final Future<MikudromeAudioHandler> Function()? _handlerLoader;
+  final Future<void> Function() _cacheClearer;
   final bool usesAudioService;
   final StreamController<MobileAudioPlaybackState> _states;
   final List<StreamSubscription<Object?>> _subscriptions = [];
@@ -800,6 +803,15 @@ class JustAudioMobileAudioPlaybackService
     if (_disposed) return;
     final handler = await _effectiveHandler();
     await handler.stop();
+  }
+
+  @override
+  Future<void> clearCache() async {
+    if (_disposed) return;
+    await stop();
+    try {
+      await _cacheClearer();
+    } catch (_) {}
   }
 
   @override
