@@ -1699,6 +1699,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
                   track: currentTrack,
                   coverUrl: _coverUrlForTrack(currentTrack),
                   isPlaying: _isPlaying,
+                  isLoading: _isMobileAudioStarting,
                   progress: _playbackProgress,
                   onPlayPause: _togglePlayback,
                   bottomPadding: bottomPadding,
@@ -1748,6 +1749,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
                       useExternalAudioPlayback:
                           _playbackMode == PlaybackMode.audio,
                       externalIsPlaying: _isPlaying,
+                      externalIsLoading: _isMobileAudioStarting,
                       externalProgress: _playbackProgress,
                       onExternalPlay: _playMobileAudioFromPlayerControls,
                       onExternalPause: _mobileAudioPlaybackService.pause,

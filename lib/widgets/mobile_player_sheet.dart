@@ -10,6 +10,7 @@ class MobilePlayerSheet extends StatefulWidget {
     required this.track,
     required this.coverUrl,
     required this.isPlaying,
+    this.isLoading = false,
     required this.progress,
     required this.onPlayPause,
     required this.bottomPadding,
@@ -21,6 +22,7 @@ class MobilePlayerSheet extends StatefulWidget {
   final Track track;
   final String coverUrl;
   final bool isPlaying;
+  final bool isLoading;
   final double progress;
   final VoidCallback onPlayPause;
   final double bottomPadding; // Tab bar height + safe area
@@ -121,6 +123,7 @@ class _MobilePlayerSheetState extends State<MobilePlayerSheet>
                       track: widget.track,
                       coverUrl: widget.coverUrl,
                       isPlaying: widget.isPlaying,
+                      isLoading: widget.isLoading,
                       progress: widget.progress,
                       onTap: _expand,
                       onPlayPause: widget.onPlayPause,

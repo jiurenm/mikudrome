@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/models/track.dart';
@@ -26,8 +27,11 @@ const _timedLyricTrack = Track(
 
 Widget _buildPlayer({
   Track track = _track,
+  Size surfaceSize = const Size(430, 900),
   required double externalProgress,
   required bool externalIsPlaying,
+  bool externalIsLoading = false,
+  Future<void> Function()? onExternalPlay,
   required Future<void> Function() onExternalPause,
   required PlayerSeekToFraction onExternalSeekToFraction,
   required PlayerControlsReady onControlsReady,
@@ -41,7 +45,7 @@ Widget _buildPlayer({
 }) {
   return MaterialApp(
     home: MediaQuery(
-      data: const MediaQueryData(size: Size(430, 900)),
+      data: MediaQueryData(size: surfaceSize),
       child: PlayerScreen(
         track: track,
         queue: [track],
@@ -60,7 +64,9 @@ Widget _buildPlayer({
         initializeControllerOnStart: false,
         useExternalAudioPlayback: true,
         externalIsPlaying: externalIsPlaying,
+        externalIsLoading: externalIsLoading,
         externalProgress: externalProgress,
+        onExternalPlay: onExternalPlay,
         onExternalPause: onExternalPause,
         onExternalSeekToFraction: onExternalSeekToFraction,
       ),
@@ -69,6 +75,194 @@ Widget _buildPlayer({
 }
 
 void main() {
+  testWidgets('loading external audio disables mobile portrait play control', (
+    tester,
+  ) async {
+    var playCalls = 0;
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _buildPlayer(
+        externalProgress: 0.25,
+        externalIsPlaying: false,
+        externalIsLoading: true,
+        onExternalPlay: () async => playCalls += 1,
+        onExternalPause: () async {},
+        onExternalSeekToFraction: (_) async {},
+        onControlsReady:
+            ({required togglePlayback, required seekToFraction}) {},
+        onPlaybackStateChanged:
+            ({
+              required bool isPlaying,
+              required double progress,
+              required String elapsedLabel,
+              required String durationLabel,
+            }) {},
+      ),
+    );
+
+    final indicator = find.byKey(
+      const ValueKey('player-external-audio-loading-indicator'),
+    );
+    final centralButton = find.ancestor(
+      of: indicator,
+      matching: find.byType(IconButton),
+    );
+
+    expect(indicator, findsOneWidget);
+    expect(centralButton, findsOneWidget);
+    expect(tester.widget<IconButton>(centralButton).onPressed, isNull);
+
+    await tester.tap(centralButton);
+    await tester.pump();
+
+    expect(playCalls, 0);
+  });
+
+  testWidgets(
+    'loading external audio disables native phone landscape play control',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      await tester.binding.setSurfaceSize(const Size(844, 390));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      var playCalls = 0;
+
+      try {
+        await tester.pumpWidget(
+          _buildPlayer(
+            surfaceSize: const Size(844, 390),
+            externalProgress: 0.25,
+            externalIsPlaying: false,
+            externalIsLoading: true,
+            onExternalPlay: () async => playCalls += 1,
+            onExternalPause: () async {},
+            onExternalSeekToFraction: (_) async {},
+            onControlsReady:
+                ({required togglePlayback, required seekToFraction}) {},
+            onPlaybackStateChanged:
+                ({
+                  required bool isPlaying,
+                  required double progress,
+                  required String elapsedLabel,
+                  required String durationLabel,
+                }) {},
+          ),
+        );
+
+        final indicator = find.byKey(
+          const ValueKey('player-external-audio-loading-indicator'),
+        );
+        final centralButton = find.ancestor(
+          of: indicator,
+          matching: find.byType(IconButton),
+        );
+
+        expect(
+          find.byKey(const ValueKey('mobile-landscape-player')),
+          findsOneWidget,
+        );
+        expect(indicator, findsOneWidget);
+        expect(tester.widget<IconButton>(centralButton).onPressed, isNull);
+
+        await tester.tap(centralButton);
+        await tester.pump();
+
+        expect(playCalls, 0);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    },
+  );
+
+  testWidgets(
+    'non-loading external audio keeps mobile play and pause actions',
+    (tester) async {
+      var playCalls = 0;
+      var pauseCalls = 0;
+      await tester.binding.setSurfaceSize(const Size(430, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      Widget buildPlayer({required bool isPlaying}) => _buildPlayer(
+        externalProgress: 0.25,
+        externalIsPlaying: isPlaying,
+        onExternalPlay: () async => playCalls += 1,
+        onExternalPause: () async => pauseCalls += 1,
+        onExternalSeekToFraction: (_) async {},
+        onControlsReady:
+            ({required togglePlayback, required seekToFraction}) {},
+        onPlaybackStateChanged:
+            ({
+              required bool isPlaying,
+              required double progress,
+              required String elapsedLabel,
+              required String durationLabel,
+            }) {},
+      );
+
+      await tester.pumpWidget(buildPlayer(isPlaying: false));
+      expect(
+        find.byKey(const ValueKey('player-external-audio-loading-indicator')),
+        findsNothing,
+      );
+      await tester.tap(find.byIcon(Icons.play_arrow));
+      await tester.pump();
+
+      await tester.pumpWidget(buildPlayer(isPlaying: true));
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.pause));
+      await tester.pump();
+
+      expect(playCalls, 1);
+      expect(pauseCalls, 1);
+    },
+  );
+
+  testWidgets('external loading does not disable desktop audio controls', (
+    tester,
+  ) async {
+    var playCalls = 0;
+    await tester.binding.setSurfaceSize(const Size(1280, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _buildPlayer(
+        surfaceSize: const Size(1280, 1000),
+        externalProgress: 0.25,
+        externalIsPlaying: false,
+        externalIsLoading: true,
+        onExternalPlay: () async => playCalls += 1,
+        onExternalPause: () async {},
+        onExternalSeekToFraction: (_) async {},
+        onControlsReady:
+            ({required togglePlayback, required seekToFraction}) {},
+        onPlaybackStateChanged:
+            ({
+              required bool isPlaying,
+              required double progress,
+              required String elapsedLabel,
+              required String durationLabel,
+            }) {},
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('player-external-audio-loading-indicator')),
+      findsNothing,
+    );
+    final playButton = find.ancestor(
+      of: find.byIcon(Icons.play_circle_fill),
+      matching: find.byType(IconButton),
+    );
+    expect(tester.widget<IconButton>(playButton).onPressed, isNotNull);
+
+    await tester.tap(playButton);
+    await tester.pump();
+
+    expect(playCalls, 1);
+  });
+
   testWidgets('external audio pause does not emit stale zero progress', (
     tester,
   ) async {

@@ -1,10 +1,89 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mikudrome/models/track.dart';
+import 'package:mikudrome/theme/app_theme.dart';
 import 'package:mikudrome/widgets/mobile_mini_player.dart';
 import 'package:mikudrome/widgets/mobile_player_sheet.dart';
 
 void main() {
+  testWidgets('loading mini player disables its central playback control', (
+    tester,
+  ) async {
+    var playPauseCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MobileMiniPlayer(
+            track: const Track(
+              id: 1,
+              title: 'Track',
+              audioPath: 'track.flac',
+              videoPath: '',
+            ),
+            coverUrl: '',
+            isPlaying: false,
+            isLoading: true,
+            progress: 0,
+            onTap: () {},
+            onPlayPause: () => playPauseCalls += 1,
+          ),
+        ),
+      ),
+    );
+
+    final indicator = find.byKey(
+      const ValueKey('mobile-mini-player-loading-indicator'),
+    );
+    final progressIndicator = tester.widget<CircularProgressIndicator>(
+      indicator,
+    );
+    final playPauseButton = tester.widget<IconButton>(find.byType(IconButton));
+
+    expect(indicator, findsOneWidget);
+    expect(tester.getSize(indicator), const Size.square(24));
+    expect(progressIndicator.color, AppTheme.mikuGreen);
+    expect(playPauseButton.onPressed, isNull);
+
+    await tester.tap(find.byType(IconButton));
+    await tester.pump();
+
+    expect(playPauseCalls, 0);
+  });
+
+  testWidgets('collapsed sheet forwards loading to the mini player', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Stack(
+          children: [
+            MobilePlayerSheet(
+              track: const Track(
+                id: 1,
+                title: 'Track',
+                audioPath: 'track.flac',
+                videoPath: '',
+              ),
+              coverUrl: '',
+              isPlaying: false,
+              isLoading: true,
+              progress: 0,
+              onPlayPause: () {},
+              bottomPadding: 80,
+              playerBuilder: (_) => const SizedBox.shrink(),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('mobile-mini-player-loading-indicator')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('mini player content avoids horizontal safe areas', (
     tester,
   ) async {

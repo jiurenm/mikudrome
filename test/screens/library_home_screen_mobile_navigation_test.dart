@@ -539,7 +539,10 @@ void main() {
       expect(service.playQueueAttempts, 1);
 
       await tester.tap(find.text('设置'));
-      await tester.pumpAndSettle();
+      await _pumpUntil(
+        tester,
+        () => find.text('弱网省流量音质').evaluate().isNotEmpty,
+      );
       await tester.tap(find.text('弱网省流量音质'));
       await tester.pump(const Duration(milliseconds: 500));
 
@@ -741,7 +744,21 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('播放启动失败，请重试'), findsOneWidget);
       expect(service.playQueueAttempts, 1);
+      expect(
+        find.byKey(const ValueKey('player-external-audio-loading-indicator')),
+        findsNothing,
+      );
       expect(playButton(), findsOneWidget);
+      expect(
+        tester
+            .widget<IconButton>(
+              find
+                  .ancestor(of: playButton(), matching: find.byType(IconButton))
+                  .first,
+            )
+            .onPressed,
+        isNotNull,
+      );
 
       await tester.tap(playButton());
       await tester.pump();
@@ -809,22 +826,75 @@ void main() {
       await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
       await tester.pumpAndSettle();
 
-      Finder playButton() => find.descendant(
+      final playButton = find.descendant(
         of: find.byType(MobileMiniPlayer),
         matching: find.byIcon(Icons.play_arrow),
       );
 
-      await tester.tap(playButton());
+      await tester.tap(playButton);
       await tester.pump();
-      await tester.tap(playButton());
+
+      final miniLoadingIndicator = find.byKey(
+        const ValueKey('mobile-mini-player-loading-indicator'),
+      );
+      final miniPlayButton = find.ancestor(
+        of: miniLoadingIndicator,
+        matching: find.byType(IconButton),
+      );
+      expect(miniLoadingIndicator, findsOneWidget);
+      expect(tester.widget<IconButton>(miniPlayButton).onPressed, isNull);
+
+      await tester.tap(miniPlayButton);
       await tester.pump(const Duration(milliseconds: 300));
 
+      expect(service.playQueueAttempts, 1);
+
+      tester
+          .widget<MobilePlayerSheet>(find.byType(MobilePlayerSheet))
+          .onExpandedChanged!
+          .call(true);
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey('mobile-player-immersive')),
+        findsOneWidget,
+      );
+
+      final expandedLoadingIndicator = find.byKey(
+        const ValueKey('player-external-audio-loading-indicator'),
+      );
+      final expandedPlayButton = find.ancestor(
+        of: expandedLoadingIndicator,
+        matching: find.byType(IconButton),
+      );
+      expect(expandedLoadingIndicator, findsOneWidget);
+      expect(tester.widget<IconButton>(expandedPlayButton).onPressed, isNull);
+
+      await tester.tap(expandedPlayButton);
+      await tester.pump();
       expect(service.playQueueAttempts, 1);
 
       service.completeFirstPlayQueue();
       for (var i = 0; i < 40; i++) {
         await tester.pump(const Duration(milliseconds: 16));
       }
+
+      expect(expandedLoadingIndicator, findsNothing);
+      final pauseButton = find.descendant(
+        of: find.byKey(const ValueKey('mobile-player-immersive')),
+        matching: find.byIcon(Icons.pause),
+      );
+      expect(pauseButton, findsOneWidget);
+      expect(
+        tester
+            .widget<IconButton>(
+              find
+                  .ancestor(of: pauseButton, matching: find.byType(IconButton))
+                  .first,
+            )
+            .onPressed,
+        isNotNull,
+      );
     }, createHttpClient: (_) => _LibraryFakeHttpClient());
 
     expect(tester.takeException(), isNull);

@@ -70,6 +70,7 @@ class PlayerScreen extends StatefulWidget {
     this.renderVideo = true,
     this.useExternalAudioPlayback = false,
     this.externalIsPlaying,
+    this.externalIsLoading = false,
     this.externalProgress,
     this.onExternalPlay,
     this.onExternalPause,
@@ -109,6 +110,7 @@ class PlayerScreen extends StatefulWidget {
   final bool renderVideo;
   final bool useExternalAudioPlayback;
   final bool? externalIsPlaying;
+  final bool externalIsLoading;
   final double? externalProgress;
   final Future<void> Function()? onExternalPlay;
   final Future<void> Function()? onExternalPause;
@@ -224,6 +226,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       : _usesWebAudioPlayer
       ? _webAudioPlayer.value.isPlaying
       : _controller?.value.isPlaying ?? false;
+  bool get _isExternalAudioLoading =>
+      _usesExternalAudioPlayback && widget.externalIsLoading;
   bool get _hasTimedLyrics => _timedLyrics.isNotEmpty;
   bool get _canSeekInMediaSession {
     final injected = widget.mediaSessionCanSeek;
@@ -966,6 +970,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
+  Widget _buildExternalAudioLoadingIndicator(Color accentColor) {
+    return SizedBox.square(
+      dimension: 24,
+      child: CircularProgressIndicator(
+        key: const ValueKey('player-external-audio-loading-indicator'),
+        color: accentColor,
+        strokeWidth: 2.5,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final accentColor = VocalThemeProvider.of(context);
@@ -1379,12 +1394,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
           ),
           const SizedBox(width: 14),
           IconButton(
-            onPressed: _togglePlayback,
-            icon: Icon(
-              _isPlaying ? Icons.pause : Icons.play_arrow,
-              size: 42,
-              color: const Color(0xFF071015),
-            ),
+            onPressed: _isExternalAudioLoading ? null : _togglePlayback,
+            icon: _isExternalAudioLoading
+                ? _buildExternalAudioLoadingIndicator(accentColor)
+                : Icon(
+                    _isPlaying ? Icons.pause : Icons.play_arrow,
+                    size: 42,
+                    color: const Color(0xFF071015),
+                  ),
             style: IconButton.styleFrom(
               backgroundColor: accentColor,
               fixedSize: const Size(64, 64),
@@ -1676,12 +1693,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         onPressed: _hasPrevious ? widget.onPrevious : null,
                       ),
                       IconButton(
-                        onPressed: _togglePlayback,
-                        icon: Icon(
-                          _isPlaying ? Icons.pause : Icons.play_arrow,
-                          size: 46,
-                          color: const Color(0xFF071015),
-                        ),
+                        onPressed: _isExternalAudioLoading
+                            ? null
+                            : _togglePlayback,
+                        icon: _isExternalAudioLoading
+                            ? _buildExternalAudioLoadingIndicator(accentColor)
+                            : Icon(
+                                _isPlaying ? Icons.pause : Icons.play_arrow,
+                                size: 46,
+                                color: const Color(0xFF071015),
+                              ),
                         style: IconButton.styleFrom(
                           backgroundColor: accentColor,
                           fixedSize: const Size(74, 74),
