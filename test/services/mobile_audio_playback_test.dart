@@ -53,6 +53,52 @@ void main() {
     await service.dispose();
   });
 
+  test(
+    'audio service global initializer retries after a failed flight',
+    () async {
+      audio_service.resetAudioServiceHandlerInitializationForTests();
+      final player = FakeJustAudioPlayer();
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+      final loadError = StateError('audio service init failed');
+      var initializerCalls = 0;
+
+      Future<audio_service.MikudromeAudioHandler> initializeHandler() async {
+        initializerCalls += 1;
+        if (initializerCalls == 1) throw loadError;
+        return handler;
+      }
+
+      final firstService =
+          audio_service.JustAudioMobileAudioPlaybackService.fromAudioService(
+            audioServiceInitializer: initializeHandler,
+          );
+      audio_service.JustAudioMobileAudioPlaybackService? secondService;
+      addTearDown(() async {
+        await secondService?.dispose();
+        await firstService.dispose();
+        if (player.disposeCalls == 0) {
+          await handler.dispose();
+        }
+        audio_service.resetAudioServiceHandlerInitializationForTests();
+      });
+
+      await expectLater(firstService.pause(), throwsA(same(loadError)));
+      await firstService.dispose();
+
+      final retryService =
+          audio_service.JustAudioMobileAudioPlaybackService.fromAudioService(
+            audioServiceInitializer: initializeHandler,
+          );
+      secondService = retryService;
+      await retryService.pause();
+
+      expect(initializerCalls, 2);
+      expect(player.pauseCalls, 1);
+
+      await retryService.dispose();
+    },
+  );
+
   test('audio handler publishes media queue and current media item', () async {
     final player = FakeJustAudioPlayer();
     final handler = audio_service.MikudromeAudioHandler(player: player);
@@ -1489,6 +1535,46 @@ void main() {
     expect(service.currentState.track?.id, 2);
   });
 
+  test(
+    'stop failure reaches caller without poisoning later mutations',
+    () async {
+      final player = FakeJustAudioPlayer();
+      final service = audio_service.JustAudioMobileAudioPlaybackService(
+        player: player,
+      );
+      final stopError = StateError('stop failed');
+      final unhandledErrors = <Object>[];
+
+      await service.playQueue(
+        queue: [_track(1)],
+        index: 0,
+        audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+      );
+      player.stopError = stopError;
+
+      await runZonedGuarded(() async {
+        await expectLater(service.stop(), throwsA(same(stopError)));
+        player.stopError = null;
+        await service.playQueue(
+          queue: [_track(2)],
+          index: 0,
+          audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+        );
+        await pumpEventQueue();
+      }, (error, stackTrace) => unhandledErrors.add(error));
+
+      expect(unhandledErrors, isEmpty);
+      expect(service.currentState.track?.id, 2);
+
+      await service.stop();
+
+      expect(player.stopCalls, 2);
+      expect(service.currentState.queue, isEmpty);
+
+      await service.dispose();
+    },
+  );
+
   test('just_audio service stops playback before clearing cache', () async {
     final player = FakeJustAudioPlayer();
     var stopCallsObservedByClearer = -1;
@@ -1613,6 +1699,43 @@ void main() {
     );
 
     await expectLater(service.clearCache(), completes);
+    expect(service.currentState.queue, isEmpty);
+
+    await service.dispose();
+  });
+
+  test('clear cache stops after handler stop failure and can retry', () async {
+    final player = FakeJustAudioPlayer();
+    var clearCalls = 0;
+    final service = audio_service.JustAudioMobileAudioPlaybackService(
+      player: player,
+      cacheClearer: () async {
+        clearCalls += 1;
+      },
+    );
+    final stopError = StateError('stop failed');
+    final unhandledErrors = <Object>[];
+
+    await service.playQueue(
+      queue: [_track(1)],
+      index: 0,
+      audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+    );
+    player.stopError = stopError;
+
+    await runZonedGuarded(() async {
+      await expectLater(service.clearCache(), throwsA(same(stopError)));
+      await pumpEventQueue();
+    }, (error, stackTrace) => unhandledErrors.add(error));
+
+    expect(unhandledErrors, isEmpty);
+    expect(clearCalls, 0);
+
+    player.stopError = null;
+    await service.clearCache();
+
+    expect(player.stopCalls, 2);
+    expect(clearCalls, 1);
     expect(service.currentState.queue, isEmpty);
 
     await service.dispose();
@@ -1834,6 +1957,47 @@ void main() {
       expect(disposeCompleted, isTrue);
     },
   );
+
+  test('single-flight handler loading retries after a failed flight', () async {
+    final player = FakeJustAudioPlayer();
+    final handler = audio_service.MikudromeAudioHandler(player: player);
+    final firstLoad = Completer<audio_service.MikudromeAudioHandler>();
+    final loadError = StateError('load failed');
+    var loaderCalls = 0;
+    final service = audio_service.JustAudioMobileAudioPlaybackService(
+      handlerLoader: () {
+        loaderCalls += 1;
+        if (loaderCalls == 1) return firstLoad.future;
+        return Future<audio_service.MikudromeAudioHandler>.value(handler);
+      },
+    );
+    addTearDown(() async {
+      await service.dispose();
+      if (player.disposeCalls == 0) {
+        await handler.dispose();
+      }
+    });
+
+    final pauseExpectation = expectLater(
+      service.pause(),
+      throwsA(same(loadError)),
+    );
+    final seekExpectation = expectLater(
+      service.seek(const Duration(seconds: 12)),
+      throwsA(same(loadError)),
+    );
+    await pumpEventQueue();
+
+    expect(loaderCalls, 1);
+
+    firstLoad.completeError(loadError);
+    await Future.wait([pauseExpectation, seekExpectation]);
+
+    await expectLater(service.pause(), completes);
+
+    expect(loaderCalls, 2);
+    expect(player.pauseCalls, 1);
+  });
 
   test(
     'dispose waits for an active source apply before disposing player',
@@ -2280,6 +2444,7 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
   LoopMode loopMode = LoopMode.off;
   Object? setAudioSourcesError;
   Object? playError;
+  Object? stopError;
   final seekPositions = <Duration>[];
 
   @override
@@ -2360,6 +2525,10 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
   @override
   Future<void> stop() async {
     stopCalls += 1;
+    final error = stopError;
+    if (error != null) {
+      throw error;
+    }
     setPlaying(false);
   }
 

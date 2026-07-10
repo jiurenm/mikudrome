@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../api/config.dart';
@@ -28,6 +29,42 @@ const _mobileAudioLoadConfiguration = AudioLoadConfiguration(
 );
 
 Future<MikudromeAudioHandler>? _audioServiceHandlerInit;
+
+@visibleForTesting
+void resetAudioServiceHandlerInitializationForTests() {
+  _audioServiceHandlerInit = null;
+}
+
+Future<MikudromeAudioHandler> _loadAudioServiceHandler(
+  Future<MikudromeAudioHandler> Function()? initializer,
+) {
+  final existing = _audioServiceHandlerInit;
+  if (existing != null) return existing;
+
+  late final Future<MikudromeAudioHandler> flight;
+  final started =
+      initializer?.call() ??
+      AudioService.init(
+        builder: MikudromeAudioHandler.new,
+        config: const AudioServiceConfig(
+          androidNotificationChannelId: 'com.miku39.mikudrome.playback',
+          androidNotificationChannelName: 'Mikudrome playback',
+          androidNotificationIcon: 'drawable/ic_notification',
+          androidNotificationOngoing: true,
+        ),
+      );
+  flight = started.then(
+    (handler) => handler,
+    onError: (Object error, StackTrace stackTrace) {
+      if (identical(_audioServiceHandlerInit, flight)) {
+        _audioServiceHandlerInit = null;
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    },
+  );
+  _audioServiceHandlerInit = flight;
+  return flight;
+}
 
 MobileAudioPlaybackService createMobileAudioPlaybackService() {
   return JustAudioMobileAudioPlaybackService.fromAudioService();
@@ -776,19 +813,12 @@ class MikudromeAudioHandler extends BaseAudioHandler
 
 class JustAudioMobileAudioPlaybackService
     implements MobileAudioPlaybackService {
-  JustAudioMobileAudioPlaybackService.fromAudioService()
-    : this(
-        handlerLoader: () => _audioServiceHandlerInit ??= AudioService.init(
-          builder: MikudromeAudioHandler.new,
-          config: const AudioServiceConfig(
-            androidNotificationChannelId: 'com.miku39.mikudrome.playback',
-            androidNotificationChannelName: 'Mikudrome playback',
-            androidNotificationIcon: 'drawable/ic_notification',
-            androidNotificationOngoing: true,
-          ),
-        ),
-        usesAudioService: true,
-      );
+  JustAudioMobileAudioPlaybackService.fromAudioService({
+    Future<MikudromeAudioHandler> Function()? audioServiceInitializer,
+  }) : this(
+         handlerLoader: () => _loadAudioServiceHandler(audioServiceInitializer),
+         usesAudioService: true,
+       );
 
   JustAudioMobileAudioPlaybackService({
     MikudromeAudioHandler? handler,
@@ -1032,7 +1062,21 @@ class JustAudioMobileAudioPlaybackService
     if (existing != null) {
       return Future<MikudromeAudioHandler>.value(existing);
     }
-    return _handlerLoad ??= _loadHandler();
+    final handlerLoad = _handlerLoad;
+    if (handlerLoad != null) return handlerLoad;
+
+    late final Future<MikudromeAudioHandler> flight;
+    flight = _loadHandler().then(
+      (handler) => handler,
+      onError: (Object error, StackTrace stackTrace) {
+        if (identical(_handlerLoad, flight)) {
+          _handlerLoad = null;
+        }
+        Error.throwWithStackTrace(error, stackTrace);
+      },
+    );
+    _handlerLoad = flight;
+    return flight;
   }
 
   Future<MikudromeAudioHandler> _loadHandler() async {
