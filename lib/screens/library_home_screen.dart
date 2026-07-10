@@ -684,7 +684,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       _playbackOrderMode = PlaybackOrderMode.sequential;
       _playerTogglePlayback = _noopTogglePlayback;
       _playerSeekToFraction = _noopSeekToFraction;
-      _invalidateRestoredMobileAudioStart();
+      _discardRestoredMobileAudioPresentation();
       _videoController = null;
       _lastSavedProgress = 0;
     });
@@ -750,11 +750,12 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
 
   void _setLowQualityAudioPreference(bool value) {
     if (_preferLowQualityAudio == value) return;
+    final restartRestoredStart = _restoredNotStarted && _isMobileAudioStarting;
     setState(() {
-      _invalidateRestoredMobileAudioStart();
+      if (restartRestoredStart) _invalidateRestoredMobileAudioStart();
       _preferLowQualityAudio = value;
     });
-    unawaited(_syncMobileAudioQueuePreservingProgress());
+    _syncMobileAudioAfterMutation(restartRestoredStart: restartRestoredStart);
   }
 
   MobilePlaybackOrderMode get _mobilePlaybackOrderMode =>
@@ -818,9 +819,23 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
 
   void _invalidateRestoredMobileAudioStart() {
     _restoredMobileAudioStartRequest += 1;
-    _restoredNotStarted = false;
     _isMobileAudioStarting = false;
+  }
+
+  void _discardRestoredMobileAudioPresentation() {
+    _invalidateRestoredMobileAudioStart();
+    _restoredNotStarted = false;
     _resumeProgress = null;
+  }
+
+  void _syncMobileAudioAfterMutation({required bool restartRestoredStart}) {
+    if (_restoredNotStarted) {
+      if (restartRestoredStart) {
+        unawaited(_startRestoredMobileAudioPlayback());
+      }
+      return;
+    }
+    unawaited(_syncMobileAudioQueuePreservingProgress());
   }
 
   Future<void> _syncMobileAudioQueuePreservingProgress() async {
@@ -983,7 +998,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
         ? PlaybackStartIntent.video
         : PlaybackStartIntent.audio;
     setState(() {
-      _invalidateRestoredMobileAudioStart();
+      _discardRestoredMobileAudioPresentation();
       _playerQueue = List<Track>.from(queue);
       _orderedPlayerQueue = null;
       _playerIndex = index.clamp(0, queue.length - 1);
@@ -1015,7 +1030,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     _invalidateMobileVideoCollapseRequest();
     final nextTrack = _playerQueue[index];
     setState(() {
-      _invalidateRestoredMobileAudioStart();
+      _discardRestoredMobileAudioPresentation();
       _playerIndex = index;
       _playbackMode = _nextModeForTrack(nextTrack);
       _showPlayer = showPlayer;
@@ -1032,13 +1047,14 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   void _addTrackToCurrentQueue(Track track) {
     if (_playerQueue.any((item) => item.id == track.id)) return;
     _invalidateMobileVideoCollapseRequest();
+    final restartRestoredStart = _restoredNotStarted && _isMobileAudioStarting;
     setState(() {
-      _invalidateRestoredMobileAudioStart();
+      if (restartRestoredStart) _invalidateRestoredMobileAudioStart();
       _playerQueue = [..._playerQueue, track];
       _orderedPlayerQueue = null;
     });
     _savePlaybackState();
-    unawaited(_syncMobileAudioQueuePreservingProgress());
+    _syncMobileAudioAfterMutation(restartRestoredStart: restartRestoredStart);
   }
 
   void _cyclePlaybackOrderMode() {
@@ -1074,15 +1090,17 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       final restoredIndex = ordered.indexWhere(
         (track) => track.id == currentTrack.id,
       );
+      final restartRestoredStart =
+          _restoredNotStarted && _isMobileAudioStarting;
       setState(() {
-        _invalidateRestoredMobileAudioStart();
+        if (restartRestoredStart) _invalidateRestoredMobileAudioStart();
         _playerQueue = List<Track>.from(ordered);
         _playerIndex = restoredIndex < 0 ? 0 : restoredIndex;
         _orderedPlayerQueue = null;
         _shuffleEnabled = false;
       });
       _savePlaybackState();
-      unawaited(_syncMobileAudioQueuePreservingProgress());
+      _syncMobileAudioAfterMutation(restartRestoredStart: restartRestoredStart);
       return;
     }
 
@@ -1090,15 +1108,16 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     final rest =
         _playerQueue.where((track) => track.id != currentTrack.id).toList()
           ..shuffle(Random());
+    final restartRestoredStart = _restoredNotStarted && _isMobileAudioStarting;
     setState(() {
-      _invalidateRestoredMobileAudioStart();
+      if (restartRestoredStart) _invalidateRestoredMobileAudioStart();
       _orderedPlayerQueue = List<Track>.from(_playerQueue);
       _playerQueue = [currentTrack, ...rest];
       _playerIndex = 0;
       _shuffleEnabled = true;
     });
     _savePlaybackState();
-    unawaited(_syncMobileAudioQueuePreservingProgress());
+    _syncMobileAudioAfterMutation(restartRestoredStart: restartRestoredStart);
   }
 
   void _playPrevious() {
@@ -1113,7 +1132,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     _invalidateMobileVideoCollapseRequest();
     final nextTrack = _playerQueue[nextIndex];
     setState(() {
-      _invalidateRestoredMobileAudioStart();
+      _discardRestoredMobileAudioPresentation();
       _playerIndex = nextIndex;
       _playbackMode = _nextModeForTrack(nextTrack);
       _isPlaying = true;
@@ -1138,7 +1157,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     _invalidateMobileVideoCollapseRequest();
     final nextTrack = _playerQueue[nextIndex];
     setState(() {
-      _invalidateRestoredMobileAudioStart();
+      _discardRestoredMobileAudioPresentation();
       _playerIndex = nextIndex;
       _playbackMode = _nextModeForTrack(nextTrack);
       _isPlaying = true;
@@ -1164,8 +1183,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     try {
       await _playRestoredMobileAudioQueue(resumeProgress);
     } catch (error, stackTrace) {
-      _debugRestoredMobileAudioStartFailure(error, stackTrace);
       if (!mounted || request != _restoredMobileAudioStartRequest) return;
+      _debugRestoredMobileAudioStartFailure(error, stackTrace);
       setState(() {
         _isPlaying = false;
         _isMobileAudioStarting = false;
@@ -1271,7 +1290,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     if (mode == PlaybackMode.audio && !currentTrack.hasAudio) return;
     _invalidateMobileVideoCollapseRequest();
     setState(() {
-      _invalidateRestoredMobileAudioStart();
+      _discardRestoredMobileAudioPresentation();
       _playbackMode = mode;
       if (_isMobilePlaybackSurface) {
         _preferVideoOnExpand =
@@ -1344,7 +1363,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       });
       return;
     }
-    _invalidateRestoredMobileAudioStart();
+    _discardRestoredMobileAudioPresentation();
     final request = ++_mobileVideoCollapseRequest;
     final progress = _playbackProgress.clamp(0.0, 1.0).toDouble();
     final initialPosition = currentTrack.durationSeconds > 0
