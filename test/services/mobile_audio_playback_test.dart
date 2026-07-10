@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:audio_service/audio_service.dart'
     show AudioProcessingState, MediaControl;
@@ -298,6 +299,143 @@ void main() {
     await sub.cancel();
     await service.dispose();
   });
+
+  test(
+    'queue loads are serialized and only the latest state is published',
+    () async {
+      final player = DelayedSetAudioSourcesFakeJustAudioPlayer();
+      final service = audio_service.JustAudioMobileAudioPlaybackService(
+        player: player,
+      );
+      final states = <MobileAudioPlaybackState>[];
+      final sub = service.states.listen(states.add);
+
+      final firstLoad = service.playQueue(
+        queue: [_track(1)],
+        index: 0,
+        audioUrlForTrack: (_) => 'http://server/audio/first',
+      );
+      await player.firstSetStarted;
+
+      final secondLoad = service.playQueue(
+        queue: [_track(2)],
+        index: 0,
+        audioUrlForTrack: (_) => 'http://server/audio/second',
+      );
+      addTearDown(() async {
+        player.completeFirstSet();
+        await Future.wait([firstLoad, secondLoad]);
+        await sub.cancel();
+        await service.dispose();
+      });
+
+      await pumpEventQueue();
+
+      expect(player.maxConcurrentSetAudioSourcesCalls, 1);
+
+      player.completeFirstSet();
+      await Future.wait([firstLoad, secondLoad]);
+
+      expect(player.maxConcurrentSetAudioSourcesCalls, 1);
+      expect(player.setAudioSourcesCalls, 2);
+      expect(player.appliedSourceUrls, [
+        ['http://server/audio/first'],
+        ['http://server/audio/second'],
+      ]);
+      expect(_sourceUri(player.sources.single).path, endsWith('/second'));
+      final nonEmptyStates = states
+          .where((state) => state.queue.isNotEmpty)
+          .toList();
+      expect(nonEmptyStates, hasLength(1));
+      expect(nonEmptyStates.map((state) => state.track?.id).toSet(), {2});
+      expect(service.currentState.track?.id, 2);
+    },
+  );
+
+  test(
+    'queue loads skip superseded URL work while the handler loads',
+    () async {
+      final player = FakeJustAudioPlayer();
+      final handlerCompleter = Completer<audio_service.MikudromeAudioHandler>();
+      final generatedTrackIds = <int>[];
+      final service = audio_service.JustAudioMobileAudioPlaybackService(
+        handlerLoader: () => handlerCompleter.future,
+      );
+
+      Future<void> loadTrack(int id) {
+        return service.playQueue(
+          queue: [_track(id)],
+          index: 0,
+          audioUrlForTrack: (track) {
+            generatedTrackIds.add(track.id);
+            return 'http://server/audio/${track.id}';
+          },
+        );
+      }
+
+      final loads = [loadTrack(1), loadTrack(2), loadTrack(3)];
+      handlerCompleter.complete(
+        audio_service.MikudromeAudioHandler(player: player),
+      );
+      await Future.wait(loads);
+
+      expect(generatedTrackIds, [3]);
+      expect(player.setAudioSourcesCalls, 1);
+      expect(service.currentState.track?.id, 3);
+
+      await service.dispose();
+    },
+  );
+
+  test(
+    'same track and index still accept the latest queue URL and state',
+    () async {
+      final player = DelayedSetAudioSourcesFakeJustAudioPlayer();
+      final service = audio_service.JustAudioMobileAudioPlaybackService(
+        player: player,
+      );
+      final states = <MobileAudioPlaybackState>[];
+      final sub = service.states.listen(states.add);
+
+      final firstLoad = service.playQueue(
+        queue: [_track(1)],
+        index: 0,
+        audioUrlForTrack: (_) => 'http://server/audio/first',
+      );
+      await player.firstSetStarted;
+      final secondLoad = service.playQueue(
+        queue: [_track(1)],
+        index: 0,
+        audioUrlForTrack: (_) => 'http://server/audio/second',
+      );
+      addTearDown(() async {
+        player.completeFirstSet();
+        await Future.wait([firstLoad, secondLoad]);
+        await sub.cancel();
+        await service.dispose();
+      });
+
+      player.completeFirstSet();
+      await Future.wait([firstLoad, secondLoad]);
+
+      expect(player.appliedSourceUrls, [
+        ['http://server/audio/first'],
+        ['http://server/audio/second'],
+      ]);
+      expect(_sourceUri(player.sources.single).path, endsWith('/second'));
+      expect(service.currentState.track?.id, 1);
+      expect(service.currentState.index, 0);
+      expect(service.currentState.audioUrl, endsWith('/second'));
+      final nonEmptyStates = states
+          .where((state) => state.queue.isNotEmpty)
+          .toList();
+      expect(nonEmptyStates, hasLength(1));
+      expect(
+        nonEmptyStates.map((state) => state.audioUrl),
+        everyElement(endsWith('/second')),
+      );
+    },
+  );
 
   test(
     'just_audio service starts restored queue at requested initial position',
@@ -1000,6 +1138,35 @@ void main() {
     await service.dispose();
   });
 
+  test('queue load failure does not poison later queue mutations', () async {
+    final player = FakeJustAudioPlayer()
+      ..setAudioSourcesError = StateError('load failed');
+    final service = audio_service.JustAudioMobileAudioPlaybackService(
+      player: player,
+    );
+
+    await expectLater(
+      service.playQueue(
+        queue: [_track(1)],
+        index: 0,
+        audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+      ),
+      throwsStateError,
+    );
+
+    player.setAudioSourcesError = null;
+    await service.playQueue(
+      queue: [_track(2)],
+      index: 0,
+      audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+    );
+
+    expect(player.setAudioSourcesCalls, 2);
+    expect(service.currentState.track?.id, 2);
+
+    await service.dispose();
+  });
+
   test('play failure is handled and leaves selected track paused', () async {
     final player = FakeJustAudioPlayer()..playError = StateError('play failed');
     final service = audio_service.JustAudioMobileAudioPlaybackService(
@@ -1466,6 +1633,59 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
 
   void emitError(PlayerException error) {
     _errors.add(error);
+  }
+}
+
+class DelayedSetAudioSourcesFakeJustAudioPlayer extends FakeJustAudioPlayer {
+  final _firstSetStarted = Completer<void>();
+  final _releaseFirstSet = Completer<void>();
+  int _setAudioSourcesInvocations = 0;
+  int activeSetAudioSourcesCalls = 0;
+  int maxConcurrentSetAudioSourcesCalls = 0;
+  final appliedSourceUrls = <List<String>>[];
+
+  Future<void> get firstSetStarted => _firstSetStarted.future;
+
+  void completeFirstSet() {
+    if (!_releaseFirstSet.isCompleted) {
+      _releaseFirstSet.complete();
+    }
+  }
+
+  @override
+  Future<void> setAudioSources(
+    List<AudioSource> sources, {
+    required int initialIndex,
+    required Duration initialPosition,
+  }) async {
+    final invocation = ++_setAudioSourcesInvocations;
+    activeSetAudioSourcesCalls += 1;
+    maxConcurrentSetAudioSourcesCalls = max(
+      maxConcurrentSetAudioSourcesCalls,
+      activeSetAudioSourcesCalls,
+    );
+    try {
+      if (invocation == 1) {
+        _firstSetStarted.complete();
+        await _releaseFirstSet.future;
+      }
+      await super.setAudioSources(
+        sources,
+        initialIndex: initialIndex,
+        initialPosition: initialPosition,
+      );
+      appliedSourceUrls.add(
+        sources.map((source) => _sourceUri(source).toString()).toList(),
+      );
+    } finally {
+      activeSetAudioSourcesCalls -= 1;
+    }
+  }
+
+  @override
+  Future<void> dispose() async {
+    completeFirstSet();
+    await super.dispose();
   }
 }
 

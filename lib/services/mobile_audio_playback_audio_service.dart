@@ -728,6 +728,11 @@ class JustAudioMobileAudioPlaybackService
   final List<StreamSubscription<Object?>> _subscriptions = [];
   MobileAudioPlaybackState _currentState = MobileAudioPlaybackState.empty();
   MikudromeAudioHandler? _boundHandler;
+  Future<void> _queueMutationTail = Future<void>.value();
+  int _latestQueueGeneration = 0;
+  int _appliedQueueGeneration = 0;
+  int? _applyingQueueGeneration;
+  MobileAudioPlaybackState? _applyingQueueState;
   bool _disposed = false;
 
   @override
@@ -746,24 +751,59 @@ class JustAudioMobileAudioPlaybackService
     Duration initialPosition = Duration.zero,
     TrackFavoriteStatus? isTrackFavorited,
     TrackFavoriteToggle? toggleTrackFavorite,
-  }) async {
-    if (_disposed) return;
+  }) {
+    if (_disposed) return Future<void>.value();
 
+    final generation = ++_latestQueueGeneration;
     final nextQueue = List<Track>.unmodifiable(queue);
-    final nextAudioUrls = List<String>.unmodifiable(
-      nextQueue.map(audioUrlForTrack),
-    );
-    final handler = await _effectiveHandler();
-    await handler.setMikudromeQueue(
-      tracks: nextQueue,
-      audioUrls: nextAudioUrls,
-      initialIndex: index,
-      coverUrlForTrack: coverUrlForTrack,
-      orderMode: orderMode,
-      initialPosition: initialPosition,
-      isTrackFavorited: isTrackFavorited,
-      toggleTrackFavorite: toggleTrackFavorite,
-    );
+    return _enqueueQueueMutation(() async {
+      if (_disposed || generation != _latestQueueGeneration) return;
+
+      final handler = await _effectiveHandler();
+      if (_disposed || generation != _latestQueueGeneration) return;
+
+      final nextAudioUrls = List<String>.unmodifiable(
+        nextQueue.map(audioUrlForTrack),
+      );
+      _applyingQueueGeneration = generation;
+      _applyingQueueState = null;
+      MobileAudioPlaybackState? appliedState;
+      try {
+        await handler.setMikudromeQueue(
+          tracks: nextQueue,
+          audioUrls: nextAudioUrls,
+          initialIndex: index,
+          coverUrlForTrack: coverUrlForTrack,
+          orderMode: orderMode,
+          initialPosition: initialPosition,
+          isTrackFavorited: isTrackFavorited,
+          toggleTrackFavorite: toggleTrackFavorite,
+        );
+        _appliedQueueGeneration = generation;
+        appliedState = _applyingQueueState;
+      } finally {
+        if (_applyingQueueGeneration == generation) {
+          _applyingQueueGeneration = null;
+          _applyingQueueState = null;
+        }
+      }
+      if (appliedState != null) {
+        _emit(appliedState);
+      }
+    });
+  }
+
+  Future<void> _enqueueQueueMutation(Future<void> Function() mutation) {
+    final operation = Completer<void>();
+    _queueMutationTail = _queueMutationTail.then((_) async {
+      try {
+        await mutation();
+        operation.complete();
+      } catch (error, stackTrace) {
+        operation.completeError(error, stackTrace);
+      }
+    });
+    return operation.future;
   }
 
   @override
@@ -861,6 +901,14 @@ class JustAudioMobileAudioPlaybackService
 
   void _emit(MobileAudioPlaybackState state) {
     if (_disposed) return;
+    if ((_applyingQueueGeneration ?? _appliedQueueGeneration) !=
+        _latestQueueGeneration) {
+      return;
+    }
+    if (_applyingQueueGeneration != null) {
+      _applyingQueueState = state;
+      return;
+    }
     _currentState = state;
     _states.add(state);
   }
