@@ -91,10 +91,12 @@ class MikudromeAudioHandler extends BaseAudioHandler
   bool _playbackRequested = false;
   bool _isRecoveringPlayback = false;
   int _playbackRecoveryAttempts = 0;
-  MobilePlaybackOrderMode _orderMode = MobilePlaybackOrderMode.sequential;
   Duration? _lastPausedSeekPosition;
   TrackFavoriteStatus? _isTrackFavorited;
   TrackFavoriteToggle? _toggleTrackFavorite;
+  Future<void> _sourceMutationTail = Future<void>.value();
+  int _sourceGeneration = 0;
+  bool _isApplyingQueueSource = false;
   bool _disposed = false;
 
   Stream<MobileAudioPlaybackState> get mikudromeState =>
@@ -109,36 +111,11 @@ class MikudromeAudioHandler extends BaseAudioHandler
     Duration initialPosition = Duration.zero,
     TrackFavoriteStatus? isTrackFavorited,
     TrackFavoriteToggle? toggleTrackFavorite,
-  }) async {
-    if (_disposed) return;
-    _orderMode = orderMode;
-    _isTrackFavorited = isTrackFavorited;
-    _toggleTrackFavorite = toggleTrackFavorite;
-    if (tracks.isEmpty) {
-      _tracks = const [];
-      _audioUrls = const [];
-      _currentIndex = null;
-      _lastEmittedPosition = Duration.zero;
-      _lastPausedSeekPosition = null;
-      _isTrackFavorited = null;
-      _toggleTrackFavorite = null;
-      _playbackRequested = false;
-      _playbackRecoveryAttempts = 0;
-      queue.add(const []);
-      mediaItem.add(null);
-      await _player.stop();
-      _publishPlaybackState(processingState: AudioProcessingState.idle);
-      _emitMikudromeState(empty: true);
-      return;
-    }
-
+  }) {
+    if (_disposed) return Future<void>.value();
+    final generation = ++_sourceGeneration;
     final nextTracks = List<Track>.unmodifiable(tracks);
     final nextAudioUrls = List<String>.unmodifiable(audioUrls);
-    final clampedIndex = initialIndex.clamp(0, nextTracks.length - 1);
-    final clampedPosition = _clampPositionForTrack(
-      initialPosition,
-      nextTracks[clampedIndex],
-    );
     final artHeaders = ApiConfig.defaultHeaders.isEmpty
         ? null
         : ApiConfig.defaultHeaders;
@@ -154,35 +131,84 @@ class MikudromeAudioHandler extends BaseAudioHandler
         ),
     ];
 
-    await _player.setAudioSources(
-      nextAudioUrls.map(_audioSourceForUrl).toList(growable: false),
-      initialIndex: clampedIndex,
-      initialPosition: clampedPosition,
-    );
-    await _player.setLoopMode(_loopModeForOrderMode(_orderMode));
-    _tracks = nextTracks;
-    _audioUrls = nextAudioUrls;
-    queue.add(items);
-    mediaItem.add(items[clampedIndex]);
-    _currentIndex = clampedIndex;
-    _position = clampedPosition;
-    _lastEmittedPosition = clampedPosition;
-    _duration = Duration(seconds: _tracks[clampedIndex].durationSeconds);
-    _isCompleted = false;
-    _lastPausedSeekPosition = null;
-    _playbackRecoveryAttempts = 0;
-    _publishPlaybackState();
-    _emitMikudromeState(
-      index: clampedIndex,
-      position: clampedPosition,
-      isPlaying: _player.playing,
-    );
-    await _startPlaybackSafely(clampedIndex);
+    return _enqueueSourceMutation(() async {
+      if (_disposed || generation != _sourceGeneration) return;
+      if (nextTracks.isEmpty) {
+        await _player.stop();
+        if (_disposed || generation != _sourceGeneration) return;
+        _tracks = const [];
+        _audioUrls = const [];
+        _currentIndex = null;
+        _lastEmittedPosition = Duration.zero;
+        _lastPausedSeekPosition = null;
+        _isTrackFavorited = null;
+        _toggleTrackFavorite = null;
+        _playbackRequested = false;
+        _playbackRecoveryAttempts = 0;
+        queue.add(const []);
+        mediaItem.add(null);
+        _publishPlaybackState(processingState: AudioProcessingState.idle);
+        _emitMikudromeState(empty: true);
+        return;
+      }
+
+      final clampedIndex = initialIndex.clamp(0, nextTracks.length - 1);
+      final clampedPosition = _clampPositionForTrack(
+        initialPosition,
+        nextTracks[clampedIndex],
+      );
+      _isApplyingQueueSource = true;
+      try {
+        await _player.setAudioSources(
+          nextAudioUrls.map(_audioSourceForUrl).toList(growable: false),
+          initialIndex: clampedIndex,
+          initialPosition: clampedPosition,
+        );
+      } finally {
+        _isApplyingQueueSource = false;
+      }
+      if (_disposed || generation != _sourceGeneration) return;
+
+      await _player.setLoopMode(_loopModeForOrderMode(orderMode));
+      if (_disposed || generation != _sourceGeneration) return;
+      _isTrackFavorited = isTrackFavorited;
+      _toggleTrackFavorite = toggleTrackFavorite;
+      _tracks = nextTracks;
+      _audioUrls = nextAudioUrls;
+      queue.add(items);
+      mediaItem.add(items[clampedIndex]);
+      _currentIndex = clampedIndex;
+      _position = clampedPosition;
+      _lastEmittedPosition = clampedPosition;
+      _duration = Duration(seconds: _tracks[clampedIndex].durationSeconds);
+      _isCompleted = false;
+      _lastPausedSeekPosition = null;
+      _playbackRecoveryAttempts = 0;
+      _publishPlaybackState();
+      _emitMikudromeState(
+        index: clampedIndex,
+        position: clampedPosition,
+        isPlaying: _player.playing,
+      );
+      await _startPlaybackSafely(clampedIndex);
+    });
+  }
+
+  Future<void> _enqueueSourceMutation(Future<void> Function() mutation) {
+    final operation = Completer<void>();
+    _sourceMutationTail = _sourceMutationTail.then((_) async {
+      try {
+        await mutation();
+        operation.complete();
+      } catch (error, stackTrace) {
+        operation.completeError(error, stackTrace);
+      }
+    });
+    return operation.future;
   }
 
   Future<void> setPlaybackOrderMode(MobilePlaybackOrderMode orderMode) async {
     if (_disposed) return;
-    _orderMode = orderMode;
     await _player.setLoopMode(_loopModeForOrderMode(orderMode));
   }
 
@@ -456,6 +482,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
   void _handlePlaybackError(PlayerException _) {
     if (_disposed ||
         _tracks.isEmpty ||
+        _isApplyingQueueSource ||
         !_playbackRequested ||
         _lastPausedSeekPosition != null ||
         _isCompleted ||
@@ -482,10 +509,20 @@ class MikudromeAudioHandler extends BaseAudioHandler
 
   Future<void> _recoverPlaybackAt(Duration position) async {
     _isRecoveringPlayback = true;
+    final sourceGeneration = _sourceGeneration;
     try {
-      await _switchCurrentTrackToLowQuality(position);
+      final sourceReady = await _switchCurrentTrackToLowQuality(
+        position,
+        sourceGeneration: sourceGeneration,
+      );
+      if (!sourceReady || sourceGeneration != _sourceGeneration) return;
       await _player.seek(position);
-      if (_disposed || !_playbackRequested || _tracks.isEmpty) return;
+      if (_disposed ||
+          sourceGeneration != _sourceGeneration ||
+          !_playbackRequested ||
+          _tracks.isEmpty) {
+        return;
+      }
       await _player.play();
     } catch (_) {
       if (!_disposed && _tracks.isNotEmpty) {
@@ -498,41 +535,59 @@ class MikudromeAudioHandler extends BaseAudioHandler
     }
   }
 
-  Future<void> _switchCurrentTrackToLowQuality(
+  Future<bool> _switchCurrentTrackToLowQuality(
     Duration position, {
+    required int sourceGeneration,
     bool resumePlayback = false,
   }) async {
-    if (_disposed || _tracks.isEmpty || _audioUrls.isEmpty) return;
-    final index = (_currentIndex ?? _player.currentIndex ?? 0).clamp(
-      0,
-      _audioUrls.length - 1,
-    );
-    final currentUrl = _audioUrls[index];
-    final lowQualityUrl = _withLowQualityAudio(currentUrl);
-    if (lowQualityUrl == currentUrl) return;
+    var sourceReady = false;
+    await _enqueueSourceMutation(() async {
+      if (_disposed ||
+          sourceGeneration != _sourceGeneration ||
+          _tracks.isEmpty ||
+          _audioUrls.isEmpty) {
+        return;
+      }
+      final index = (_currentIndex ?? _player.currentIndex ?? 0).clamp(
+        0,
+        _audioUrls.length - 1,
+      );
+      final currentUrl = _audioUrls[index];
+      final lowQualityUrl = _withLowQualityAudio(currentUrl);
+      if (lowQualityUrl == currentUrl) {
+        sourceReady = true;
+        return;
+      }
 
-    final nextAudioUrls = List<String>.from(_audioUrls);
-    nextAudioUrls[index] = lowQualityUrl;
-    final nextQueue = List<MediaItem>.from(queue.value);
-    if (index < nextQueue.length) {
-      nextQueue[index] = nextQueue[index].copyWith(id: lowQualityUrl);
-    }
+      final nextAudioUrls = List<String>.from(_audioUrls);
+      nextAudioUrls[index] = lowQualityUrl;
+      final nextQueue = List<MediaItem>.from(queue.value);
+      if (index < nextQueue.length) {
+        nextQueue[index] = nextQueue[index].copyWith(id: lowQualityUrl);
+      }
 
-    await _player.setAudioSources(
-      nextAudioUrls.map(_audioSourceForUrl).toList(growable: false),
-      initialIndex: index,
-      initialPosition: position,
-    );
-    if (_disposed || _tracks.isEmpty) return;
-    _audioUrls = List<String>.unmodifiable(nextAudioUrls);
-    queue.add(List<MediaItem>.unmodifiable(nextQueue));
-    if (index < nextQueue.length) {
-      mediaItem.add(nextQueue[index]);
-    }
-    _emitMikudromeState(index: index, position: position);
-    if (resumePlayback && _playbackRequested) {
-      await _player.play();
-    }
+      await _player.setAudioSources(
+        nextAudioUrls.map(_audioSourceForUrl).toList(growable: false),
+        initialIndex: index,
+        initialPosition: position,
+      );
+      if (_disposed ||
+          sourceGeneration != _sourceGeneration ||
+          _tracks.isEmpty) {
+        return;
+      }
+      _audioUrls = List<String>.unmodifiable(nextAudioUrls);
+      queue.add(List<MediaItem>.unmodifiable(nextQueue));
+      if (index < nextQueue.length) {
+        mediaItem.add(nextQueue[index]);
+      }
+      _emitMikudromeState(index: index, position: position);
+      if (resumePlayback && _playbackRequested) {
+        await _player.play();
+      }
+      sourceReady = true;
+    });
+    return sourceReady;
   }
 
   String _withLowQualityAudio(String url) {

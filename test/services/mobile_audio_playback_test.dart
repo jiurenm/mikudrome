@@ -357,9 +357,17 @@ void main() {
     () async {
       final player = FakeJustAudioPlayer();
       final handlerCompleter = Completer<audio_service.MikudromeAudioHandler>();
+      final loaderStarted = Completer<void>();
       final generatedTrackIds = <int>[];
+      var loaderCalls = 0;
       final service = audio_service.JustAudioMobileAudioPlaybackService(
-        handlerLoader: () => handlerCompleter.future,
+        handlerLoader: () {
+          loaderCalls += 1;
+          if (!loaderStarted.isCompleted) {
+            loaderStarted.complete();
+          }
+          return handlerCompleter.future;
+        },
       );
 
       Future<void> loadTrack(int id) {
@@ -373,12 +381,15 @@ void main() {
         );
       }
 
-      final loads = [loadTrack(1), loadTrack(2), loadTrack(3)];
+      final firstLoad = loadTrack(1);
+      await loaderStarted.future;
+      final loads = [firstLoad, loadTrack(2), loadTrack(3)];
       handlerCompleter.complete(
         audio_service.MikudromeAudioHandler(player: player),
       );
       await Future.wait(loads);
 
+      expect(loaderCalls, 1);
       expect(generatedTrackIds, [3]);
       expect(player.setAudioSourcesCalls, 1);
       expect(service.currentState.track?.id, 3);
@@ -684,6 +695,103 @@ void main() {
 
       await sub.cancel();
       await handler.dispose();
+    },
+  );
+
+  test(
+    'queue replacement ignores recovery errors while setting sources',
+    () async {
+      final player = DelayedSetAudioSourcesFakeJustAudioPlayer(
+        delayedInvocation: 2,
+      );
+      final service = audio_service.JustAudioMobileAudioPlaybackService(
+        player: player,
+      );
+
+      await service.playQueue(
+        queue: [_track(1)],
+        index: 0,
+        audioUrlForTrack: (_) => 'http://server/audio/first',
+      );
+
+      final replacement = service.playQueue(
+        queue: [_track(2)],
+        index: 0,
+        audioUrlForTrack: (_) => 'http://server/audio/second',
+      );
+      await player.delayedSetStarted;
+      addTearDown(() async {
+        player.completeDelayedSet();
+        await replacement;
+        await service.dispose();
+      });
+
+      player.emitError(PlayerException(1, 'replacement failed', 0));
+      await pumpEventQueue();
+
+      expect(player.maxConcurrentSetAudioSourcesCalls, 1);
+
+      player.completeDelayedSet();
+      await replacement;
+      await pumpEventQueue();
+
+      expect(player.maxConcurrentSetAudioSourcesCalls, 1);
+      expect(player.setAudioSourcesCalls, 2);
+      expect(player.appliedSourceUrls, [
+        ['http://server/audio/first'],
+        ['http://server/audio/second'],
+      ]);
+      expect(_sourceUri(player.sources.single).toString(), endsWith('/second'));
+      expect(service.currentState.track?.id, 2);
+      expect(service.currentState.audioUrl, endsWith('/second'));
+    },
+  );
+
+  test(
+    'queue replacement waits for running recovery and remains final',
+    () async {
+      final player = DelayedSetAudioSourcesFakeJustAudioPlayer(
+        delayedInvocation: 2,
+      );
+      final service = audio_service.JustAudioMobileAudioPlaybackService(
+        player: player,
+      );
+
+      await service.playQueue(
+        queue: [_track(1)],
+        index: 0,
+        audioUrlForTrack: (_) => 'http://server/audio/first',
+      );
+
+      player.emitError(PlayerException(1, 'connection lost', 0));
+      await player.delayedSetStarted;
+      final replacement = service.playQueue(
+        queue: [_track(2)],
+        index: 0,
+        audioUrlForTrack: (_) => 'http://server/audio/second',
+      );
+      addTearDown(() async {
+        player.completeDelayedSet();
+        await replacement;
+        await service.dispose();
+      });
+
+      await pumpEventQueue();
+      final maxConcurrencyBeforeRelease =
+          player.maxConcurrentSetAudioSourcesCalls;
+
+      player.completeDelayedSet();
+      await replacement;
+      await pumpEventQueue();
+
+      expect(player.setAudioSourcesCalls, 3);
+      expect(_sourceUri(player.sources.single).toString(), endsWith('/second'));
+      expect(player.appliedSourceUrls[1].single, contains('quality=low'));
+      expect(player.appliedSourceUrls.last, ['http://server/audio/second']);
+      expect(maxConcurrencyBeforeRelease, 1);
+      expect(player.maxConcurrentSetAudioSourcesCalls, 1);
+      expect(service.currentState.track?.id, 2);
+      expect(service.currentState.audioUrl, endsWith('/second'));
     },
   );
 
@@ -1139,28 +1247,35 @@ void main() {
   });
 
   test('queue load failure does not poison later queue mutations', () async {
-    final player = FakeJustAudioPlayer()
-      ..setAudioSourcesError = StateError('load failed');
+    final player = DelayedSetAudioSourcesFakeJustAudioPlayer(
+      delayedError: StateError('load failed'),
+    );
     final service = audio_service.JustAudioMobileAudioPlaybackService(
       player: player,
     );
+    final unhandledErrors = <Object>[];
 
-    await expectLater(
-      service.playQueue(
+    await runZonedGuarded(() async {
+      final failingLoad = service.playQueue(
         queue: [_track(1)],
         index: 0,
         audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
-      ),
-      throwsStateError,
-    );
+      );
+      await player.delayedSetStarted;
+      final successfulLoad = service.playQueue(
+        queue: [_track(2)],
+        index: 0,
+        audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+      );
 
-    player.setAudioSourcesError = null;
-    await service.playQueue(
-      queue: [_track(2)],
-      index: 0,
-      audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
-    );
+      final failingExpectation = expectLater(failingLoad, throwsStateError);
+      final successfulExpectation = expectLater(successfulLoad, completes);
+      player.completeDelayedSet();
+      await Future.wait([failingExpectation, successfulExpectation]);
+      await pumpEventQueue();
+    }, (error, stackTrace) => unhandledErrors.add(error));
 
+    expect(unhandledErrors, isEmpty);
     expect(player.setAudioSourcesCalls, 2);
     expect(service.currentState.track?.id, 2);
 
@@ -1637,18 +1752,29 @@ class FakeJustAudioPlayer implements audio_service.MobileAudioPlayerAdapter {
 }
 
 class DelayedSetAudioSourcesFakeJustAudioPlayer extends FakeJustAudioPlayer {
-  final _firstSetStarted = Completer<void>();
-  final _releaseFirstSet = Completer<void>();
+  DelayedSetAudioSourcesFakeJustAudioPlayer({
+    this.delayedInvocation = 1,
+    this.delayedError,
+  });
+
+  final int delayedInvocation;
+  final Object? delayedError;
+  final _delayedSetStarted = Completer<void>();
+  final _releaseDelayedSet = Completer<void>();
   int _setAudioSourcesInvocations = 0;
   int activeSetAudioSourcesCalls = 0;
   int maxConcurrentSetAudioSourcesCalls = 0;
   final appliedSourceUrls = <List<String>>[];
 
-  Future<void> get firstSetStarted => _firstSetStarted.future;
+  Future<void> get firstSetStarted => delayedSetStarted;
 
-  void completeFirstSet() {
-    if (!_releaseFirstSet.isCompleted) {
-      _releaseFirstSet.complete();
+  Future<void> get delayedSetStarted => _delayedSetStarted.future;
+
+  void completeFirstSet() => completeDelayedSet();
+
+  void completeDelayedSet() {
+    if (!_releaseDelayedSet.isCompleted) {
+      _releaseDelayedSet.complete();
     }
   }
 
@@ -1665,9 +1791,14 @@ class DelayedSetAudioSourcesFakeJustAudioPlayer extends FakeJustAudioPlayer {
       activeSetAudioSourcesCalls,
     );
     try {
-      if (invocation == 1) {
-        _firstSetStarted.complete();
-        await _releaseFirstSet.future;
+      if (invocation == delayedInvocation) {
+        _delayedSetStarted.complete();
+        await _releaseDelayedSet.future;
+        final error = delayedError;
+        if (error != null) {
+          setAudioSourcesCalls += 1;
+          throw error;
+        }
       }
       await super.setAudioSources(
         sources,
@@ -1684,7 +1815,7 @@ class DelayedSetAudioSourcesFakeJustAudioPlayer extends FakeJustAudioPlayer {
 
   @override
   Future<void> dispose() async {
-    completeFirstSet();
+    completeDelayedSet();
     await super.dispose();
   }
 }
