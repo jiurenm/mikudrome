@@ -667,6 +667,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   }
 
   void _clearPlaybackForServerChange() {
+    unawaited(_mobileAudioPlaybackService.clearCache());
     setState(() {
       _playerQueue = const [];
       _orderedPlayerQueue = null;
