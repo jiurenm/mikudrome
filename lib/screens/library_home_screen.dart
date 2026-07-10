@@ -159,6 +159,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   StreamSubscription<MobileAudioPlaybackState>? _mobileAudioSubscription;
 
   bool _restoredNotStarted = false;
+  bool _isMobileAudioStarting = false;
   double? _resumeProgress;
   VideoPlayerController? _videoController;
   int _mobileVideoCollapseRequest = 0;
@@ -684,6 +685,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       _playerTogglePlayback = _noopTogglePlayback;
       _playerSeekToFraction = _noopSeekToFraction;
       _restoredNotStarted = false;
+      _isMobileAudioStarting = false;
       _resumeProgress = null;
       _videoController = null;
       _lastSavedProgress = 0;
@@ -997,6 +999,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       _showPlayer = true;
       _isPlaying = true;
       _restoredNotStarted = false;
+      _isMobileAudioStarting = false;
       _resumeProgress = null;
     });
     _savePlaybackState();
@@ -1142,19 +1145,47 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     }
   }
 
+  Future<void> _startRestoredMobileAudioPlayback() async {
+    if (_isMobileAudioStarting || !_restoredNotStarted) return;
+    final resumeProgress = _resumeProgress ?? _playbackProgress;
+
+    setState(() {
+      _isMobileAudioStarting = true;
+      _isPlaying = false;
+    });
+
+    try {
+      await _playRestoredMobileAudioQueue(resumeProgress);
+      if (!mounted) return;
+      setState(() {
+        _restoredNotStarted = false;
+        _resumeProgress = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isPlaying = false;
+      });
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('播放启动失败，请重试')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isMobileAudioStarting = false;
+        });
+      }
+    }
+  }
+
   Future<void> _togglePlayback() async {
     if (_currentTrack == null) return;
     if (_canUseMobileAudioPlayback) {
       if (_restoredNotStarted) {
-        final resumeProgress = _resumeProgress ?? _playbackProgress;
-        setState(() {
-          _restoredNotStarted = false;
-          _isPlaying = true;
-          _resumeProgress = null;
-        });
-        await _playRestoredMobileAudioQueue(resumeProgress);
+        await _startRestoredMobileAudioPlayback();
         return;
       }
+      if (_isMobileAudioStarting) return;
       if (_isPlaying) {
         await _mobileAudioPlaybackService.pause();
       } else {

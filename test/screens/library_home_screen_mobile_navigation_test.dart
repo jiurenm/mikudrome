@@ -508,6 +508,45 @@ void main() {
     },
   );
 
+  testWidgets('failed restored detail playback stays paused and can retry', (
+    tester,
+  ) async {
+    final service = _FailingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+    await _seedPlaybackState(progress: 0.5);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(MobileMiniPlayer));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      Finder playButton() => find.descendant(
+        of: find.byKey(const ValueKey('mobile-player-immersive')),
+        matching: find.byIcon(Icons.play_arrow),
+      );
+
+      await tester.tap(playButton());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('播放启动失败，请重试').first, findsOneWidget);
+      expect(service.playQueueAttempts, 1);
+      expect(playButton(), findsOneWidget);
+
+      await tester.tap(playButton());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(tester.takeException(), isNull);
+    expect(service.playQueueAttempts, 2);
+    expect(service.playCalls, 0);
+  });
+
   testWidgets(
     'restored mobile playback at zero progress starts without seeking',
     (tester) async {
