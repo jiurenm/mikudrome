@@ -427,26 +427,45 @@ void main() {
   });
 
   test(
-    'audio handler switches current item to low quality while buffering',
+    'audio handler keeps restored source and position while buffering',
     () async {
       final player = FakeJustAudioPlayer();
       final handler = audio_service.MikudromeAudioHandler(player: player);
+      final states = <MobileAudioPlaybackState>[];
+      final sub = handler.mikudromeState.listen(states.add);
 
       await handler.setMikudromeQueue(
-        tracks: [_track(1)],
-        audioUrls: const ['http://server/api/stream/1/audio'],
-        initialIndex: 0,
+        tracks: [_track(1), _track(2)],
+        audioUrls: const [
+          'http://server/api/stream/1/audio',
+          'http://server/api/stream/2/audio',
+        ],
+        initialIndex: 1,
+        initialPosition: const Duration(seconds: 75),
       );
-      player.setPosition(const Duration(seconds: 12));
 
+      player.setProcessingState(ProcessingState.buffering);
       player.setProcessingState(ProcessingState.buffering);
       await pumpEventQueue();
 
-      expect(player.setAudioSourcesCalls, 2);
-      expect(player.sources.single.uri.toString(), contains('quality=low'));
-      expect(player.initialPosition, const Duration(seconds: 12));
-      expect(handler.mediaItem.value?.id, contains('quality=low'));
+      expect(player.setAudioSourcesCalls, 1);
+      expect(player.initialIndex, 1);
+      expect(player.initialPosition, const Duration(seconds: 75));
+      expect(
+        player.sources.map((source) => source.uri.toString()),
+        [
+          'http://server/api/stream/1/audio',
+          'http://server/api/stream/2/audio',
+        ],
+      );
+      expect(
+        handler.playbackState.value.processingState,
+        AudioProcessingState.buffering,
+      );
+      expect(states.last.index, 1);
+      expect(states.last.position, const Duration(seconds: 75));
 
+      await sub.cancel();
       await handler.dispose();
     },
   );

@@ -411,7 +411,6 @@ class MikudromeAudioHandler extends BaseAudioHandler
       );
       _emitMikudromeState(isPlaying: false, isCompleted: true);
     } else if (state == ProcessingState.buffering && _tracks.isNotEmpty) {
-      final retryPosition = _positionForPause();
       _publishPlaybackState(
         isPlaying: _playbackRequested && _lastPausedSeekPosition == null,
         processingState: AudioProcessingState.buffering,
@@ -420,14 +419,6 @@ class MikudromeAudioHandler extends BaseAudioHandler
         isPlaying: _playbackRequested && _lastPausedSeekPosition == null,
         isCompleted: false,
       );
-      if (_playbackRequested && _lastPausedSeekPosition == null) {
-        unawaited(
-          _switchCurrentTrackToLowQuality(
-            retryPosition,
-            resumePlayback: true,
-          ).catchError((_) {}),
-        );
-      }
     } else if (state == ProcessingState.ready ||
         state == ProcessingState.loading) {
       _publishPlaybackState(
