@@ -236,6 +236,52 @@ void main() {
     expect(PlaybackStorage.load(), isNotNull);
   });
 
+  testWidgets('reloading configured storage does not reset playback', (
+    tester,
+  ) async {
+    final service = _RecordingMobileAudioPlaybackService();
+    final controller = AppConfigController(
+      store: _FakeStore(serverUrl: 'http://192.168.1.10:8080'),
+    );
+    await controller.load();
+    _seedPlaybackStorage();
+    addTearDown(service.dispose);
+    addTearDown(controller.dispose);
+
+    var homeInitializations = 0;
+    var homeDisposals = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppRoot(
+          controller: controller,
+          mobileAudioPlaybackService: service,
+          homeBuilder: (_) => _TrackedHome(
+            onInit: () => homeInitializations += 1,
+            onDispose: () => homeDisposals += 1,
+          ),
+        ),
+      ),
+    );
+
+    final reload = controller.load();
+    expect(controller.state.status, AppConfigStatus.loading);
+    expect(controller.state.serverUrl, isNull);
+    await tester.pump();
+
+    expect(find.text('Library Home'), findsOneWidget);
+    expect(homeInitializations, 1);
+    expect(homeDisposals, 0);
+
+    await reload;
+    await tester.pump();
+
+    expect(controller.state.status, AppConfigStatus.configured);
+    expect(service.clearCacheCalls, 0);
+    expect(PlaybackStorage.load(), isNotNull);
+    expect(homeInitializations, 1);
+    expect(homeDisposals, 0);
+  });
+
   testWidgets('native phone landscape hides only the status overlay', (
     tester,
   ) async {

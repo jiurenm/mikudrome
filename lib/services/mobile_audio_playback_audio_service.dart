@@ -1057,14 +1057,12 @@ class JustAudioMobileAudioPlaybackService
     if (_disposed) return;
     _disposed = true;
     _latestQueueGeneration += 1;
-    if (_ownsHandler) {
-      await _queueMutationTail;
-      final handlerLoad = _handlerLoad;
-      if (handlerLoad != null) {
-        try {
-          await handlerLoad;
-        } catch (_) {}
-      }
+    await _queueMutationTail;
+    final handlerLoad = _handlerLoad;
+    if (handlerLoad != null) {
+      try {
+        await handlerLoad;
+      } catch (_) {}
     }
     for (final subscription in _subscriptions) {
       await subscription.cancel();

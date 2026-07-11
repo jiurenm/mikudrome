@@ -35,7 +35,8 @@ class _AppRootState extends State<AppRoot> {
   late MobileAudioPlaybackService _mobileAudioPlaybackService;
   late bool _ownsMobileAudioPlaybackService;
   late bool _hasConfiguredSession;
-  bool _configuredEditInFlight = false;
+  String? _pendingServerEditUrl;
+  String? _pendingServerEditCookie;
   int _homeGeneration = 0;
 
   @override
@@ -55,7 +56,7 @@ class _AppRootState extends State<AppRoot> {
       widget.controller.addListener(_onConfigChanged);
       _hasConfiguredSession =
           widget.controller.state.status == AppConfigStatus.configured;
-      _configuredEditInFlight = false;
+      _clearPendingServerEdit();
       _homeGeneration += 1;
     }
     if (!identical(
@@ -90,14 +91,23 @@ class _AppRootState extends State<AppRoot> {
   }
 
   void _onConfigChanged() {
-    final status = widget.controller.state.status;
-    if (status == AppConfigStatus.loading && _hasConfiguredSession) {
-      _configuredEditInFlight = true;
+    final state = widget.controller.state;
+    final status = state.status;
+    if (status == AppConfigStatus.loading) {
+      if (_hasConfiguredSession && state.serverUrl != null) {
+        _pendingServerEditUrl = state.serverUrl;
+        _pendingServerEditCookie = state.serverCookie;
+      } else {
+        _clearPendingServerEdit();
+      }
     } else if (status == AppConfigStatus.configured) {
-      final completedConfiguredEdit = _configuredEditInFlight;
+      final completedConfiguredEdit =
+          _pendingServerEditUrl != null &&
+          state.serverUrl == _pendingServerEditUrl &&
+          state.serverCookie == _pendingServerEditCookie;
       _hasConfiguredSession = true;
-      _configuredEditInFlight = false;
       if (completedConfiguredEdit) {
+        _clearPendingServerEdit();
         PlaybackStorage.clear();
         try {
           unawaited(
@@ -107,12 +117,17 @@ class _AppRootState extends State<AppRoot> {
         _homeGeneration += 1;
       }
     } else if (status == AppConfigStatus.error) {
-      _configuredEditInFlight = false;
+      _clearPendingServerEdit();
     } else if (status == AppConfigStatus.unconfigured) {
       _hasConfiguredSession = false;
-      _configuredEditInFlight = false;
+      _clearPendingServerEdit();
     }
     if (mounted) setState(() {});
+  }
+
+  void _clearPendingServerEdit() {
+    _pendingServerEditUrl = null;
+    _pendingServerEditCookie = null;
   }
 
   @override

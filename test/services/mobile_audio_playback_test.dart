@@ -211,6 +211,71 @@ void main() {
     },
   );
 
+  test(
+    'shared wrapper dispose waits for its active queue before replacement use',
+    () async {
+      audio_service.resetAudioServiceHandlerInitializationForTests();
+      final player = DelayedSetAudioSourcesFakeJustAudioPlayer();
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+      var initializerCalls = 0;
+
+      Future<audio_service.MikudromeAudioHandler> initializeHandler() async {
+        initializerCalls += 1;
+        return handler;
+      }
+
+      final firstService =
+          audio_service.JustAudioMobileAudioPlaybackService.fromAudioService(
+            audioServiceInitializer: initializeHandler,
+          );
+      final replacementService =
+          audio_service.JustAudioMobileAudioPlaybackService.fromAudioService(
+            audioServiceInitializer: initializeHandler,
+          );
+      addTearDown(() async {
+        player.completeDelayedSet();
+        await firstService.dispose();
+        await replacementService.dispose();
+        if (player.disposeCalls == 0) {
+          await handler.dispose();
+        }
+        audio_service.resetAudioServiceHandlerInitializationForTests();
+      });
+
+      final queueLoad = firstService.playQueue(
+        queue: [_track(1)],
+        index: 0,
+        audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+      );
+      await player.delayedSetStarted;
+
+      var disposeCompleted = false;
+      final dispose = firstService.dispose().then((_) {
+        disposeCompleted = true;
+      });
+      await pumpEventQueue();
+
+      expect(disposeCompleted, isFalse);
+      expect(player.disposeCalls, 0);
+
+      player.completeDelayedSet();
+      await Future.wait([queueLoad, dispose]);
+      await replacementService.playQueue(
+        queue: [_track(2)],
+        index: 0,
+        audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+      );
+
+      expect(initializerCalls, 1);
+      expect(player.disposeCalls, 0);
+      expect(
+        _sourceUri(player.sources.single),
+        Uri.parse('http://server/audio/2'),
+      );
+      expect(replacementService.currentState.track?.id, 2);
+    },
+  );
+
   test('audio handler publishes media queue and current media item', () async {
     final player = FakeJustAudioPlayer();
     final handler = audio_service.MikudromeAudioHandler(player: player);
