@@ -667,8 +667,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     );
   }
 
-  void _clearPlaybackForServerChange() {
-    unawaited(_mobileAudioPlaybackService.clearCache());
+  void _clearPlaybackPresentationForServerChange() {
     setState(() {
       _playerQueue = const [];
       _orderedPlayerQueue = null;
@@ -688,7 +687,6 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
       _videoController = null;
       _lastSavedProgress = 0;
     });
-    PlaybackStorage.clear();
   }
 
   Future<void> _openServerSettings() async {
@@ -704,7 +702,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
           previousStatus == AppConfigStatus.loading &&
           state.status == AppConfigStatus.configured) {
         clearedForSave = true;
-        _clearPlaybackForServerChange();
+        _clearPlaybackPresentationForServerChange();
         if (mounted) {
           Navigator.of(context).pop();
         }

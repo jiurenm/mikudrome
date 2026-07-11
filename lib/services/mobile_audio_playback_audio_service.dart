@@ -815,9 +815,10 @@ class JustAudioMobileAudioPlaybackService
     implements MobileAudioPlaybackService {
   JustAudioMobileAudioPlaybackService.fromAudioService({
     Future<MikudromeAudioHandler> Function()? audioServiceInitializer,
-  }) : this(
+  }) : this._(
          handlerLoader: () => _loadAudioServiceHandler(audioServiceInitializer),
          usesAudioService: true,
+         ownsHandler: false,
        );
 
   JustAudioMobileAudioPlaybackService({
@@ -825,10 +826,27 @@ class JustAudioMobileAudioPlaybackService
     Future<MikudromeAudioHandler> Function()? handlerLoader,
     MobileAudioPlayerAdapter? player,
     Future<void> Function()? cacheClearer,
-    this.usesAudioService = false,
+    bool usesAudioService = false,
+  }) : this._(
+         handler: handler,
+         handlerLoader: handlerLoader,
+         player: player,
+         cacheClearer: cacheClearer,
+         usesAudioService: usesAudioService,
+         ownsHandler: true,
+       );
+
+  JustAudioMobileAudioPlaybackService._({
+    MikudromeAudioHandler? handler,
+    Future<MikudromeAudioHandler> Function()? handlerLoader,
+    MobileAudioPlayerAdapter? player,
+    Future<void> Function()? cacheClearer,
+    required this.usesAudioService,
+    required bool ownsHandler,
   }) : _handler = handler,
        _handlerLoader = handlerLoader,
        _cacheClearer = cacheClearer ?? AudioPlayer.clearAssetCache,
+       _ownsHandler = ownsHandler,
        _fallbackHandler = handler == null && handlerLoader == null
            ? MikudromeAudioHandler(player: player)
            : null,
@@ -845,6 +863,7 @@ class JustAudioMobileAudioPlaybackService
   final MikudromeAudioHandler? _fallbackHandler;
   final Future<MikudromeAudioHandler> Function()? _handlerLoader;
   final Future<void> Function() _cacheClearer;
+  final bool _ownsHandler;
   final bool usesAudioService;
   final StreamController<MobileAudioPlaybackState> _states;
   final List<StreamSubscription<Object?>> _subscriptions = [];
@@ -1038,18 +1057,22 @@ class JustAudioMobileAudioPlaybackService
     if (_disposed) return;
     _disposed = true;
     _latestQueueGeneration += 1;
-    await _queueMutationTail;
-    final handlerLoad = _handlerLoad;
-    if (handlerLoad != null) {
-      try {
-        await handlerLoad;
-      } catch (_) {}
+    if (_ownsHandler) {
+      await _queueMutationTail;
+      final handlerLoad = _handlerLoad;
+      if (handlerLoad != null) {
+        try {
+          await handlerLoad;
+        } catch (_) {}
+      }
     }
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
-    await (_handler ?? _fallbackHandler ?? _boundHandler ?? _loadedHandler)
-        ?.dispose();
+    if (_ownsHandler) {
+      await (_handler ?? _fallbackHandler ?? _boundHandler ?? _loadedHandler)
+          ?.dispose();
+    }
     await _states.close();
   }
 

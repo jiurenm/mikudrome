@@ -99,6 +99,118 @@ void main() {
     },
   );
 
+  test(
+    'audio service wrappers share a live handler after one wrapper disposes',
+    () async {
+      audio_service.resetAudioServiceHandlerInitializationForTests();
+      final player = FakeJustAudioPlayer();
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+      var initializerCalls = 0;
+
+      Future<audio_service.MikudromeAudioHandler> initializeHandler() async {
+        initializerCalls += 1;
+        return handler;
+      }
+
+      final firstService =
+          audio_service.JustAudioMobileAudioPlaybackService.fromAudioService(
+            audioServiceInitializer: initializeHandler,
+          );
+      final secondService =
+          audio_service.JustAudioMobileAudioPlaybackService.fromAudioService(
+            audioServiceInitializer: initializeHandler,
+          );
+      final secondStates = <MobileAudioPlaybackState>[];
+      final secondSubscription = secondService.states.listen(secondStates.add);
+      addTearDown(() async {
+        await secondSubscription.cancel();
+        await firstService.dispose();
+        await secondService.dispose();
+        if (player.disposeCalls == 0) {
+          await handler.dispose();
+        }
+        audio_service.resetAudioServiceHandlerInitializationForTests();
+      });
+
+      await firstService.playQueue(
+        queue: [_track(1)],
+        index: 0,
+        audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+      );
+      await firstService.dispose();
+
+      expect(player.disposeCalls, 0);
+
+      await secondService.playQueue(
+        queue: [_track(2)],
+        index: 0,
+        audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+      );
+      await secondService.play();
+
+      expect(initializerCalls, 1);
+      expect(player.playCalls, 3);
+      expect(
+        _sourceUri(player.sources.single),
+        Uri.parse('http://server/audio/2'),
+      );
+      expect(secondService.currentState.track?.id, 2);
+      expect(secondService.currentState.isPlaying, isTrue);
+      expect(secondStates.last.track?.id, 2);
+    },
+  );
+
+  test(
+    'audio service handler remains reusable after its first wrapper disposes',
+    () async {
+      audio_service.resetAudioServiceHandlerInitializationForTests();
+      final player = FakeJustAudioPlayer();
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+      var initializerCalls = 0;
+
+      Future<audio_service.MikudromeAudioHandler> initializeHandler() async {
+        initializerCalls += 1;
+        return handler;
+      }
+
+      final firstService =
+          audio_service.JustAudioMobileAudioPlaybackService.fromAudioService(
+            audioServiceInitializer: initializeHandler,
+          );
+      audio_service.JustAudioMobileAudioPlaybackService? replacementService;
+      addTearDown(() async {
+        await firstService.dispose();
+        await replacementService?.dispose();
+        if (player.disposeCalls == 0) {
+          await handler.dispose();
+        }
+        audio_service.resetAudioServiceHandlerInitializationForTests();
+      });
+
+      await firstService.pause();
+      await firstService.dispose();
+
+      final replacement =
+          audio_service.JustAudioMobileAudioPlaybackService.fromAudioService(
+            audioServiceInitializer: initializeHandler,
+          );
+      replacementService = replacement;
+      await replacement.playQueue(
+        queue: [_track(3)],
+        index: 0,
+        audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+      );
+
+      expect(initializerCalls, 1);
+      expect(player.disposeCalls, 0);
+      expect(
+        _sourceUri(player.sources.single),
+        Uri.parse('http://server/audio/3'),
+      );
+      expect(replacement.currentState.track?.id, 3);
+    },
+  );
+
   test('audio handler publishes media queue and current media item', () async {
     final player = FakeJustAudioPlayer();
     final handler = audio_service.MikudromeAudioHandler(player: player);

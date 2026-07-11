@@ -108,47 +108,53 @@ void main() {
     expect(find.text('服务器'), findsNothing);
   });
 
-  testWidgets('successful server edit clears mobile audio cache', (
-    tester,
-  ) async {
-    final service = _RecordingMobileAudioPlaybackService();
-    final store = _MemoryAppConfigStore(
-      serverUrl: 'http://old.example.test',
-      serverCookie: 'session=old',
-    );
-    final controller = AppConfigController(
-      store: store,
-      connectionTester: (_, {serverCookie}) async {},
-    );
-    await controller.load();
-    addTearDown(service.dispose);
-    addTearDown(controller.dispose);
-    addTearDown(ApiConfig.resetRuntimeConfigForTests);
-
-    await HttpOverrides.runZoned(() async {
-      await _pumpMobileLibrary(
-        tester,
-        mobileAudioPlaybackService: service,
-        appConfigController: controller,
+  testWidgets(
+    'successful server edit clears only local playback presentation',
+    (tester) async {
+      final service = _RecordingMobileAudioPlaybackService();
+      final store = _MemoryAppConfigStore(
+        serverUrl: 'http://old.example.test',
+        serverCookie: 'session=old',
       );
-      await tester.pumpAndSettle();
+      final controller = AppConfigController(
+        store: store,
+        connectionTester: (_, {serverCookie}) async {},
+      );
+      await controller.load();
+      addTearDown(service.dispose);
+      addTearDown(controller.dispose);
+      addTearDown(ApiConfig.resetRuntimeConfigForTests);
+      await _seedPlaybackState(progress: 0.5);
 
-      await tester.tap(find.text('设置'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('服务器'));
-      await tester.pumpAndSettle();
+      await HttpOverrides.runZoned(() async {
+        await _pumpMobileLibrary(
+          tester,
+          mobileAudioPlaybackService: service,
+          appConfigController: controller,
+        );
+        await tester.pumpAndSettle();
 
-      final fields = find.byType(TextField);
-      await tester.enterText(fields.at(0), 'http://new.example.test');
-      await tester.enterText(fields.at(1), 'session=new');
-      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-      await tester.pumpAndSettle();
-    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+        expect(find.byType(MobileMiniPlayer), findsOneWidget);
 
-    expect(service.clearCacheCalls, 1);
-    expect(store.serverUrl, 'http://new.example.test');
-    expect(store.serverCookie, 'session=new');
-  });
+        await tester.tap(find.text('设置'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('服务器'));
+        await tester.pumpAndSettle();
+
+        final fields = find.byType(TextField);
+        await tester.enterText(fields.at(0), 'http://new.example.test');
+        await tester.enterText(fields.at(1), 'session=new');
+        await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+      expect(service.clearCacheCalls, 0);
+      expect(PlaybackStorage.load(), isNotNull);
+      expect(find.byType(MobileMiniPlayer), findsNothing);
+      expect(store.serverUrl, 'http://new.example.test');
+      expect(store.serverCookie, 'session=new');
+    },
+  );
 
   testWidgets(
     'discover more opens the full mobile section and back restores home',
@@ -1142,74 +1148,76 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('server clear invalidates pending restored playback', (
-    tester,
-  ) async {
-    final service =
-        _FirstPlayQueueDelayedWithoutStateMobileAudioPlaybackService(
-          failFirst: true,
+  testWidgets(
+    'server edit clears local presentation and invalidates pending restore',
+    (tester) async {
+      final service =
+          _FirstPlayQueueDelayedWithoutStateMobileAudioPlaybackService(
+            failFirst: true,
+          );
+      final store = _MemoryAppConfigStore(
+        serverUrl: 'http://old.example.test',
+        serverCookie: 'session=old',
+      );
+      final controller = AppConfigController(
+        store: store,
+        connectionTester: (_, {serverCookie}) async {},
+      );
+      await controller.load();
+      addTearDown(service.dispose);
+      addTearDown(controller.dispose);
+      addTearDown(ApiConfig.resetRuntimeConfigForTests);
+      await _seedPlaybackState(progress: 0.5);
+
+      await HttpOverrides.runZoned(() async {
+        await _pumpMobileLibrary(
+          tester,
+          mobileAudioPlaybackService: service,
+          appConfigController: controller,
         );
-    final store = _MemoryAppConfigStore(
-      serverUrl: 'http://old.example.test',
-      serverCookie: 'session=old',
-    );
-    final controller = AppConfigController(
-      store: store,
-      connectionTester: (_, {serverCookie}) async {},
-    );
-    await controller.load();
-    addTearDown(service.dispose);
-    addTearDown(controller.dispose);
-    addTearDown(ApiConfig.resetRuntimeConfigForTests);
-    await _seedPlaybackState(progress: 0.5);
+        await tester.pumpAndSettle();
 
-    await HttpOverrides.runZoned(() async {
-      await _pumpMobileLibrary(
-        tester,
-        mobileAudioPlaybackService: service,
-        appConfigController: controller,
-      );
-      await tester.pumpAndSettle();
+        await tester.tap(find.byType(MobileMiniPlayer));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.tap(
+          find.descendant(
+            of: find.byKey(const ValueKey('mobile-player-immersive')),
+            matching: find.byIcon(Icons.play_arrow),
+          ),
+        );
+        await tester.pump();
 
-      await tester.tap(find.byType(MobileMiniPlayer));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-      await tester.tap(
-        find.descendant(
-          of: find.byKey(const ValueKey('mobile-player-immersive')),
-          matching: find.byIcon(Icons.play_arrow),
-        ),
-      );
-      await tester.pump();
+        expect(service.playQueueAttempts, 1);
 
-      expect(service.playQueueAttempts, 1);
+        final settings = tester.widget<SettingsScreen>(
+          find.byType(SettingsScreen, skipOffstage: false),
+        );
+        settings.onEditServer!();
+        await tester.pumpAndSettle();
 
-      final settings = tester.widget<SettingsScreen>(
-        find.byType(SettingsScreen, skipOffstage: false),
-      );
-      settings.onEditServer!();
-      await tester.pumpAndSettle();
+        final fields = find.byType(TextField);
+        await tester.enterText(fields.at(0), 'http://new.example.test');
+        await tester.enterText(fields.at(1), 'session=new');
+        await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+        await tester.pumpAndSettle();
 
-      final fields = find.byType(TextField);
-      await tester.enterText(fields.at(0), 'http://new.example.test');
-      await tester.enterText(fields.at(1), 'session=new');
-      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-      await tester.pumpAndSettle();
+        expect(service.clearCacheCalls, 0);
+        expect(service.currentState.queue, isEmpty);
+        expect(PlaybackStorage.load(), isNotNull);
 
-      expect(service.clearCacheCalls, 1);
-      expect(service.currentState.queue, isEmpty);
+        service.completeFirstPlayQueue();
+        for (var i = 0; i < 40; i++) {
+          await tester.pump(const Duration(milliseconds: 16));
+        }
 
-      service.completeFirstPlayQueue();
-      for (var i = 0; i < 40; i++) {
-        await tester.pump(const Duration(milliseconds: 16));
-      }
+        expect(service.currentState.queue, isEmpty);
+        expect(find.byType(MobileMiniPlayer), findsNothing);
+      }, createHttpClient: (_) => _LibraryFakeHttpClient());
 
-      expect(service.currentState.queue, isEmpty);
-      expect(find.byType(MobileMiniPlayer), findsNothing);
-    }, createHttpClient: (_) => _LibraryFakeHttpClient());
-
-    expect(tester.takeException(), isNull);
-  });
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'restored mobile playback at zero progress starts without seeking',
