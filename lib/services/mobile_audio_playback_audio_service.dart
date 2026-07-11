@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../api/config.dart';
@@ -28,6 +29,42 @@ const _mobileAudioLoadConfiguration = AudioLoadConfiguration(
 );
 
 Future<MikudromeAudioHandler>? _audioServiceHandlerInit;
+
+@visibleForTesting
+void resetAudioServiceHandlerInitializationForTests() {
+  _audioServiceHandlerInit = null;
+}
+
+Future<MikudromeAudioHandler> _loadAudioServiceHandler(
+  Future<MikudromeAudioHandler> Function()? initializer,
+) {
+  final existing = _audioServiceHandlerInit;
+  if (existing != null) return existing;
+
+  late final Future<MikudromeAudioHandler> flight;
+  final started =
+      initializer?.call() ??
+      AudioService.init(
+        builder: MikudromeAudioHandler.new,
+        config: const AudioServiceConfig(
+          androidNotificationChannelId: 'com.miku39.mikudrome.playback',
+          androidNotificationChannelName: 'Mikudrome playback',
+          androidNotificationIcon: 'drawable/ic_notification',
+          androidNotificationOngoing: true,
+        ),
+      );
+  flight = started.then(
+    (handler) => handler,
+    onError: (Object error, StackTrace stackTrace) {
+      if (identical(_audioServiceHandlerInit, flight)) {
+        _audioServiceHandlerInit = null;
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    },
+  );
+  _audioServiceHandlerInit = flight;
+  return flight;
+}
 
 MobileAudioPlaybackService createMobileAudioPlaybackService() {
   return JustAudioMobileAudioPlaybackService.fromAudioService();
@@ -91,10 +128,13 @@ class MikudromeAudioHandler extends BaseAudioHandler
   bool _playbackRequested = false;
   bool _isRecoveringPlayback = false;
   int _playbackRecoveryAttempts = 0;
-  MobilePlaybackOrderMode _orderMode = MobilePlaybackOrderMode.sequential;
   Duration? _lastPausedSeekPosition;
   TrackFavoriteStatus? _isTrackFavorited;
   TrackFavoriteToggle? _toggleTrackFavorite;
+  Future<void> _sourceMutationTail = Future<void>.value();
+  int _sourceGeneration = 0;
+  int _latestPlayAttempt = 0;
+  bool _isApplyingQueueSource = false;
   bool _disposed = false;
 
   Stream<MobileAudioPlaybackState> get mikudromeState =>
@@ -109,36 +149,12 @@ class MikudromeAudioHandler extends BaseAudioHandler
     Duration initialPosition = Duration.zero,
     TrackFavoriteStatus? isTrackFavorited,
     TrackFavoriteToggle? toggleTrackFavorite,
-  }) async {
-    if (_disposed) return;
-    _orderMode = orderMode;
-    _isTrackFavorited = isTrackFavorited;
-    _toggleTrackFavorite = toggleTrackFavorite;
-    if (tracks.isEmpty) {
-      _tracks = const [];
-      _audioUrls = const [];
-      _currentIndex = null;
-      _lastEmittedPosition = Duration.zero;
-      _lastPausedSeekPosition = null;
-      _isTrackFavorited = null;
-      _toggleTrackFavorite = null;
-      _playbackRequested = false;
-      _playbackRecoveryAttempts = 0;
-      queue.add(const []);
-      mediaItem.add(null);
-      await _player.stop();
-      _publishPlaybackState(processingState: AudioProcessingState.idle);
-      _emitMikudromeState(empty: true);
-      return;
-    }
-
+  }) {
+    if (_disposed) return Future<void>.value();
+    final generation = ++_sourceGeneration;
+    _invalidatePlayAttempt();
     final nextTracks = List<Track>.unmodifiable(tracks);
     final nextAudioUrls = List<String>.unmodifiable(audioUrls);
-    final clampedIndex = initialIndex.clamp(0, nextTracks.length - 1);
-    final clampedPosition = _clampPositionForTrack(
-      initialPosition,
-      nextTracks[clampedIndex],
-    );
     final artHeaders = ApiConfig.defaultHeaders.isEmpty
         ? null
         : ApiConfig.defaultHeaders;
@@ -154,35 +170,84 @@ class MikudromeAudioHandler extends BaseAudioHandler
         ),
     ];
 
-    await _player.setAudioSources(
-      nextAudioUrls.map(_audioSourceForUrl).toList(growable: false),
-      initialIndex: clampedIndex,
-      initialPosition: clampedPosition,
-    );
-    await _player.setLoopMode(_loopModeForOrderMode(_orderMode));
-    _tracks = nextTracks;
-    _audioUrls = nextAudioUrls;
-    queue.add(items);
-    mediaItem.add(items[clampedIndex]);
-    _currentIndex = clampedIndex;
-    _position = clampedPosition;
-    _lastEmittedPosition = clampedPosition;
-    _duration = Duration(seconds: _tracks[clampedIndex].durationSeconds);
-    _isCompleted = false;
-    _lastPausedSeekPosition = null;
-    _playbackRecoveryAttempts = 0;
-    _publishPlaybackState();
-    _emitMikudromeState(
-      index: clampedIndex,
-      position: clampedPosition,
-      isPlaying: _player.playing,
-    );
-    await _startPlaybackSafely(clampedIndex);
+    return _enqueueSourceMutation(() async {
+      if (_disposed || generation != _sourceGeneration) return;
+      if (nextTracks.isEmpty) {
+        await _player.stop();
+        if (_disposed || generation != _sourceGeneration) return;
+        _tracks = const [];
+        _audioUrls = const [];
+        _currentIndex = null;
+        _lastEmittedPosition = Duration.zero;
+        _lastPausedSeekPosition = null;
+        _isTrackFavorited = null;
+        _toggleTrackFavorite = null;
+        _playbackRequested = false;
+        _playbackRecoveryAttempts = 0;
+        queue.add(const []);
+        mediaItem.add(null);
+        _publishPlaybackState(processingState: AudioProcessingState.idle);
+        _emitMikudromeState(empty: true);
+        return;
+      }
+
+      final clampedIndex = initialIndex.clamp(0, nextTracks.length - 1);
+      final clampedPosition = _clampPositionForTrack(
+        initialPosition,
+        nextTracks[clampedIndex],
+      );
+      _isApplyingQueueSource = true;
+      try {
+        await _player.setAudioSources(
+          nextAudioUrls.map(_audioSourceForUrl).toList(growable: false),
+          initialIndex: clampedIndex,
+          initialPosition: clampedPosition,
+        );
+      } finally {
+        _isApplyingQueueSource = false;
+      }
+      if (_disposed || generation != _sourceGeneration) return;
+
+      await _player.setLoopMode(_loopModeForOrderMode(orderMode));
+      if (_disposed || generation != _sourceGeneration) return;
+      _isTrackFavorited = isTrackFavorited;
+      _toggleTrackFavorite = toggleTrackFavorite;
+      _tracks = nextTracks;
+      _audioUrls = nextAudioUrls;
+      queue.add(items);
+      mediaItem.add(items[clampedIndex]);
+      _currentIndex = clampedIndex;
+      _position = clampedPosition;
+      _lastEmittedPosition = clampedPosition;
+      _duration = Duration(seconds: _tracks[clampedIndex].durationSeconds);
+      _isCompleted = false;
+      _lastPausedSeekPosition = null;
+      _playbackRecoveryAttempts = 0;
+      _publishPlaybackState();
+      _emitMikudromeState(
+        index: clampedIndex,
+        position: clampedPosition,
+        isPlaying: _player.playing,
+      );
+      await _startPlaybackSafely(clampedIndex);
+    });
+  }
+
+  Future<void> _enqueueSourceMutation(Future<void> Function() mutation) {
+    final operation = Completer<void>();
+    _sourceMutationTail = _sourceMutationTail.then((_) async {
+      try {
+        await mutation();
+        operation.complete();
+      } catch (error, stackTrace) {
+        operation.completeError(error, stackTrace);
+      }
+    });
+    return operation.future;
   }
 
   Future<void> setPlaybackOrderMode(MobilePlaybackOrderMode orderMode) async {
     if (_disposed) return;
-    _orderMode = orderMode;
     await _player.setLoopMode(_loopModeForOrderMode(orderMode));
   }
 
@@ -220,6 +285,8 @@ class MikudromeAudioHandler extends BaseAudioHandler
   @override
   Future<void> play() async {
     if (_disposed) return;
+    final sourceGeneration = _sourceGeneration;
+    final playAttempt = _beginPlayAttempt();
     _lastPausedSeekPosition = null;
     _isCompleted = false;
     _playbackRequested = true;
@@ -232,20 +299,35 @@ class MikudromeAudioHandler extends BaseAudioHandler
       }
       unawaited(
         playFuture.catchError((Object _) {
-          if (!_disposed && _tracks.isNotEmpty) {
-            _playbackRequested = false;
-            _publishPlaybackState(isPlaying: false);
-            _emitMikudromeState(isPlaying: false);
-          }
+          _handlePlayFailure(sourceGeneration, playAttempt);
         }),
       );
     } catch (_) {
-      if (!_disposed && _tracks.isNotEmpty) {
-        _playbackRequested = false;
-        _publishPlaybackState(isPlaying: false);
-        _emitMikudromeState(isPlaying: false);
-      }
+      _handlePlayFailure(sourceGeneration, playAttempt);
     }
+  }
+
+  int _beginPlayAttempt() => ++_latestPlayAttempt;
+
+  void _invalidatePlayAttempt() {
+    _latestPlayAttempt += 1;
+  }
+
+  bool _ownsPlayAttempt(int sourceGeneration, int playAttempt) {
+    return !_disposed &&
+        sourceGeneration == _sourceGeneration &&
+        playAttempt == _latestPlayAttempt;
+  }
+
+  void _handlePlayFailure(int sourceGeneration, int playAttempt) {
+    if (!_ownsPlayAttempt(sourceGeneration, playAttempt) ||
+        !_playbackRequested ||
+        _tracks.isEmpty) {
+      return;
+    }
+    _playbackRequested = false;
+    _publishPlaybackState(isPlaying: false);
+    _emitMikudromeState(isPlaying: false);
   }
 
   @override
@@ -318,23 +400,30 @@ class MikudromeAudioHandler extends BaseAudioHandler
   }
 
   @override
-  Future<void> stop() async {
-    await _player.stop();
-    _tracks = const [];
-    _audioUrls = const [];
-    _currentIndex = null;
-    _position = Duration.zero;
-    _duration = Duration.zero;
-    _isCompleted = false;
-    _lastPausedSeekPosition = null;
+  Future<void> stop() {
+    if (_disposed) return Future<void>.value();
+    _sourceGeneration += 1;
+    _invalidatePlayAttempt();
     _playbackRequested = false;
-    _playbackRecoveryAttempts = 0;
-    _isTrackFavorited = null;
-    _toggleTrackFavorite = null;
-    queue.add(const []);
-    mediaItem.add(null);
-    _publishPlaybackState(processingState: AudioProcessingState.idle);
-    _emitMikudromeState(empty: true);
+    return _enqueueSourceMutation(() async {
+      if (_disposed) return;
+      await _player.stop();
+      if (_disposed) return;
+      _tracks = const [];
+      _audioUrls = const [];
+      _currentIndex = null;
+      _position = Duration.zero;
+      _duration = Duration.zero;
+      _isCompleted = false;
+      _lastPausedSeekPosition = null;
+      _playbackRecoveryAttempts = 0;
+      _isTrackFavorited = null;
+      _toggleTrackFavorite = null;
+      queue.add(const []);
+      mediaItem.add(null);
+      _publishPlaybackState(processingState: AudioProcessingState.idle);
+      _emitMikudromeState(empty: true);
+    });
   }
 
   @override
@@ -456,6 +545,7 @@ class MikudromeAudioHandler extends BaseAudioHandler
   void _handlePlaybackError(PlayerException _) {
     if (_disposed ||
         _tracks.isEmpty ||
+        _isApplyingQueueSource ||
         !_playbackRequested ||
         _lastPausedSeekPosition != null ||
         _isCompleted ||
@@ -482,34 +572,71 @@ class MikudromeAudioHandler extends BaseAudioHandler
 
   Future<void> _recoverPlaybackAt(Duration position) async {
     _isRecoveringPlayback = true;
+    final sourceGeneration = _sourceGeneration;
+    final playAttempt = _beginPlayAttempt();
     try {
-      await _switchCurrentTrackToLowQuality(position);
-      await _player.seek(position);
-      if (_disposed || !_playbackRequested || _tracks.isEmpty) return;
-      await _player.play();
+      await _enqueueSourceMutation(() async {
+        if (!_canContinueRecovery(sourceGeneration, playAttempt)) return;
+        final sourceReady = await _switchCurrentTrackToLowQuality(
+          position,
+          sourceGeneration: sourceGeneration,
+          playAttempt: playAttempt,
+        );
+        if (!sourceReady ||
+            !_canContinueRecovery(sourceGeneration, playAttempt)) {
+          return;
+        }
+
+        await _player.seek(position);
+        if (!_canContinueRecovery(sourceGeneration, playAttempt)) return;
+
+        final playFuture = _player.play();
+        unawaited(
+          playFuture.catchError((Object _) {
+            _handleRecoveryFailure(position, sourceGeneration, playAttempt);
+          }),
+        );
+      });
     } catch (_) {
-      if (!_disposed && _tracks.isNotEmpty) {
-        _playbackRequested = false;
-        _publishPlaybackState(isPlaying: false);
-        _emitMikudromeState(position: position, isPlaying: false);
-      }
+      _handleRecoveryFailure(position, sourceGeneration, playAttempt);
     } finally {
       _isRecoveringPlayback = false;
     }
   }
 
-  Future<void> _switchCurrentTrackToLowQuality(
+  bool _canContinueRecovery(int sourceGeneration, int playAttempt) {
+    return _ownsPlayAttempt(sourceGeneration, playAttempt) &&
+        _playbackRequested &&
+        _tracks.isNotEmpty;
+  }
+
+  void _handleRecoveryFailure(
+    Duration position,
+    int sourceGeneration,
+    int playAttempt,
+  ) {
+    if (!_canContinueRecovery(sourceGeneration, playAttempt)) return;
+    _playbackRequested = false;
+    _publishPlaybackState(isPlaying: false);
+    _emitMikudromeState(position: position, isPlaying: false);
+  }
+
+  Future<bool> _switchCurrentTrackToLowQuality(
     Duration position, {
-    bool resumePlayback = false,
+    required int sourceGeneration,
+    required int playAttempt,
   }) async {
-    if (_disposed || _tracks.isEmpty || _audioUrls.isEmpty) return;
+    if (!_canContinueRecovery(sourceGeneration, playAttempt) ||
+        _audioUrls.isEmpty) {
+      return false;
+    }
     final index = (_currentIndex ?? _player.currentIndex ?? 0).clamp(
       0,
       _audioUrls.length - 1,
     );
     final currentUrl = _audioUrls[index];
     final lowQualityUrl = _withLowQualityAudio(currentUrl);
-    if (lowQualityUrl == currentUrl) return;
+    if (lowQualityUrl == currentUrl) return true;
 
     final nextAudioUrls = List<String>.from(_audioUrls);
     nextAudioUrls[index] = lowQualityUrl;
@@ -523,16 +650,14 @@ class MikudromeAudioHandler extends BaseAudioHandler
       initialIndex: index,
       initialPosition: position,
     );
-    if (_disposed || _tracks.isEmpty) return;
+    if (!_canContinueRecovery(sourceGeneration, playAttempt)) return false;
     _audioUrls = List<String>.unmodifiable(nextAudioUrls);
     queue.add(List<MediaItem>.unmodifiable(nextQueue));
     if (index < nextQueue.length) {
       mediaItem.add(nextQueue[index]);
     }
     _emitMikudromeState(index: index, position: position);
-    if (resumePlayback && _playbackRequested) {
-      await _player.play();
-    }
+    return true;
   }
 
   String _withLowQualityAudio(String url) {
@@ -674,9 +799,13 @@ class MikudromeAudioHandler extends BaseAudioHandler
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    _sourceGeneration += 1;
+    _invalidatePlayAttempt();
+    _playbackRequested = false;
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
+    await _sourceMutationTail;
     await _player.dispose();
     await _mikudromeStates.close();
   }
@@ -684,29 +813,40 @@ class MikudromeAudioHandler extends BaseAudioHandler
 
 class JustAudioMobileAudioPlaybackService
     implements MobileAudioPlaybackService {
-  JustAudioMobileAudioPlaybackService.fromAudioService()
-    : this(
-        handlerLoader: () => _audioServiceHandlerInit ??= AudioService.init(
-          builder: MikudromeAudioHandler.new,
-          config: const AudioServiceConfig(
-            androidNotificationChannelId: 'com.miku39.mikudrome.playback',
-            androidNotificationChannelName: 'Mikudrome playback',
-            androidNotificationIcon: 'drawable/ic_notification',
-            androidNotificationOngoing: true,
-          ),
-        ),
-        usesAudioService: true,
-      );
+  JustAudioMobileAudioPlaybackService.fromAudioService({
+    Future<MikudromeAudioHandler> Function()? audioServiceInitializer,
+  }) : this._(
+         handlerLoader: () => _loadAudioServiceHandler(audioServiceInitializer),
+         usesAudioService: true,
+         ownsHandler: false,
+       );
 
   JustAudioMobileAudioPlaybackService({
     MikudromeAudioHandler? handler,
     Future<MikudromeAudioHandler> Function()? handlerLoader,
     MobileAudioPlayerAdapter? player,
     Future<void> Function()? cacheClearer,
-    this.usesAudioService = false,
+    bool usesAudioService = false,
+  }) : this._(
+         handler: handler,
+         handlerLoader: handlerLoader,
+         player: player,
+         cacheClearer: cacheClearer,
+         usesAudioService: usesAudioService,
+         ownsHandler: true,
+       );
+
+  JustAudioMobileAudioPlaybackService._({
+    MikudromeAudioHandler? handler,
+    Future<MikudromeAudioHandler> Function()? handlerLoader,
+    MobileAudioPlayerAdapter? player,
+    Future<void> Function()? cacheClearer,
+    required this.usesAudioService,
+    required bool ownsHandler,
   }) : _handler = handler,
        _handlerLoader = handlerLoader,
        _cacheClearer = cacheClearer ?? AudioPlayer.clearAssetCache,
+       _ownsHandler = ownsHandler,
        _fallbackHandler = handler == null && handlerLoader == null
            ? MikudromeAudioHandler(player: player)
            : null,
@@ -723,11 +863,21 @@ class JustAudioMobileAudioPlaybackService
   final MikudromeAudioHandler? _fallbackHandler;
   final Future<MikudromeAudioHandler> Function()? _handlerLoader;
   final Future<void> Function() _cacheClearer;
+  final bool _ownsHandler;
   final bool usesAudioService;
   final StreamController<MobileAudioPlaybackState> _states;
   final List<StreamSubscription<Object?>> _subscriptions = [];
   MobileAudioPlaybackState _currentState = MobileAudioPlaybackState.empty();
   MikudromeAudioHandler? _boundHandler;
+  MikudromeAudioHandler? _loadedHandler;
+  Future<MikudromeAudioHandler>? _handlerLoad;
+  Future<void> _queueMutationTail = Future<void>.value();
+  int _latestQueueGeneration = 0;
+  int _appliedQueueGeneration = 0;
+  int? _applyingQueueGeneration;
+  MobileAudioPlaybackState? _applyingQueueState;
+  int _activeDirectOperations = 0;
+  Completer<void>? _directOperationsDrained;
   bool _disposed = false;
 
   @override
@@ -746,107 +896,242 @@ class JustAudioMobileAudioPlaybackService
     Duration initialPosition = Duration.zero,
     TrackFavoriteStatus? isTrackFavorited,
     TrackFavoriteToggle? toggleTrackFavorite,
-  }) async {
-    if (_disposed) return;
+  }) {
+    if (_disposed) return Future<void>.value();
 
+    final generation = ++_latestQueueGeneration;
     final nextQueue = List<Track>.unmodifiable(queue);
-    final nextAudioUrls = List<String>.unmodifiable(
-      nextQueue.map(audioUrlForTrack),
-    );
-    final handler = await _effectiveHandler();
-    await handler.setMikudromeQueue(
-      tracks: nextQueue,
-      audioUrls: nextAudioUrls,
-      initialIndex: index,
-      coverUrlForTrack: coverUrlForTrack,
-      orderMode: orderMode,
-      initialPosition: initialPosition,
-      isTrackFavorited: isTrackFavorited,
-      toggleTrackFavorite: toggleTrackFavorite,
-    );
+    return _enqueueQueueMutation(() {
+      return _applyQueueGeneration(generation, (handler) async {
+        final nextAudioUrls = List<String>.unmodifiable(
+          nextQueue.map(audioUrlForTrack),
+        );
+        await handler.setMikudromeQueue(
+          tracks: nextQueue,
+          audioUrls: nextAudioUrls,
+          initialIndex: index,
+          coverUrlForTrack: coverUrlForTrack,
+          orderMode: orderMode,
+          initialPosition: initialPosition,
+          isTrackFavorited: isTrackFavorited,
+          toggleTrackFavorite: toggleTrackFavorite,
+        );
+      });
+    });
   }
 
-  @override
-  Future<void> setPlaybackOrderMode(MobilePlaybackOrderMode orderMode) async {
-    if (_disposed) return;
+  Future<bool> _applyQueueGeneration(
+    int generation,
+    Future<void> Function(MikudromeAudioHandler handler) mutation, {
+    bool skipIfSuperseded = true,
+  }) async {
+    if (_disposed ||
+        (skipIfSuperseded && generation != _latestQueueGeneration)) {
+      return false;
+    }
     final handler = await _effectiveHandler();
-    await handler.setPlaybackOrderMode(orderMode);
-  }
+    if (_disposed ||
+        (skipIfSuperseded && generation != _latestQueueGeneration)) {
+      return false;
+    }
 
-  @override
-  Future<void> play() async {
-    if (_disposed || _currentState.queue.isEmpty) return;
+    _applyingQueueGeneration = generation;
+    _applyingQueueState = null;
+    MobileAudioPlaybackState? appliedState;
     try {
-      final handler = await _effectiveHandler();
-      await handler.play();
-    } catch (_) {
-      if (!_disposed) {
-        _emit(_currentState.copyWith(isPlaying: false));
+      await mutation(handler);
+      _appliedQueueGeneration = generation;
+      appliedState = _applyingQueueState;
+    } finally {
+      if (_applyingQueueGeneration == generation) {
+        _applyingQueueGeneration = null;
+        _applyingQueueState = null;
       }
     }
+    if (appliedState != null) {
+      _emit(appliedState);
+    }
+    return true;
+  }
+
+  Future<void> _enqueueQueueMutation(Future<void> Function() mutation) {
+    final operation = Completer<void>();
+    _queueMutationTail = _queueMutationTail.then((_) async {
+      try {
+        await mutation();
+        operation.complete();
+      } catch (error, stackTrace) {
+        operation.completeError(error, stackTrace);
+      }
+    });
+    return operation.future;
   }
 
   @override
-  Future<void> pause() async {
-    if (_disposed) return;
-    final handler = await _effectiveHandler();
-    await handler.pause();
+  Future<void> setPlaybackOrderMode(MobilePlaybackOrderMode orderMode) {
+    if (_disposed) return Future<void>.value();
+    return _enqueueQueueMutation(() async {
+      if (_disposed) return;
+      final handler = await _effectiveHandler();
+      if (_disposed) return;
+      await handler.setPlaybackOrderMode(orderMode);
+    });
   }
 
   @override
-  Future<void> seek(Duration position) async {
-    if (_disposed) return;
-    final handler = await _effectiveHandler();
-    await handler.seek(position);
+  Future<void> play() {
+    if (_disposed || _currentState.queue.isEmpty) return Future<void>.value();
+    return _runDirectOperation(() async {
+      try {
+        final handler = await _effectiveHandler();
+        if (_disposed) return;
+        await handler.play();
+      } catch (_) {
+        if (!_disposed) {
+          _emit(_currentState.copyWith(isPlaying: false));
+        }
+      }
+    });
   }
 
   @override
-  Future<void> stop() async {
-    if (_disposed) return;
-    final handler = await _effectiveHandler();
-    await handler.stop();
+  Future<void> pause() {
+    if (_disposed) return Future<void>.value();
+    return _runDirectOperation(() async {
+      final handler = await _effectiveHandler();
+      if (_disposed) return;
+      await handler.pause();
+    });
   }
 
   @override
-  Future<void> clearCache() async {
-    if (_disposed) return;
-    await stop();
-    try {
-      await _cacheClearer();
-    } catch (_) {}
+  Future<void> seek(Duration position) {
+    if (_disposed) return Future<void>.value();
+    return _runDirectOperation(() async {
+      final handler = await _effectiveHandler();
+      if (_disposed) return;
+      await handler.seek(position);
+    });
   }
 
   @override
-  Future<void> next() async {
-    if (_disposed || _currentState.queue.isEmpty) return;
-    final handler = await _effectiveHandler();
-    await handler.skipToNext();
+  Future<void> stop() {
+    if (_disposed) return Future<void>.value();
+    final generation = ++_latestQueueGeneration;
+    return _enqueueQueueMutation(() async {
+      await _applyQueueGeneration(
+        generation,
+        (handler) => handler.stop(),
+        skipIfSuperseded: false,
+      );
+    });
   }
 
   @override
-  Future<void> previous() async {
-    if (_disposed || _currentState.queue.isEmpty) return;
-    final handler = await _effectiveHandler();
-    await handler.skipToPrevious();
+  Future<void> clearCache() {
+    if (_disposed) return Future<void>.value();
+    final generation = ++_latestQueueGeneration;
+    return _enqueueQueueMutation(() async {
+      final didStop = await _applyQueueGeneration(
+        generation,
+        (handler) => handler.stop(),
+        skipIfSuperseded: false,
+      );
+      if (!didStop) return;
+      try {
+        await _cacheClearer();
+      } catch (_) {}
+    });
+  }
+
+  @override
+  Future<void> next() {
+    if (_disposed || _currentState.queue.isEmpty) return Future<void>.value();
+    return _runDirectOperation(() async {
+      final handler = await _effectiveHandler();
+      if (_disposed) return;
+      await handler.skipToNext();
+    });
+  }
+
+  @override
+  Future<void> previous() {
+    if (_disposed || _currentState.queue.isEmpty) return Future<void>.value();
+    return _runDirectOperation(() async {
+      final handler = await _effectiveHandler();
+      if (_disposed) return;
+      await handler.skipToPrevious();
+    });
+  }
+
+  Future<void> _runDirectOperation(Future<void> Function() operation) {
+    _activeDirectOperations += 1;
+    return Future<void>.sync(operation).whenComplete(() {
+      _activeDirectOperations -= 1;
+      if (_activeDirectOperations == 0) {
+        _directOperationsDrained?.complete();
+        _directOperationsDrained = null;
+      }
+    });
+  }
+
+  Future<void> _waitForDirectOperations() {
+    if (_activeDirectOperations == 0) return Future<void>.value();
+    return (_directOperationsDrained ??= Completer<void>()).future;
   }
 
   @override
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    _latestQueueGeneration += 1;
+    await _queueMutationTail;
+    final handlerLoad = _handlerLoad;
+    if (handlerLoad != null) {
+      try {
+        await handlerLoad;
+      } catch (_) {}
+    }
+    await _waitForDirectOperations();
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
-    await (_handler ?? _fallbackHandler ?? _boundHandler)?.dispose();
+    if (_ownsHandler) {
+      await (_handler ?? _fallbackHandler ?? _boundHandler ?? _loadedHandler)
+          ?.dispose();
+    }
     await _states.close();
   }
 
-  Future<MikudromeAudioHandler> _effectiveHandler() async {
+  Future<MikudromeAudioHandler> _effectiveHandler() {
     final immediateHandler = _handler ?? _fallbackHandler;
-    if (immediateHandler != null) return immediateHandler;
-    final existing = _boundHandler;
-    if (existing != null) return existing;
+    if (immediateHandler != null) {
+      return Future<MikudromeAudioHandler>.value(immediateHandler);
+    }
+    final existing = _boundHandler ?? _loadedHandler;
+    if (existing != null) {
+      return Future<MikudromeAudioHandler>.value(existing);
+    }
+    final handlerLoad = _handlerLoad;
+    if (handlerLoad != null) return handlerLoad;
+
+    late final Future<MikudromeAudioHandler> flight;
+    flight = _loadHandler().then(
+      (handler) => handler,
+      onError: (Object error, StackTrace stackTrace) {
+        if (identical(_handlerLoad, flight)) {
+          _handlerLoad = null;
+        }
+        Error.throwWithStackTrace(error, stackTrace);
+      },
+    );
+    _handlerLoad = flight;
+    return flight;
+  }
+
+  Future<MikudromeAudioHandler> _loadHandler() async {
     final handler = await _handlerLoader!();
+    _loadedHandler = handler;
     if (!_disposed) {
       _bindHandler(handler);
     }
@@ -861,6 +1146,14 @@ class JustAudioMobileAudioPlaybackService
 
   void _emit(MobileAudioPlaybackState state) {
     if (_disposed) return;
+    if ((_applyingQueueGeneration ?? _appliedQueueGeneration) !=
+        _latestQueueGeneration) {
+      return;
+    }
+    if (_applyingQueueGeneration != null) {
+      _applyingQueueState = state;
+      return;
+    }
     _currentState = state;
     _states.add(state);
   }

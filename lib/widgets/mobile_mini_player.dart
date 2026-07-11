@@ -10,6 +10,7 @@ class MobileMiniPlayer extends StatelessWidget {
     required this.track,
     required this.coverUrl,
     required this.isPlaying,
+    this.isLoading = false,
     required this.progress,
     required this.onTap,
     required this.onPlayPause,
@@ -18,6 +19,7 @@ class MobileMiniPlayer extends StatelessWidget {
   final Track track;
   final String coverUrl;
   final bool isPlaying;
+  final bool isLoading;
   final double progress; // 0.0 to 1.0
   final VoidCallback onTap;
   final VoidCallback onPlayPause;
@@ -91,12 +93,24 @@ class MobileMiniPlayer extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      onPressed: onPlayPause,
-                      icon: Icon(
-                        isPlaying ? Icons.pause : Icons.play_arrow,
-                        color: AppTheme.textPrimary,
-                        size: 32,
-                      ),
+                      onPressed: isLoading ? null : onPlayPause,
+                      icon: isLoading
+                          ? const SizedBox.square(
+                              dimension: 24,
+                              child: CircularProgressIndicator(
+                                key: ValueKey(
+                                  'mobile-mini-player-loading-indicator',
+                                ),
+                                color: AppTheme.mikuGreen,
+                                strokeWidth: 2.5,
+                                semanticsLabel: '音频加载中',
+                              ),
+                            )
+                          : Icon(
+                              isPlaying ? Icons.pause : Icons.play_arrow,
+                              color: AppTheme.textPrimary,
+                              size: 32,
+                            ),
                     ),
                   ],
                 ),

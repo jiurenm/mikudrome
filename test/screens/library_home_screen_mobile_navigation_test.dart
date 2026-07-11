@@ -15,6 +15,7 @@ import 'package:mikudrome/services/playback_storage.dart';
 import 'package:mikudrome/widgets/mobile_mini_player.dart';
 import 'package:mikudrome/widgets/mobile_player_sheet.dart';
 import 'package:mikudrome/widgets/player/mobile_mv_player_surface.dart';
+import 'package:mikudrome/widgets/settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -107,9 +108,72 @@ void main() {
     expect(find.text('服务器'), findsNothing);
   });
 
-  testWidgets('successful server edit clears mobile audio cache', (
+  testWidgets(
+    'config reload keeps server settings and local playback presentation',
+    (tester) async {
+      final service = _RecordingMobileAudioPlaybackService();
+      final store = _MemoryAppConfigStore(
+        serverUrl: 'http://old.example.test',
+        serverCookie: 'session=old',
+      );
+      final controller = AppConfigController(
+        store: store,
+        connectionTester: (_, {serverCookie}) async {},
+      );
+      await controller.load();
+      addTearDown(service.dispose);
+      addTearDown(controller.dispose);
+      addTearDown(ApiConfig.resetRuntimeConfigForTests);
+      await _seedPlaybackState(progress: 0.5);
+
+      await HttpOverrides.runZoned(() async {
+        await _pumpMobileLibrary(
+          tester,
+          mobileAudioPlaybackService: service,
+          appConfigController: controller,
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byType(MobileMiniPlayer), findsOneWidget);
+
+        await tester.tap(find.text('设置'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('服务器'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Server URL'), findsOneWidget);
+
+        await controller.load();
+        await tester.pumpAndSettle();
+
+        expect(find.text('Server URL'), findsOneWidget);
+        expect(service.clearCacheCalls, 0);
+        expect(PlaybackStorage.load(), isNotNull);
+        expect(
+          find.byType(MobileMiniPlayer, skipOffstage: false),
+          findsOneWidget,
+        );
+
+        final fields = find.byType(TextField);
+        await tester.enterText(fields.at(0), 'http://new.example.test');
+        await tester.enterText(fields.at(1), 'session=new');
+        await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Server URL'), findsNothing);
+        expect(find.byType(MobileMiniPlayer), findsNothing);
+        expect(service.clearCacheCalls, 0);
+        expect(PlaybackStorage.load(), isNotNull);
+        expect(store.serverUrl, 'http://new.example.test');
+        expect(store.serverCookie, 'session=new');
+      }, createHttpClient: (_) => _LibraryFakeHttpClient());
+    },
+  );
+
+  testWidgets('disposed library ignores matching server save completion', (
     tester,
   ) async {
+    final connectionRelease = Completer<void>();
     final service = _RecordingMobileAudioPlaybackService();
     final store = _MemoryAppConfigStore(
       serverUrl: 'http://old.example.test',
@@ -117,12 +181,13 @@ void main() {
     );
     final controller = AppConfigController(
       store: store,
-      connectionTester: (_, {serverCookie}) async {},
+      connectionTester: (_, {serverCookie}) => connectionRelease.future,
     );
     await controller.load();
     addTearDown(service.dispose);
     addTearDown(controller.dispose);
     addTearDown(ApiConfig.resetRuntimeConfigForTests);
+    await _seedPlaybackState(progress: 0.5);
 
     await HttpOverrides.runZoned(() async {
       await _pumpMobileLibrary(
@@ -137,17 +202,77 @@ void main() {
       await tester.tap(find.text('服务器'));
       await tester.pumpAndSettle();
 
-      final fields = find.byType(TextField);
-      await tester.enterText(fields.at(0), 'http://new.example.test');
-      await tester.enterText(fields.at(1), 'session=new');
-      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-      await tester.pumpAndSettle();
-    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+      final save = controller.saveServerConfig(
+        serverUrl: 'http://new.example.test',
+        serverCookie: 'session=new',
+      );
+      await tester.pump();
 
-    expect(service.clearCacheCalls, 1);
-    expect(store.serverUrl, 'http://new.example.test');
-    expect(store.serverCookie, 'session=new');
+      expect(controller.state.status, AppConfigStatus.loading);
+
+      await tester.pumpWidget(const MaterialApp(home: Text('Replacement')));
+      await tester.pump();
+
+      expect(find.byType(LibraryHomeScreen), findsNothing);
+
+      connectionRelease.complete();
+      await save;
+      await tester.pump();
+
+      expect(find.byType(LibraryHomeScreen), findsNothing);
+      expect(service.clearCacheCalls, 0);
+      expect(PlaybackStorage.load(), isNotNull);
+      expect(tester.takeException(), isNull);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
   });
+
+  testWidgets(
+    'successful server edit clears only local playback presentation',
+    (tester) async {
+      final service = _RecordingMobileAudioPlaybackService();
+      final store = _MemoryAppConfigStore(
+        serverUrl: 'http://old.example.test',
+        serverCookie: 'session=old',
+      );
+      final controller = AppConfigController(
+        store: store,
+        connectionTester: (_, {serverCookie}) async {},
+      );
+      await controller.load();
+      addTearDown(service.dispose);
+      addTearDown(controller.dispose);
+      addTearDown(ApiConfig.resetRuntimeConfigForTests);
+      await _seedPlaybackState(progress: 0.5);
+
+      await HttpOverrides.runZoned(() async {
+        await _pumpMobileLibrary(
+          tester,
+          mobileAudioPlaybackService: service,
+          appConfigController: controller,
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byType(MobileMiniPlayer), findsOneWidget);
+
+        await tester.tap(find.text('设置'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('服务器'));
+        await tester.pumpAndSettle();
+
+        final fields = find.byType(TextField);
+        await tester.enterText(fields.at(0), 'http://new.example.test');
+        await tester.enterText(fields.at(1), 'session=new');
+        await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+        await tester.pumpAndSettle();
+      }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+      expect(service.clearCacheCalls, 0);
+      expect(PlaybackStorage.load(), isNotNull);
+      expect(find.byType(MobileMiniPlayer), findsNothing);
+      expect(store.serverUrl, 'http://new.example.test');
+      expect(store.serverCookie, 'session=new');
+    },
+  );
 
   testWidgets(
     'discover more opens the full mobile section and back restores home',
@@ -473,6 +598,745 @@ void main() {
     },
   );
 
+  testWidgets('restored idle low-quality change waits for explicit play', (
+    tester,
+  ) async {
+    final service = _RecordingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+    await _seedPlaybackState(progress: 0.5);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('设置'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('弱网省流量音质'));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final miniPlayer = tester.widget<MobileMiniPlayer>(
+        find.byType(MobileMiniPlayer),
+      );
+      expect(service.playedQueues, isEmpty);
+      expect(miniPlayer.track.id, 402);
+      expect(miniPlayer.progress, 0.5);
+      expect(miniPlayer.isPlaying, isFalse);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(MobileMiniPlayer),
+          matching: find.byIcon(Icons.play_arrow),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(service.playedQueues.single.map((track) => track.id), [401, 402]);
+    expect(service.playedIndexes.single, 1);
+    expect(service.initialPositions.single, const Duration(seconds: 75));
+    expect(
+      service.currentState.audioUrl,
+      endsWith('/api/stream/402/audio?quality=low'),
+    );
+  });
+
+  testWidgets('pending restored low-quality change restarts latest request', (
+    tester,
+  ) async {
+    final service =
+        _FirstPlayQueueDelayedWithoutStateMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+    await _seedPlaybackState(progress: 0.5);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(MobileMiniPlayer),
+          matching: find.byIcon(Icons.play_arrow),
+        ),
+      );
+      await tester.pump();
+
+      expect(service.playQueueAttempts, 1);
+
+      await tester.tap(find.text('设置'));
+      await _pumpUntil(
+        tester,
+        () => find.text('弱网省流量音质').evaluate().isNotEmpty,
+      );
+      await tester.tap(find.text('弱网省流量音质'));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(service.playQueueAttempts, 2);
+      expect(service.playedIndexes, [1, 1]);
+      expect(service.initialPositions, [
+        const Duration(seconds: 75),
+        const Duration(seconds: 75),
+      ]);
+      expect(
+        service.currentState.audioUrl,
+        endsWith('/api/stream/402/audio?quality=low'),
+      );
+      expect(
+        tester
+            .widget<MobileMiniPlayer>(find.byType(MobileMiniPlayer))
+            .isPlaying,
+        isTrue,
+      );
+
+      service.completeFirstPlayQueue();
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      expect(service.playQueueAttempts, 2);
+      expect(find.text('播放启动失败，请重试'), findsNothing);
+      expect(
+        tester
+            .widget<MobileMiniPlayer>(find.byType(MobileMiniPlayer))
+            .isPlaying,
+        isTrue,
+      );
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('restored idle add-to-queue waits for explicit play', (
+    tester,
+  ) async {
+    final service = _RecordingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+    await _seedPlaybackState(progress: 0.5);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.library_music_outlined));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(InkWell, '最近播放').first);
+      await tester.pumpAndSettle();
+
+      final recentRow = find.byKey(const ValueKey('recent-playback-201'));
+      await tester.tap(
+        find.descendant(of: recentRow, matching: find.byTooltip('更多操作')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('加入当前队列'));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final miniPlayer = tester.widget<MobileMiniPlayer>(
+        find.byType(MobileMiniPlayer),
+      );
+      expect(service.playedQueues, isEmpty);
+      expect(miniPlayer.track.id, 402);
+      expect(miniPlayer.progress, 0.5);
+      expect(miniPlayer.isPlaying, isFalse);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(MobileMiniPlayer),
+          matching: find.byIcon(Icons.play_arrow),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(service.playedQueues.single.map((track) => track.id), [
+      401,
+      402,
+      201,
+    ]);
+    expect(service.playedIndexes.single, 1);
+    expect(service.initialPositions.single, const Duration(seconds: 75));
+  });
+
+  testWidgets('restored idle shuffle waits for explicit play', (tester) async {
+    final service = _RecordingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+    await _seedPlaybackState(progress: 0.5);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(MobileMiniPlayer));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.byTooltip('随机播放'));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final player = find.byKey(const ValueKey('mobile-player-immersive'));
+      expect(service.playedQueues, isEmpty);
+      expect(
+        tester.widget<PlayerScreen>(find.byType(PlayerScreen)).currentIndex,
+        0,
+      );
+      expect(find.text('Resume Two'), findsWidgets);
+      expect(
+        find.descendant(of: player, matching: find.byIcon(Icons.play_arrow)),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.descendant(of: player, matching: find.byIcon(Icons.play_arrow)),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(service.playedQueues.single.map((track) => track.id), [402, 401]);
+    expect(service.playedIndexes.single, 0);
+    expect(service.orderModes.single, MobilePlaybackOrderMode.listLoop);
+    expect(service.initialPositions.single, const Duration(seconds: 75));
+  });
+
+  testWidgets(
+    'restored mobile playback starts from saved progress after opening details',
+    (tester) async {
+      final service = _RecordingMobileAudioPlaybackService();
+      addTearDown(service.dispose);
+      await _seedPlaybackState(progress: 0.5);
+
+      await HttpOverrides.runZoned(() async {
+        await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byType(MobileMiniPlayer));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+
+        final player = find.byKey(const ValueKey('mobile-player-immersive'));
+        final playButton = find.descendant(
+          of: player,
+          matching: find.byIcon(Icons.play_arrow),
+        );
+        expect(playButton, findsOneWidget);
+
+        await tester.tap(playButton);
+        await tester.pump(const Duration(milliseconds: 500));
+
+        final pauseButton = find.descendant(
+          of: player,
+          matching: find.byIcon(Icons.pause),
+        );
+        expect(pauseButton, findsOneWidget);
+        await tester.tap(pauseButton);
+        await tester.pump();
+        await tester.tap(
+          find.descendant(of: player, matching: find.byIcon(Icons.play_arrow)),
+        );
+        await tester.pump();
+      }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+      expect(service.playedQueues, hasLength(1));
+      expect(service.playedQueues.single.map((track) => track.id), [401, 402]);
+      expect(service.playedIndexes.single, 1);
+      expect(service.orderModes.single, MobilePlaybackOrderMode.listLoop);
+      expect(service.initialPositions.single, const Duration(seconds: 75));
+      expect(service.playCalls, 1);
+    },
+  );
+
+  testWidgets('failed restored detail playback stays paused and can retry', (
+    tester,
+  ) async {
+    final service = _FailingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+    await _seedPlaybackState(progress: 0.5);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(MobileMiniPlayer));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      Finder playButton() => find.descendant(
+        of: find.byKey(const ValueKey('mobile-player-immersive')),
+        matching: find.byIcon(Icons.play_arrow),
+      );
+
+      await tester.tap(playButton());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('播放启动失败，请重试'), findsOneWidget);
+      expect(service.playQueueAttempts, 1);
+      expect(
+        find.byKey(const ValueKey('player-external-audio-loading-indicator')),
+        findsNothing,
+      );
+      expect(playButton(), findsOneWidget);
+      expect(
+        tester
+            .widget<IconButton>(
+              find
+                  .ancestor(of: playButton(), matching: find.byType(IconButton))
+                  .first,
+            )
+            .onPressed,
+        isNotNull,
+      );
+
+      await tester.tap(playButton());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(tester.takeException(), isNull);
+    expect(service.playQueueAttempts, 2);
+    expect(
+      service.playedQueues
+          .map((queue) => queue.map((track) => track.id).toList())
+          .toList(),
+      [
+        [401, 402],
+        [401, 402],
+      ],
+    );
+    expect(service.playedIndexes, [1, 1]);
+    expect(service.orderModes, [
+      MobilePlaybackOrderMode.listLoop,
+      MobilePlaybackOrderMode.listLoop,
+    ]);
+    expect(service.initialPositions, [
+      const Duration(seconds: 75),
+      const Duration(seconds: 75),
+    ]);
+    expect(service.playCalls, 0);
+  });
+
+  testWidgets('failed restored mini-player playback shows one error', (
+    tester,
+  ) async {
+    final service = _FailingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+    await _seedPlaybackState(progress: 0.5);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+
+      Finder playButton() => find.descendant(
+        of: find.byType(MobileMiniPlayer),
+        matching: find.byIcon(Icons.play_arrow),
+      );
+
+      await tester.tap(playButton());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('播放启动失败，请重试'), findsOneWidget);
+      expect(service.playQueueAttempts, 1);
+      expect(playButton(), findsOneWidget);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+  });
+
+  testWidgets('pending restored playback ignores duplicate play taps', (
+    tester,
+  ) async {
+    final service = _FirstPlayQueueDelayedMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+    await _seedPlaybackState(progress: 0.5);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+
+      final playButton = find.descendant(
+        of: find.byType(MobileMiniPlayer),
+        matching: find.byIcon(Icons.play_arrow),
+      );
+
+      await tester.tap(playButton);
+      await tester.pump();
+
+      final miniLoadingIndicator = find.byKey(
+        const ValueKey('mobile-mini-player-loading-indicator'),
+      );
+      final miniPlayButton = find.ancestor(
+        of: miniLoadingIndicator,
+        matching: find.byType(IconButton),
+      );
+      expect(miniLoadingIndicator, findsOneWidget);
+      expect(tester.widget<IconButton>(miniPlayButton).onPressed, isNull);
+
+      await tester.tap(miniPlayButton);
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(service.playQueueAttempts, 1);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(MobileMiniPlayer),
+          matching: find.text('Resume Two'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        tester
+            .widget<MobilePlayerSheet>(find.byType(MobilePlayerSheet))
+            .expanded,
+        isTrue,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-player-immersive')),
+        findsOneWidget,
+      );
+
+      final expandedLoadingIndicator = find.byKey(
+        const ValueKey('player-external-audio-loading-indicator'),
+      );
+      final expandedPlayButton = find.ancestor(
+        of: expandedLoadingIndicator,
+        matching: find.byType(IconButton),
+      );
+      expect(expandedLoadingIndicator, findsOneWidget);
+      expect(tester.widget<IconButton>(expandedPlayButton).onPressed, isNull);
+
+      await tester.tap(expandedPlayButton);
+      await tester.pump();
+      expect(service.playQueueAttempts, 1);
+
+      service.completeFirstPlayQueue();
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      expect(expandedLoadingIndicator, findsNothing);
+      final pauseButton = find.descendant(
+        of: find.byKey(const ValueKey('mobile-player-immersive')),
+        matching: find.byIcon(Icons.pause),
+      );
+      expect(pauseButton, findsOneWidget);
+      expect(
+        tester
+            .widget<IconButton>(
+              find
+                  .ancestor(of: pauseButton, matching: find.byType(IconButton))
+                  .first,
+            )
+            .onPressed,
+        isNotNull,
+      );
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(tester.takeException(), isNull);
+    expect(service.playQueueAttempts, 1);
+    expect(service.playedIndexes, [1]);
+    expect(service.playCalls, 0);
+  });
+
+  testWidgets('delayed restored failure clears loading and allows retry', (
+    tester,
+  ) async {
+    final service = _DelayedFailingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+    await _seedPlaybackState(progress: 0.5);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(MobileMiniPlayer),
+          matching: find.byIcon(Icons.play_arrow),
+        ),
+      );
+      await tester.pump();
+
+      final miniLoadingIndicator = find.byKey(
+        const ValueKey('mobile-mini-player-loading-indicator'),
+        skipOffstage: false,
+      );
+      final miniPlayButton = find.ancestor(
+        of: miniLoadingIndicator,
+        matching: find.byType(IconButton),
+      );
+      expect(miniLoadingIndicator, findsOneWidget);
+      expect(tester.widget<IconButton>(miniPlayButton).onPressed, isNull);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(MobileMiniPlayer),
+          matching: find.text('Resume Two'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final expandedLoadingIndicator = find.byKey(
+        const ValueKey('player-external-audio-loading-indicator'),
+      );
+      final expandedPlayButton = find.ancestor(
+        of: expandedLoadingIndicator,
+        matching: find.byType(IconButton),
+      );
+      expect(expandedLoadingIndicator, findsOneWidget);
+      expect(tester.widget<IconButton>(expandedPlayButton).onPressed, isNull);
+      expect(service.playQueueAttempts, 1);
+
+      service.releaseFailure();
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const ValueKey('player-external-audio-loading-indicator'))
+            .evaluate()
+            .isEmpty,
+        attempts: 20,
+      );
+
+      expect(expandedLoadingIndicator, findsNothing);
+      expect(miniLoadingIndicator, findsNothing);
+      expect(find.text('播放启动失败，请重试'), findsOneWidget);
+
+      final playIcon = find.descendant(
+        of: find.byKey(const ValueKey('mobile-player-immersive')),
+        matching: find.byIcon(Icons.play_arrow),
+      );
+      final playButton = find.ancestor(
+        of: playIcon,
+        matching: find.byType(IconButton),
+      );
+      expect(playIcon, findsOneWidget);
+      expect(tester.widget<IconButton>(playButton).onPressed, isNotNull);
+
+      await tester.tap(playButton);
+      await _pumpUntil(tester, () => service.playQueueAttempts == 2);
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(service.playQueueAttempts, 2);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('mobile-player-immersive')),
+          matching: find.byIcon(Icons.pause),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('播放启动失败，请重试'), findsOneWidget);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('stale restored failure cannot finish newer UI intent', (
+    tester,
+  ) async {
+    final service =
+        _FirstPlayQueueDelayedWithoutStateMobileAudioPlaybackService(
+          failFirst: true,
+        );
+    final debugMessages = <String>[];
+    final previousDebugPrint = debugPrint;
+    debugPrint = (message, {wrapWidth}) {
+      if (message != null) debugMessages.add(message);
+    };
+    addTearDown(service.dispose);
+    await _seedPlaybackState(progress: 0.5);
+
+    try {
+      await HttpOverrides.runZoned(() async {
+        await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byType(MobileMiniPlayer));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+
+        final player = find.byKey(const ValueKey('mobile-player-immersive'));
+        await tester.tap(
+          find.descendant(of: player, matching: find.byIcon(Icons.play_arrow)),
+        );
+        await tester.pump();
+
+        expect(service.playQueueAttempts, 1);
+
+        _invokeScopedIconButton(
+          tester,
+          scope: player,
+          icon: Icons.skip_previous,
+        );
+        await tester.pump(const Duration(milliseconds: 500));
+
+        expect(service.playQueueAttempts, 2);
+        expect(
+          tester.widget<PlayerScreen>(find.byType(PlayerScreen)).currentIndex,
+          0,
+        );
+        expect(
+          find.descendant(of: player, matching: find.byIcon(Icons.pause)),
+          findsOneWidget,
+        );
+
+        service.completeFirstPlayQueue();
+        for (var i = 0; i < 40; i++) {
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+
+        expect(service.playQueueAttempts, 2);
+        expect(
+          tester.widget<PlayerScreen>(find.byType(PlayerScreen)).currentIndex,
+          0,
+        );
+        expect(
+          find.descendant(of: player, matching: find.byIcon(Icons.pause)),
+          findsOneWidget,
+        );
+        expect(find.text('播放启动失败，请重试'), findsNothing);
+        expect(
+          debugMessages.where(
+            (message) => message.contains(
+              'LibraryHomeScreen: restored mobile audio start failed',
+            ),
+          ),
+          isEmpty,
+        );
+      }, createHttpClient: (_) => _LibraryFakeHttpClient());
+    } finally {
+      debugPrint = previousDebugPrint;
+    }
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('stale restored success cannot finish newer UI intent', (
+    tester,
+  ) async {
+    final service =
+        _FirstPlayQueueDelayedWithoutStateMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+    await _seedPlaybackState(progress: 0.5);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(MobileMiniPlayer));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final player = find.byKey(const ValueKey('mobile-player-immersive'));
+      await tester.tap(
+        find.descendant(of: player, matching: find.byIcon(Icons.play_arrow)),
+      );
+      await tester.pump();
+
+      expect(service.playQueueAttempts, 1);
+
+      _invokeScopedIconButton(tester, scope: player, icon: Icons.skip_previous);
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(service.playQueueAttempts, 2);
+      expect(
+        tester.widget<PlayerScreen>(find.byType(PlayerScreen)).currentIndex,
+        0,
+      );
+      expect(
+        find.descendant(of: player, matching: find.byIcon(Icons.pause)),
+        findsOneWidget,
+      );
+
+      service.completeFirstPlayQueue();
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      expect(service.playQueueAttempts, 2);
+      expect(
+        tester.widget<PlayerScreen>(find.byType(PlayerScreen)).currentIndex,
+        0,
+      );
+      expect(
+        find.descendant(of: player, matching: find.byIcon(Icons.pause)),
+        findsOneWidget,
+      );
+      expect(find.text('播放启动失败，请重试'), findsNothing);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'server edit clears local presentation and invalidates pending restore',
+    (tester) async {
+      final service =
+          _FirstPlayQueueDelayedWithoutStateMobileAudioPlaybackService(
+            failFirst: true,
+          );
+      final store = _MemoryAppConfigStore(
+        serverUrl: 'http://old.example.test',
+        serverCookie: 'session=old',
+      );
+      final controller = AppConfigController(
+        store: store,
+        connectionTester: (_, {serverCookie}) async {},
+      );
+      await controller.load();
+      addTearDown(service.dispose);
+      addTearDown(controller.dispose);
+      addTearDown(ApiConfig.resetRuntimeConfigForTests);
+      await _seedPlaybackState(progress: 0.5);
+
+      await HttpOverrides.runZoned(() async {
+        await _pumpMobileLibrary(
+          tester,
+          mobileAudioPlaybackService: service,
+          appConfigController: controller,
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byType(MobileMiniPlayer));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.tap(
+          find.descendant(
+            of: find.byKey(const ValueKey('mobile-player-immersive')),
+            matching: find.byIcon(Icons.play_arrow),
+          ),
+        );
+        await tester.pump();
+
+        expect(service.playQueueAttempts, 1);
+
+        final settings = tester.widget<SettingsScreen>(
+          find.byType(SettingsScreen, skipOffstage: false),
+        );
+        settings.onEditServer!();
+        await tester.pumpAndSettle();
+
+        final fields = find.byType(TextField);
+        await tester.enterText(fields.at(0), 'http://new.example.test');
+        await tester.enterText(fields.at(1), 'session=new');
+        await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+        await tester.pumpAndSettle();
+
+        expect(service.clearCacheCalls, 0);
+        expect(service.currentState.queue, isEmpty);
+        expect(PlaybackStorage.load(), isNotNull);
+
+        service.completeFirstPlayQueue();
+        for (var i = 0; i < 40; i++) {
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+
+        expect(service.currentState.queue, isEmpty);
+        expect(find.byType(MobileMiniPlayer), findsNothing);
+      }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'restored mobile playback at zero progress starts without seeking',
     (tester) async {
@@ -499,6 +1363,24 @@ void main() {
       expect(service.seekPositions, isEmpty);
     },
   );
+
+  testWidgets('restored desktop playback opens player details', (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 0.6;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await _seedPlaybackState(progress: 0.5);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, size: const Size(1440, 900));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PlayerScreen), findsNothing);
+
+      await tester.tap(find.byTooltip('Open player'));
+      await tester.pump();
+
+      expect(find.byType(PlayerScreen), findsOneWidget);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+  });
 
   testWidgets('mobile back collapses MV into mobile audio playback', (
     tester,
@@ -639,49 +1521,6 @@ void main() {
         findsNothing,
       );
       expect(find.byType(MobileMiniPlayer), findsOneWidget);
-    }, createHttpClient: (_) => _LibraryFakeHttpClient());
-  });
-
-  testWidgets('stale MV collapse completion repairs current audio queue', (
-    tester,
-  ) async {
-    final service = _FirstPlayQueueDelayedMobileAudioPlaybackService();
-    addTearDown(service.dispose);
-
-    await HttpOverrides.runZoned(() async {
-      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
-      await tester.pumpAndSettle();
-      await _openAlbumMvFromDiscoverHome(tester);
-
-      await tester.drag(
-        find.byKey(const ValueKey('mobile-mv-player-surface')),
-        const Offset(0, 700),
-      );
-      await tester.pump(const Duration(milliseconds: 500));
-
-      expect(service.playQueueAttempts, 1);
-
-      final nextButton = find.descendant(
-        of: find.byKey(const ValueKey('mobile-mv-player-surface')),
-        matching: find.byIcon(Icons.skip_next),
-      );
-      final nextControl = tester.widget<IconButton>(
-        find.ancestor(of: nextButton, matching: find.byType(IconButton)).first,
-      );
-      nextControl.onPressed!();
-      await tester.pump(const Duration(milliseconds: 500));
-
-      expect(service.playQueueAttempts, 2);
-      expect(service.currentState.index, 1);
-
-      service.completeFirstPlayQueue();
-      for (var i = 0; i < 40; i++) {
-        await tester.pump(const Duration(milliseconds: 16));
-      }
-
-      expect(service.playQueueAttempts, 3);
-      expect(service.currentState.index, 1);
-      expect(service.playedIndexes.last, 1);
     }, createHttpClient: (_) => _LibraryFakeHttpClient());
   });
 
@@ -1387,6 +2226,13 @@ class _RecordingMobileAudioPlaybackService
   TrackFavoriteStatus? lastIsTrackFavorited;
   TrackFavoriteToggle? lastToggleTrackFavorite;
   int clearCacheCalls = 0;
+  int playCalls = 0;
+
+  @override
+  Future<void> play() async {
+    playCalls += 1;
+    await super.play();
+  }
 
   @override
   Future<void> clearCache() async {
@@ -1452,6 +2298,12 @@ class _FailingMobileAudioPlaybackService
     TrackFavoriteToggle? toggleTrackFavorite,
   }) async {
     playQueueAttempts += 1;
+    playedQueues.add(List<Track>.from(queue));
+    playedIndexes.add(index);
+    orderModes.add(orderMode);
+    initialPositions.add(initialPosition);
+    lastIsTrackFavorited = isTrackFavorited;
+    lastToggleTrackFavorite = toggleTrackFavorite;
     throw StateError('audio startup failed');
   }
 }
@@ -1499,6 +2351,52 @@ class _DelayedMobileAudioPlaybackService
   }
 }
 
+class _DelayedFailingMobileAudioPlaybackService
+    extends _RecordingMobileAudioPlaybackService {
+  final Completer<void> _failureRelease = Completer<void>();
+  int playQueueAttempts = 0;
+
+  void releaseFailure() {
+    if (!_failureRelease.isCompleted) {
+      _failureRelease.complete();
+    }
+  }
+
+  @override
+  Future<void> playQueue({
+    required List<Track> queue,
+    required int index,
+    required AudioUrlForTrack audioUrlForTrack,
+    CoverUrlForTrack? coverUrlForTrack,
+    MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
+    Duration initialPosition = Duration.zero,
+    TrackFavoriteStatus? isTrackFavorited,
+    TrackFavoriteToggle? toggleTrackFavorite,
+  }) async {
+    playQueueAttempts += 1;
+    if (playQueueAttempts == 1) {
+      await _failureRelease.future;
+      throw StateError('delayed audio startup failed');
+    }
+    await super.playQueue(
+      queue: queue,
+      index: index,
+      audioUrlForTrack: audioUrlForTrack,
+      coverUrlForTrack: coverUrlForTrack,
+      orderMode: orderMode,
+      initialPosition: initialPosition,
+      isTrackFavorited: isTrackFavorited,
+      toggleTrackFavorite: toggleTrackFavorite,
+    );
+  }
+
+  @override
+  Future<void> dispose() async {
+    releaseFailure();
+    await super.dispose();
+  }
+}
+
 class _FirstPlayQueueDelayedMobileAudioPlaybackService
     extends _RecordingMobileAudioPlaybackService {
   final Completer<void> _firstPlayQueueCompleter = Completer<void>();
@@ -1524,6 +2422,66 @@ class _FirstPlayQueueDelayedMobileAudioPlaybackService
     playQueueAttempts += 1;
     if (playQueueAttempts == 1) {
       await _firstPlayQueueCompleter.future;
+    }
+    await super.playQueue(
+      queue: queue,
+      index: index,
+      audioUrlForTrack: audioUrlForTrack,
+      coverUrlForTrack: coverUrlForTrack,
+      orderMode: orderMode,
+      initialPosition: initialPosition,
+      isTrackFavorited: isTrackFavorited,
+      toggleTrackFavorite: toggleTrackFavorite,
+    );
+  }
+
+  @override
+  Future<void> dispose() async {
+    completeFirstPlayQueue();
+    await super.dispose();
+  }
+}
+
+class _FirstPlayQueueDelayedWithoutStateMobileAudioPlaybackService
+    extends _RecordingMobileAudioPlaybackService {
+  _FirstPlayQueueDelayedWithoutStateMobileAudioPlaybackService({
+    this.failFirst = false,
+  });
+
+  final bool failFirst;
+  final Completer<void> _firstPlayQueueCompleter = Completer<void>();
+  int playQueueAttempts = 0;
+
+  void completeFirstPlayQueue() {
+    if (!_firstPlayQueueCompleter.isCompleted) {
+      _firstPlayQueueCompleter.complete();
+    }
+  }
+
+  @override
+  Future<void> playQueue({
+    required List<Track> queue,
+    required int index,
+    required AudioUrlForTrack audioUrlForTrack,
+    CoverUrlForTrack? coverUrlForTrack,
+    MobilePlaybackOrderMode orderMode = MobilePlaybackOrderMode.sequential,
+    Duration initialPosition = Duration.zero,
+    TrackFavoriteStatus? isTrackFavorited,
+    TrackFavoriteToggle? toggleTrackFavorite,
+  }) async {
+    playQueueAttempts += 1;
+    if (playQueueAttempts == 1) {
+      playedQueues.add(List<Track>.from(queue));
+      playedIndexes.add(index);
+      orderModes.add(orderMode);
+      initialPositions.add(initialPosition);
+      lastIsTrackFavorited = isTrackFavorited;
+      lastToggleTrackFavorite = toggleTrackFavorite;
+      await _firstPlayQueueCompleter.future;
+      if (failFirst) {
+        throw StateError('stale restored startup failed');
+      }
+      return;
     }
     await super.playQueue(
       queue: queue,
