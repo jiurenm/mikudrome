@@ -876,6 +876,8 @@ class JustAudioMobileAudioPlaybackService
   int _appliedQueueGeneration = 0;
   int? _applyingQueueGeneration;
   MobileAudioPlaybackState? _applyingQueueState;
+  int _activeDirectOperations = 0;
+  Completer<void>? _directOperationsDrained;
   bool _disposed = false;
 
   @override
@@ -977,33 +979,39 @@ class JustAudioMobileAudioPlaybackService
   }
 
   @override
-  Future<void> play() async {
-    if (_disposed || _currentState.queue.isEmpty) return;
-    try {
+  Future<void> play() {
+    if (_disposed || _currentState.queue.isEmpty) return Future<void>.value();
+    return _runDirectOperation(() async {
+      try {
+        final handler = await _effectiveHandler();
+        if (_disposed) return;
+        await handler.play();
+      } catch (_) {
+        if (!_disposed) {
+          _emit(_currentState.copyWith(isPlaying: false));
+        }
+      }
+    });
+  }
+
+  @override
+  Future<void> pause() {
+    if (_disposed) return Future<void>.value();
+    return _runDirectOperation(() async {
       final handler = await _effectiveHandler();
       if (_disposed) return;
-      await handler.play();
-    } catch (_) {
-      if (!_disposed) {
-        _emit(_currentState.copyWith(isPlaying: false));
-      }
-    }
+      await handler.pause();
+    });
   }
 
   @override
-  Future<void> pause() async {
-    if (_disposed) return;
-    final handler = await _effectiveHandler();
-    if (_disposed) return;
-    await handler.pause();
-  }
-
-  @override
-  Future<void> seek(Duration position) async {
-    if (_disposed) return;
-    final handler = await _effectiveHandler();
-    if (_disposed) return;
-    await handler.seek(position);
+  Future<void> seek(Duration position) {
+    if (_disposed) return Future<void>.value();
+    return _runDirectOperation(() async {
+      final handler = await _effectiveHandler();
+      if (_disposed) return;
+      await handler.seek(position);
+    });
   }
 
   @override
@@ -1037,19 +1045,39 @@ class JustAudioMobileAudioPlaybackService
   }
 
   @override
-  Future<void> next() async {
-    if (_disposed || _currentState.queue.isEmpty) return;
-    final handler = await _effectiveHandler();
-    if (_disposed) return;
-    await handler.skipToNext();
+  Future<void> next() {
+    if (_disposed || _currentState.queue.isEmpty) return Future<void>.value();
+    return _runDirectOperation(() async {
+      final handler = await _effectiveHandler();
+      if (_disposed) return;
+      await handler.skipToNext();
+    });
   }
 
   @override
-  Future<void> previous() async {
-    if (_disposed || _currentState.queue.isEmpty) return;
-    final handler = await _effectiveHandler();
-    if (_disposed) return;
-    await handler.skipToPrevious();
+  Future<void> previous() {
+    if (_disposed || _currentState.queue.isEmpty) return Future<void>.value();
+    return _runDirectOperation(() async {
+      final handler = await _effectiveHandler();
+      if (_disposed) return;
+      await handler.skipToPrevious();
+    });
+  }
+
+  Future<void> _runDirectOperation(Future<void> Function() operation) {
+    _activeDirectOperations += 1;
+    return Future<void>.sync(operation).whenComplete(() {
+      _activeDirectOperations -= 1;
+      if (_activeDirectOperations == 0) {
+        _directOperationsDrained?.complete();
+        _directOperationsDrained = null;
+      }
+    });
+  }
+
+  Future<void> _waitForDirectOperations() {
+    if (_activeDirectOperations == 0) return Future<void>.value();
+    return (_directOperationsDrained ??= Completer<void>()).future;
   }
 
   @override
@@ -1064,6 +1092,7 @@ class JustAudioMobileAudioPlaybackService
         await handlerLoad;
       } catch (_) {}
     }
+    await _waitForDirectOperations();
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }

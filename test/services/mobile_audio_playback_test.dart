@@ -276,6 +276,132 @@ void main() {
     },
   );
 
+  test(
+    'shared wrapper dispose drains concurrent direct commands before replacement',
+    () async {
+      audio_service.resetAudioServiceHandlerInitializationForTests();
+      final player = DelayedDirectCommandsFakeJustAudioPlayer();
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+      var initializerCalls = 0;
+
+      Future<audio_service.MikudromeAudioHandler> initializeHandler() async {
+        initializerCalls += 1;
+        return handler;
+      }
+
+      final firstService =
+          audio_service.JustAudioMobileAudioPlaybackService.fromAudioService(
+            audioServiceInitializer: initializeHandler,
+          );
+      final replacementService =
+          audio_service.JustAudioMobileAudioPlaybackService.fromAudioService(
+            audioServiceInitializer: initializeHandler,
+          );
+      addTearDown(() async {
+        player.releaseDirectCommands();
+        await firstService.dispose();
+        await replacementService.dispose();
+        if (player.disposeCalls == 0) {
+          await handler.dispose();
+        }
+        audio_service.resetAudioServiceHandlerInitializationForTests();
+      });
+
+      await firstService.playQueue(
+        queue: [_track(1), _track(2)],
+        index: 0,
+        audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+      );
+
+      final seek = firstService.seek(const Duration(seconds: 33));
+      final pause = firstService.pause();
+      final next = firstService.next();
+      await Future.wait([
+        player.seekStarted,
+        player.pauseStarted,
+        player.nextStarted,
+      ]);
+
+      var disposeCompleted = false;
+      final dispose = firstService.dispose().then((_) {
+        disposeCompleted = true;
+      });
+      await pumpEventQueue();
+
+      expect(disposeCompleted, isFalse);
+      expect(player.disposeCalls, 0);
+
+      player.releaseDirectCommands();
+      await Future.wait([seek, pause, next, dispose]);
+      await replacementService.playQueue(
+        queue: [_track(3)],
+        index: 0,
+        initialPosition: const Duration(seconds: 7),
+        audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+      );
+
+      expect(initializerCalls, 1);
+      expect(player.seekPositions, [const Duration(seconds: 33)]);
+      expect(player.pauseCalls, 1);
+      expect(player.nextCalls, 1);
+      expect(player.disposeCalls, 0);
+      expect(replacementService.currentState.track?.id, 3);
+      expect(
+        replacementService.currentState.position,
+        const Duration(seconds: 7),
+      );
+    },
+  );
+
+  test(
+    'direct command error reaches caller while dispose drain completes',
+    () async {
+      audio_service.resetAudioServiceHandlerInitializationForTests();
+      final seekError = StateError('delayed seek failed');
+      final player = DelayedDirectCommandsFakeJustAudioPlayer(
+        seekError: seekError,
+      );
+      final handler = audio_service.MikudromeAudioHandler(player: player);
+      final service =
+          audio_service.JustAudioMobileAudioPlaybackService.fromAudioService(
+            audioServiceInitializer: () async => handler,
+          );
+      addTearDown(() async {
+        player.releaseDirectCommands();
+        await service.dispose();
+        if (player.disposeCalls == 0) {
+          await handler.dispose();
+        }
+        audio_service.resetAudioServiceHandlerInitializationForTests();
+      });
+
+      await service.playQueue(
+        queue: [_track(1)],
+        index: 0,
+        audioUrlForTrack: (track) => 'http://server/audio/${track.id}',
+      );
+      final seekExpectation = expectLater(
+        service.seek(const Duration(seconds: 18)),
+        throwsA(same(seekError)),
+      );
+      await player.seekStarted;
+
+      var disposeCompleted = false;
+      final dispose = service.dispose().then((_) {
+        disposeCompleted = true;
+      });
+      await pumpEventQueue();
+
+      expect(disposeCompleted, isFalse);
+
+      player.releaseDirectCommands();
+      await Future.wait([seekExpectation, dispose]);
+
+      expect(disposeCompleted, isTrue);
+      expect(player.disposeCalls, 0);
+    },
+  );
+
   test('audio handler publishes media queue and current media item', () async {
     final player = FakeJustAudioPlayer();
     final handler = audio_service.MikudromeAudioHandler(player: player);
@@ -2899,6 +3025,57 @@ class DelayedRecoverySeekFakeJustAudioPlayer extends FakeJustAudioPlayer {
   @override
   Future<void> dispose() async {
     completeRecoverySeek();
+    await super.dispose();
+  }
+}
+
+class DelayedDirectCommandsFakeJustAudioPlayer extends FakeJustAudioPlayer {
+  DelayedDirectCommandsFakeJustAudioPlayer({this.seekError});
+
+  final Object? seekError;
+  final _releaseDirectCommands = Completer<void>();
+  final _seekStarted = Completer<void>();
+  final _pauseStarted = Completer<void>();
+  final _nextStarted = Completer<void>();
+
+  Future<void> get seekStarted => _seekStarted.future;
+
+  Future<void> get pauseStarted => _pauseStarted.future;
+
+  Future<void> get nextStarted => _nextStarted.future;
+
+  void releaseDirectCommands() {
+    if (!_releaseDirectCommands.isCompleted) {
+      _releaseDirectCommands.complete();
+    }
+  }
+
+  @override
+  Future<void> seek(Duration position) async {
+    if (!_seekStarted.isCompleted) _seekStarted.complete();
+    await _releaseDirectCommands.future;
+    final error = seekError;
+    if (error != null) throw error;
+    await super.seek(position);
+  }
+
+  @override
+  Future<void> pause() async {
+    if (!_pauseStarted.isCompleted) _pauseStarted.complete();
+    await _releaseDirectCommands.future;
+    await super.pause();
+  }
+
+  @override
+  Future<void> seekToNext() async {
+    if (!_nextStarted.isCompleted) _nextStarted.complete();
+    await _releaseDirectCommands.future;
+    await super.seekToNext();
+  }
+
+  @override
+  Future<void> dispose() async {
+    releaseDirectCommands();
     await super.dispose();
   }
 }

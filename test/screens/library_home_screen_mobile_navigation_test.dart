@@ -170,6 +170,62 @@ void main() {
     },
   );
 
+  testWidgets('disposed library ignores matching server save completion', (
+    tester,
+  ) async {
+    final connectionRelease = Completer<void>();
+    final service = _RecordingMobileAudioPlaybackService();
+    final store = _MemoryAppConfigStore(
+      serverUrl: 'http://old.example.test',
+      serverCookie: 'session=old',
+    );
+    final controller = AppConfigController(
+      store: store,
+      connectionTester: (_, {serverCookie}) => connectionRelease.future,
+    );
+    await controller.load();
+    addTearDown(service.dispose);
+    addTearDown(controller.dispose);
+    addTearDown(ApiConfig.resetRuntimeConfigForTests);
+    await _seedPlaybackState(progress: 0.5);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(
+        tester,
+        mobileAudioPlaybackService: service,
+        appConfigController: controller,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('设置'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('服务器'));
+      await tester.pumpAndSettle();
+
+      final save = controller.saveServerConfig(
+        serverUrl: 'http://new.example.test',
+        serverCookie: 'session=new',
+      );
+      await tester.pump();
+
+      expect(controller.state.status, AppConfigStatus.loading);
+
+      await tester.pumpWidget(const MaterialApp(home: Text('Replacement')));
+      await tester.pump();
+
+      expect(find.byType(LibraryHomeScreen), findsNothing);
+
+      connectionRelease.complete();
+      await save;
+      await tester.pump();
+
+      expect(find.byType(LibraryHomeScreen), findsNothing);
+      expect(service.clearCacheCalls, 0);
+      expect(PlaybackStorage.load(), isNotNull);
+      expect(tester.takeException(), isNull);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+  });
+
   testWidgets(
     'successful server edit clears only local playback presentation',
     (tester) async {

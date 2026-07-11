@@ -698,6 +698,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     var clearedForSave = false;
     late final VoidCallback listener;
     listener = () {
+      if (!mounted) return;
       final state = controller.state;
       if (state.status == AppConfigStatus.loading) {
         pendingServerUrl = state.serverUrl;
