@@ -109,6 +109,68 @@ void main() {
   });
 
   testWidgets(
+    'config reload keeps server settings and local playback presentation',
+    (tester) async {
+      final service = _RecordingMobileAudioPlaybackService();
+      final store = _MemoryAppConfigStore(
+        serverUrl: 'http://old.example.test',
+        serverCookie: 'session=old',
+      );
+      final controller = AppConfigController(
+        store: store,
+        connectionTester: (_, {serverCookie}) async {},
+      );
+      await controller.load();
+      addTearDown(service.dispose);
+      addTearDown(controller.dispose);
+      addTearDown(ApiConfig.resetRuntimeConfigForTests);
+      await _seedPlaybackState(progress: 0.5);
+
+      await HttpOverrides.runZoned(() async {
+        await _pumpMobileLibrary(
+          tester,
+          mobileAudioPlaybackService: service,
+          appConfigController: controller,
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byType(MobileMiniPlayer), findsOneWidget);
+
+        await tester.tap(find.text('设置'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('服务器'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Server URL'), findsOneWidget);
+
+        await controller.load();
+        await tester.pumpAndSettle();
+
+        expect(find.text('Server URL'), findsOneWidget);
+        expect(service.clearCacheCalls, 0);
+        expect(PlaybackStorage.load(), isNotNull);
+        expect(
+          find.byType(MobileMiniPlayer, skipOffstage: false),
+          findsOneWidget,
+        );
+
+        final fields = find.byType(TextField);
+        await tester.enterText(fields.at(0), 'http://new.example.test');
+        await tester.enterText(fields.at(1), 'session=new');
+        await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Server URL'), findsNothing);
+        expect(find.byType(MobileMiniPlayer), findsNothing);
+        expect(service.clearCacheCalls, 0);
+        expect(PlaybackStorage.load(), isNotNull);
+        expect(store.serverUrl, 'http://new.example.test');
+        expect(store.serverCookie, 'session=new');
+      }, createHttpClient: (_) => _LibraryFakeHttpClient());
+    },
+  );
+
+  testWidgets(
     'successful server edit clears only local playback presentation',
     (tester) async {
       final service = _RecordingMobileAudioPlaybackService();

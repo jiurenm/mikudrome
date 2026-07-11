@@ -693,21 +693,34 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     final controller = widget.appConfigController;
     if (controller == null) return;
 
-    var previousStatus = controller.state.status;
+    String? pendingServerUrl;
+    String? pendingServerCookie;
     var clearedForSave = false;
     late final VoidCallback listener;
     listener = () {
       final state = controller.state;
-      if (!clearedForSave &&
-          previousStatus == AppConfigStatus.loading &&
-          state.status == AppConfigStatus.configured) {
+      if (state.status == AppConfigStatus.loading) {
+        pendingServerUrl = state.serverUrl;
+        pendingServerCookie = state.serverUrl == null
+            ? null
+            : state.serverCookie;
+        return;
+      }
+
+      final completedServerSave =
+          state.status == AppConfigStatus.configured &&
+          pendingServerUrl != null &&
+          state.serverUrl == pendingServerUrl &&
+          state.serverCookie == pendingServerCookie;
+      pendingServerUrl = null;
+      pendingServerCookie = null;
+      if (!clearedForSave && completedServerSave) {
         clearedForSave = true;
         _clearPlaybackPresentationForServerChange();
         if (mounted) {
           Navigator.of(context).pop();
         }
       }
-      previousStatus = state.status;
     };
 
     controller.addListener(listener);
