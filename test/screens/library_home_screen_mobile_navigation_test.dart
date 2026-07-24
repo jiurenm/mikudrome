@@ -1717,8 +1717,16 @@ void main() {
         findsNothing,
       );
 
-      final player = tester.widget<PlayerScreen>(find.byType(PlayerScreen));
-      player.onSwitchPlaybackMode(PlaybackMode.video);
+      final moreButton = find.descendant(
+        of: find.byKey(const ValueKey('mobile-player-immersive')),
+        matching: find.byTooltip('更多'),
+      );
+      await tester.tap(moreButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      await tester.tap(find.text('切换到 MV'));
+      await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 
       expect(

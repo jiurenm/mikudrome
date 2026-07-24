@@ -1553,6 +1553,8 @@ class _PlayerScreenState extends State<PlayerScreen>
           onSelected: (value) {
             if (value == 'favorite') {
               unawaited(_toggleLandscapeFavorite());
+            } else if (value == 'video') {
+              widget.onSwitchPlaybackMode(PlaybackMode.video);
             }
           },
           itemBuilder: (context) => [
@@ -1574,6 +1576,18 @@ class _PlayerScreenState extends State<PlayerScreen>
                 ],
               ),
             ),
+            if (!_isVideoMode && _track.hasVideo)
+              const PopupMenuItem<String>(
+                value: 'video',
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.movie, color: Colors.white70, size: 20),
+                    SizedBox(width: 12),
+                    Text('切换到 MV', style: TextStyle(color: Colors.white)),
+                  ],
+                ),
+              ),
           ],
         );
       },
@@ -1722,11 +1736,41 @@ class _PlayerScreenState extends State<PlayerScreen>
                         client: _api,
                         size: 34,
                       ),
-                      IconButton(
-                        onPressed: () {},
+                      PopupMenuButton<String>(
                         icon: const Icon(Icons.more_vert, size: 32),
-                        color: Colors.white70,
+                        iconColor: Colors.white70,
+                        enabled: _track.hasVideo,
+                        color: const Color(0xFF102027),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         tooltip: '更多',
+                        onSelected: (value) {
+                          if (value == 'video') {
+                            widget.onSwitchPlaybackMode(PlaybackMode.video);
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          if (_track.hasVideo)
+                            const PopupMenuItem<String>(
+                              value: 'video',
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.movie,
+                                    color: Colors.white70,
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 12),
+                                  Text(
+                                    '切换到 MV',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
                     ],
                   ),

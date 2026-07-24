@@ -42,6 +42,7 @@ Widget _buildPlayer({
   PlaybackMode playbackMode = PlaybackMode.audio,
   bool shuffleEnabled = false,
   VoidCallback? onToggleShuffle,
+  ValueChanged<PlaybackMode>? onSwitchPlaybackMode,
   String Function(Track track)? coverUrlForTrack,
 }) {
   final resolvedTrack = track ?? _desktopTrack();
@@ -59,7 +60,7 @@ Widget _buildPlayer({
         onPrevious: () {},
         onNext: () {},
         onClose: () {},
-        onSwitchPlaybackMode: (_) {},
+        onSwitchPlaybackMode: onSwitchPlaybackMode ?? (_) {},
         playbackOrderMode: PlaybackOrderMode.sequential,
         onCyclePlaybackOrderMode: () {},
         onPlaybackStateChanged:
@@ -88,6 +89,7 @@ Future<void> _pumpPlayer(
   PlaybackMode playbackMode = PlaybackMode.audio,
   bool shuffleEnabled = false,
   VoidCallback? onToggleShuffle,
+  ValueChanged<PlaybackMode>? onSwitchPlaybackMode,
   String Function(Track track)? coverUrlForTrack,
 }) async {
   await tester.pumpWidget(
@@ -99,6 +101,7 @@ Future<void> _pumpPlayer(
       playbackMode: playbackMode,
       shuffleEnabled: shuffleEnabled,
       onToggleShuffle: onToggleShuffle,
+      onSwitchPlaybackMode: onSwitchPlaybackMode,
       coverUrlForTrack: coverUrlForTrack,
     ),
   );
@@ -371,6 +374,55 @@ void main() {
       find.byKey(const ValueKey('mobile-player-queue-peek')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('mobile more menu switches to MV when the track has video', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const track = Track(
+      id: 7,
+      title: 'Track with MV',
+      audioPath: '/tmp/7.flac',
+      videoPath: '/tmp/7.mp4',
+    );
+    PlaybackMode? selectedMode;
+
+    await _pumpPlayer(
+      tester,
+      surfaceSize: const Size(430, 900),
+      track: track,
+      onSwitchPlaybackMode: (mode) => selectedMode = mode,
+    );
+
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('切换到 MV'), findsOneWidget);
+
+    await tester.tap(find.text('切换到 MV'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(selectedMode, PlaybackMode.video);
+  });
+
+  testWidgets('mobile more menu hides MV action when the track has no video', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpPlayer(tester, surfaceSize: const Size(430, 900));
+
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('切换到 MV'), findsNothing);
   });
 
   testWidgets('mobile reopen forwards the latest initial progress to video', (
