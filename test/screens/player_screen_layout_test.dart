@@ -548,113 +548,149 @@ void main() {
   testWidgets('mobile MV fullscreen locks and restores orientation', (
     tester,
   ) async {
-    await tester.binding.setSurfaceSize(const Size(430, 900));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    var mediaSize = const Size(430, 900);
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    try {
+      await tester.binding.setSurfaceSize(const Size(430, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      var mediaSize = const Size(430, 900);
+      var mediaPadding = EdgeInsets.zero;
 
-    final platformCalls = <MethodCall>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      SystemChannels.platform,
-      (call) async {
-        platformCalls.add(call);
-        return null;
-      },
-    );
-    addTearDown(
-      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      final platformCalls = <MethodCall>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
         SystemChannels.platform,
-        null,
-      ),
-    );
+        (call) async {
+          platformCalls.add(call);
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
 
-    const track = Track(
-      id: 78,
-      title: 'Fullscreen MV',
-      audioPath: '/tmp/78.flac',
-      videoPath: '/tmp/78.mp4',
-    );
+      const track = Track(
+        id: 78,
+        title: 'Fullscreen MV',
+        audioPath: '/tmp/78.flac',
+        videoPath: '/tmp/78.mp4',
+      );
 
-    Widget buildPlayer() {
-      return MaterialApp(
-        home: MediaQuery(
-          data: MediaQueryData(size: mediaSize),
-          child: PlayerScreen(
-            track: track,
-            queue: const [track],
-            currentIndex: 0,
-            contextLabel: 'MV Test',
-            playbackMode: PlaybackMode.video,
-            onSelectTrack: (_) {},
-            onPrevious: () {},
-            onNext: () {},
-            onClose: () {},
-            onSwitchPlaybackMode: (_) {},
-            playbackOrderMode: PlaybackOrderMode.sequential,
-            onCyclePlaybackOrderMode: () {},
-            onPlaybackStateChanged:
-                ({
-                  required bool isPlaying,
-                  required double progress,
-                  required String elapsedLabel,
-                  required String durationLabel,
-                }) {},
-            initializeControllerOnStart: false,
-            renderVideo: false,
+      Widget buildPlayer() {
+        return MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(size: mediaSize, padding: mediaPadding),
+            child: PlayerScreen(
+              track: track,
+              queue: const [track],
+              currentIndex: 0,
+              contextLabel: 'MV Test',
+              playbackMode: PlaybackMode.video,
+              onSelectTrack: (_) {},
+              onPrevious: () {},
+              onNext: () {},
+              onClose: () {},
+              onSwitchPlaybackMode: (_) {},
+              playbackOrderMode: PlaybackOrderMode.sequential,
+              onCyclePlaybackOrderMode: () {},
+              onPlaybackStateChanged:
+                  ({
+                    required bool isPlaying,
+                    required double progress,
+                    required String elapsedLabel,
+                    required String durationLabel,
+                  }) {},
+              initializeControllerOnStart: false,
+              renderVideo: false,
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(buildPlayer());
+      await tester.pump();
+
+      expect(find.byTooltip('全屏'), findsOneWidget);
+      await tester.tap(find.byTooltip('全屏'));
+      await tester.pump();
+
+      expect(find.byIcon(Icons.fullscreen_exit), findsOneWidget);
+      expect(
+        platformCalls
+            .where(
+              (call) => call.method == 'SystemChrome.setEnabledSystemUIMode',
+            )
+            .map((call) => call.arguments),
+        contains(equals('SystemUiMode.immersiveSticky')),
+      );
+      expect(
+        platformCalls
+            .where(
+              (call) => call.method == 'SystemChrome.setPreferredOrientations',
+            )
+            .map((call) => call.arguments),
+        contains(
+          equals([
+            'DeviceOrientation.landscapeLeft',
+            'DeviceOrientation.landscapeRight',
+          ]),
+        ),
+      );
+
+      mediaSize = const Size(900, 430);
+      mediaPadding = const EdgeInsets.only(right: 48);
+      await tester.binding.setSurfaceSize(mediaSize);
+      await tester.pumpWidget(buildPlayer());
+      await tester.pump();
+
+      final exitButtonRect = tester.getRect(
+        find
+            .ancestor(
+              of: find.byIcon(Icons.fullscreen_exit),
+              matching: find.byType(IconButton),
+            )
+            .first,
+      );
+      expect(exitButtonRect.right, lessThanOrEqualTo(mediaSize.width - 48));
+
+      final exitControl = tester.widget<IconButton>(
+        find
+            .ancestor(
+              of: find.byIcon(Icons.fullscreen_exit),
+              matching: find.byType(IconButton),
+            )
+            .first,
+      );
+      exitControl.onPressed!();
+      await tester.pump();
+
+      expect(
+        platformCalls
+            .where(
+              (call) =>
+                  call.method == 'SystemChrome.setEnabledSystemUIOverlays',
+            )
+            .map((call) => call.arguments),
+        contains(equals([SystemUiOverlay.bottom.toString()])),
+      );
+
+      expect(
+        platformCalls
+            .where(
+              (call) => call.method == 'SystemChrome.setPreferredOrientations',
+            )
+            .map((call) => call.arguments),
+        contains(
+          equals(
+            DeviceOrientation.values.map((value) => value.toString()).toList(),
           ),
         ),
       );
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
     }
-
-    await tester.pumpWidget(buildPlayer());
-    await tester.pump();
-
-    expect(find.byTooltip('全屏'), findsOneWidget);
-    await tester.tap(find.byTooltip('全屏'));
-    await tester.pump();
-
-    expect(find.byIcon(Icons.fullscreen_exit), findsOneWidget);
-    expect(
-      platformCalls
-          .where(
-            (call) => call.method == 'SystemChrome.setPreferredOrientations',
-          )
-          .map((call) => call.arguments),
-      contains(
-        equals([
-          'DeviceOrientation.landscapeLeft',
-          'DeviceOrientation.landscapeRight',
-        ]),
-      ),
-    );
-
-    mediaSize = const Size(900, 430);
-    await tester.binding.setSurfaceSize(mediaSize);
-    await tester.pumpWidget(buildPlayer());
-    await tester.pump();
-
-    final exitControl = tester.widget<IconButton>(
-      find
-          .ancestor(
-            of: find.byIcon(Icons.fullscreen_exit),
-            matching: find.byType(IconButton),
-          )
-          .first,
-    );
-    exitControl.onPressed!();
-    await tester.pump();
-
-    expect(
-      platformCalls
-          .where(
-            (call) => call.method == 'SystemChrome.setPreferredOrientations',
-          )
-          .map((call) => call.arguments),
-      contains(
-        equals(
-          DeviceOrientation.values.map((value) => value.toString()).toList(),
-        ),
-      ),
-    );
   });
 
   testWidgets('mobile MV fullscreen restores orientation on dispose', (

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
@@ -124,7 +125,8 @@ class PlayerScreen extends StatefulWidget {
   State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-class _PlayerScreenState extends State<PlayerScreen> {
+class _PlayerScreenState extends State<PlayerScreen>
+    with WidgetsBindingObserver {
   static const _externalLyricSyncInterval = Duration(milliseconds: 100);
 
   VideoPlayerController? _controller;
@@ -229,6 +231,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool get _isExternalAudioLoading =>
       _usesExternalAudioPlayback && widget.externalIsLoading;
   bool get _hasTimedLyrics => _timedLyrics.isNotEmpty;
+  bool get _canManageFullscreenSystemUi {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+  }
+
   bool get _canSeekInMediaSession {
     final injected = widget.mediaSessionCanSeek;
     if (injected != null) {
@@ -266,6 +274,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _mobileMediaPageController = PageController();
     _pendingSeekProgress = widget.initialProgress;
     _webAudioPlayer = createWebAudioPlayer();
@@ -293,6 +302,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_isFullscreen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _isFullscreen) {
+          _enableFullscreenSystemUi();
+        }
+      });
+    }
     if (!_mobileDefaultApplied) {
       _mobileDefaultApplied = true;
       if (isMobile(context)) {
@@ -737,6 +753,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _mobileMediaPageController.dispose();
     _fullscreenChromeTimer?.cancel();
     _externalLyricSyncTimer?.cancel();
@@ -764,7 +781,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
       );
       _fullscreenOrientationLockActive = false;
     }
+    if (_isFullscreen) {
+      _restoreSystemUiAfterFullscreen(restoreAll: true);
+    }
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    if (!_isFullscreen) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _isFullscreen) {
+        _enableFullscreenSystemUi();
+      }
+    });
   }
 
   Future<void> _noopTogglePlayback() async {}
@@ -893,6 +923,28 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _initializePlayback();
   }
 
+  void _enableFullscreenSystemUi() {
+    if (!_canManageFullscreenSystemUi) return;
+    unawaited(
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky),
+    );
+  }
+
+  void _restoreSystemUiAfterFullscreen({bool restoreAll = false}) {
+    if (!_canManageFullscreenSystemUi) return;
+    final overlays = restoreAll
+        ? SystemUiOverlay.values
+        : isNativePhoneLandscapeSurface(context)
+        ? const <SystemUiOverlay>[SystemUiOverlay.bottom]
+        : SystemUiOverlay.values;
+    unawaited(
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: overlays,
+      ),
+    );
+  }
+
   void _enterFullscreen() {
     if (!_isVideoMode) return;
     final shouldResume = _controller?.value.isPlaying ?? false;
@@ -909,6 +961,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _isFullscreen = true;
       _showFullscreenChrome = true;
     });
+    _enableFullscreenSystemUi();
     _showFullscreenOverlayTemporarily();
     _resumeAfterFullscreenToggle(shouldResume);
   }
@@ -926,6 +979,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _isFullscreen = false;
       _showFullscreenChrome = true;
     });
+    _restoreSystemUiAfterFullscreen();
     _resumeAfterFullscreenToggle(shouldResume);
   }
 
@@ -1044,14 +1098,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   top: _showFullscreenChrome ? 12 : -72,
                   left: 12,
                   right: 12,
-                  child: _buildFullscreenTopBar(context),
+                  child: SafeArea(
+                    bottom: false,
+                    child: _buildFullscreenTopBar(context),
+                  ),
                 ),
                 AnimatedPositioned(
                   duration: const Duration(milliseconds: 180),
                   left: 0,
                   right: 0,
                   bottom: _showFullscreenChrome ? 0 : -180,
-                  child: _buildFullscreenControls(context),
+                  child: SafeArea(
+                    top: false,
+                    child: _buildFullscreenControls(context),
+                  ),
                 ),
               ],
             ),
