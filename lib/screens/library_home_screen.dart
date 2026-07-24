@@ -127,6 +127,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   static Future<void> _noopTogglePlayback() async {}
 
   static Future<void> _noopSeekToFraction(double _) async {}
+  static bool _noopPlayerBackHandler() => false;
   static const double _playbackHistoryProgressThreshold = 0.10;
   ShellRoute _route = ShellRoute.albums;
   Album? _selectedAlbum;
@@ -152,6 +153,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
   PlaybackOrderMode _playbackOrderMode = PlaybackOrderMode.sequential;
   PlayerTogglePlayback _playerTogglePlayback = _noopTogglePlayback;
   PlayerSeekToFraction _playerSeekToFraction = _noopSeekToFraction;
+  PlayerBackHandler _playerBackHandler = _noopPlayerBackHandler;
   final PlaybackUiUpdateGate _playbackUiUpdateGate = PlaybackUiUpdateGate();
   late final WebAudioPlaybackController _webAudioPlaybackController;
   late final MobileAudioPlaybackService _mobileAudioPlaybackService;
@@ -351,6 +353,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
 
   void _handleMobileBack() {
     if (!isMobileSurface(context)) return;
+    if (_playerBackHandler()) return;
     if (_showPlayer) {
       _collapseCurrentMobilePlayer();
       return;
@@ -1445,6 +1448,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
     _playerSeekToFraction = seekToFraction;
   }
 
+  void _registerPlayerBackHandler(PlayerBackHandler? handler) {
+    _playerBackHandler = handler ?? _noopPlayerBackHandler;
+  }
+
   void _onVideoControllerChanged(VideoPlayerController? c) {
     if (!mounted) return;
     void applyControllerChange() {
@@ -1755,6 +1762,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen>
                             );
                             _resumeProgress = null;
                           },
+                      onBackHandlerChanged: _registerPlayerBackHandler,
                       initialProgress: _resumeProgress,
                       onVideoControllerChanged: _onVideoControllerChanged,
                       renderVideo: true,

@@ -31,6 +31,7 @@ import 'player_playback_policy.dart';
 
 typedef PlayerTogglePlayback = Future<void> Function();
 typedef PlayerSeekToFraction = Future<void> Function(double value);
+typedef PlayerBackHandler = bool Function();
 typedef PlayerControlsReady =
     void Function({
       required PlayerTogglePlayback togglePlayback,
@@ -62,6 +63,7 @@ class PlayerScreen extends StatefulWidget {
     required this.onCyclePlaybackOrderMode,
     required this.onPlaybackStateChanged,
     this.onControlsReady,
+    this.onBackHandlerChanged,
     this.baseUrl = '',
     this.mediaSessionService,
     this.mediaSessionCanSeek,
@@ -102,6 +104,7 @@ class PlayerScreen extends StatefulWidget {
   })
   onPlaybackStateChanged;
   final PlayerControlsReady? onControlsReady;
+  final ValueChanged<PlayerBackHandler?>? onBackHandlerChanged;
   final String baseUrl;
   final WebMediaSessionService? mediaSessionService;
   final bool Function()? mediaSessionCanSeek;
@@ -289,6 +292,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       togglePlayback: _togglePlayback,
       seekToFraction: _seekTo,
     );
+    widget.onBackHandlerChanged?.call(_handleBack);
     if (widget.initializeControllerOnStart) {
       _initializePlayback();
     } else {
@@ -325,6 +329,10 @@ class _PlayerScreenState extends State<PlayerScreen>
         togglePlayback: _togglePlayback,
         seekToFraction: _seekTo,
       );
+    }
+    if (oldWidget.onBackHandlerChanged != widget.onBackHandlerChanged) {
+      oldWidget.onBackHandlerChanged?.call(null);
+      widget.onBackHandlerChanged?.call(_handleBack);
     }
 
     final trackChanged = oldWidget.track.id != widget.track.id;
@@ -765,6 +773,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       togglePlayback: _noopTogglePlayback,
       seekToFraction: _noopSeekToFraction,
     );
+    widget.onBackHandlerChanged?.call(null);
     if (!_usesExternalAudioPlayback) {
       widget.onPlaybackStateChanged(
         isPlaying: false,
@@ -921,6 +930,12 @@ class _PlayerScreenState extends State<PlayerScreen>
   void _retryVideoPlayback() {
     if (!_isVideoMode) return;
     _initializePlayback();
+  }
+
+  bool _handleBack() {
+    if (!_isFullscreen) return false;
+    _exitFullscreen();
+    return true;
   }
 
   void _enableFullscreenSystemUi() {

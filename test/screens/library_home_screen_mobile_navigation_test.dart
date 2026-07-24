@@ -1417,6 +1417,39 @@ void main() {
     expect(service.playedIndexes.single, 0);
   });
 
+  testWidgets('mobile back exits MV fullscreen before collapsing player', (
+    tester,
+  ) async {
+    final service = _RecordingMobileAudioPlaybackService();
+    addTearDown(service.dispose);
+
+    await HttpOverrides.runZoned(() async {
+      await _pumpMobileLibrary(tester, mobileAudioPlaybackService: service);
+      await tester.pumpAndSettle();
+      await _openAlbumMvFromDiscoverHome(tester);
+
+      await tester.tap(find.byTooltip('全屏'));
+      await tester.pump();
+      expect(find.byIcon(Icons.fullscreen_exit), findsOneWidget);
+
+      final handled = await tester.binding.handlePopRoute();
+      await tester.pump();
+
+      expect(handled, isTrue);
+      expect(find.byIcon(Icons.fullscreen_exit), findsNothing);
+      expect(
+        find.byKey(const ValueKey('mobile-mv-player-surface')),
+        findsOneWidget,
+      );
+      final sheet = tester.widget<MobilePlayerSheet>(
+        find.byType(MobilePlayerSheet),
+      );
+      expect(sheet.expanded, isTrue);
+    }, createHttpClient: (_) => _LibraryFakeHttpClient());
+
+    expect(service.playedQueues, isEmpty);
+  });
+
   testWidgets('standalone MV collapses to mini player without audio fallback', (
     tester,
   ) async {
