@@ -376,7 +376,7 @@ void main() {
     );
   });
 
-  testWidgets('mobile more menu switches to MV when the track has video', (
+  testWidgets('mobile more sheet switches to MV when the track has video', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(430, 900));
@@ -410,7 +410,7 @@ void main() {
     expect(selectedMode, PlaybackMode.video);
   });
 
-  testWidgets('mobile more menu hides MV action when the track has no video', (
+  testWidgets('mobile more sheet hides MV action when the track has no video', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(430, 900));
@@ -423,6 +423,27 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.text('切换到 MV'), findsNothing);
+  });
+
+  testWidgets('mobile more sheet opens the add-to-playlist picker', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpPlayer(tester, surfaceSize: const Size(430, 900));
+
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('加入歌单'), findsOneWidget);
+    await tester.tap(find.text('加入歌单'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('Add to Playlist'), findsOneWidget);
+    expect(find.text('New playlist'), findsOneWidget);
   });
 
   testWidgets('mobile reopen forwards the latest initial progress to video', (
@@ -1203,6 +1224,7 @@ void main() {
       await tester.tap(find.byTooltip('更多'));
       await tester.pumpAndSettle();
 
+      expect(find.text('加入歌单'), findsOneWidget);
       expect(find.text('收藏'), findsOneWidget);
     } finally {
       debugDefaultTargetPlatformOverride = null;

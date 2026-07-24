@@ -22,6 +22,7 @@ import '../services/web_media_session_contract.dart';
 import '../theme/app_theme.dart';
 import '../theme/vocal_theme.dart';
 import '../utils/responsive.dart';
+import '../widgets/add_to_playlist_sheet.dart';
 import '../widgets/favorite_button.dart';
 import '../widgets/player/asset_slider_thumb_shape.dart';
 import '../widgets/player/mobile_landscape_audio_player.dart';
@@ -1541,56 +1542,72 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   Widget _buildMobileLandscapeMoreButton() {
-    return ListenableBuilder(
-      listenable: PlaylistRepository.instance,
-      builder: (context, _) {
-        final isFavorite = PlaylistRepository.instance.isFavorite(_track.id);
-        return PopupMenuButton<String>(
-          tooltip: '更多',
-          icon: const Icon(Icons.more_vert, color: Colors.white70),
-          color: const Color(0xFF102027),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          onSelected: (value) {
-            if (value == 'favorite') {
-              unawaited(_toggleLandscapeFavorite());
-            } else if (value == 'video') {
-              widget.onSwitchPlaybackMode(PlaybackMode.video);
-            }
-          },
-          itemBuilder: (context) => [
-            PopupMenuItem<String>(
-              value: 'favorite',
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    isFavorite ? Icons.favorite : Icons.favorite_border,
-                    color: isFavorite ? AppTheme.mikuGreen : Colors.white70,
-                    size: 20,
+    return IconButton(
+      onPressed: () => _showMobileMoreSheet(includeFavorite: true),
+      icon: const Icon(Icons.more_vert, color: Colors.white70),
+      tooltip: '更多',
+    );
+  }
+
+  void _showMobileMoreSheet({required bool includeFavorite}) {
+    final isFavorite = PlaylistRepository.instance.isFavorite(_track.id);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppTheme.cardBg,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.playlist_add),
+              iconColor: Colors.white70,
+              title: const Text('加入歌单', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                unawaited(
+                  AddToPlaylistSheet.show(
+                    context: context,
+                    trackIds: [_track.id],
+                    client: _api,
                   ),
-                  const SizedBox(width: 12),
-                  Text(
-                    isFavorite ? '取消收藏' : '收藏',
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
             if (!_isVideoMode && _track.hasVideo)
-              const PopupMenuItem<String>(
-                value: 'video',
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.movie, color: Colors.white70, size: 20),
-                    SizedBox(width: 12),
-                    Text('切换到 MV', style: TextStyle(color: Colors.white)),
-                  ],
+              ListTile(
+                leading: const Icon(Icons.movie),
+                iconColor: Colors.white70,
+                title: const Text(
+                  '切换到 MV',
+                  style: TextStyle(color: Colors.white),
                 ),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  widget.onSwitchPlaybackMode(PlaybackMode.video);
+                },
+              ),
+            if (includeFavorite)
+              ListTile(
+                leading: Icon(
+                  isFavorite ? Icons.favorite : Icons.favorite_border,
+                ),
+                iconColor: isFavorite ? AppTheme.mikuGreen : Colors.white70,
+                title: Text(
+                  isFavorite ? '取消收藏' : '收藏',
+                  style: const TextStyle(color: Colors.white),
+                ),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  unawaited(_toggleLandscapeFavorite());
+                },
               ),
           ],
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -1736,41 +1753,12 @@ class _PlayerScreenState extends State<PlayerScreen>
                         client: _api,
                         size: 34,
                       ),
-                      PopupMenuButton<String>(
+                      IconButton(
                         icon: const Icon(Icons.more_vert, size: 32),
-                        iconColor: Colors.white70,
-                        enabled: _track.hasVideo,
-                        color: const Color(0xFF102027),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                        color: Colors.white70,
                         tooltip: '更多',
-                        onSelected: (value) {
-                          if (value == 'video') {
-                            widget.onSwitchPlaybackMode(PlaybackMode.video);
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          if (_track.hasVideo)
-                            const PopupMenuItem<String>(
-                              value: 'video',
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.movie,
-                                    color: Colors.white70,
-                                    size: 20,
-                                  ),
-                                  SizedBox(width: 12),
-                                  Text(
-                                    '切换到 MV',
-                                    style: TextStyle(color: Colors.white),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
+                        onPressed: () =>
+                            _showMobileMoreSheet(includeFavorite: false),
                       ),
                     ],
                   ),
